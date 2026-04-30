@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="reema_piece_rate_view_tree" model="ir.ui.view">
+        <field name="name">reema.piece.rate.view.tree</field>
+        <field name="model">reema.piece.rate</field>
+        <field name="arch" type="xml">
+            <list string="Piece Rate Matrix" editable="bottom">
+                <field name="hall_id"/>
+                <field name="construction_type"/>
+                <field name="ball_size"/>
+                <field name="complexity_level"/>
+                <field name="uom_id"/>
+                <field name="rate"/>
+                <field name="date_start"/>
+                <field name="date_end"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="reema_piece_rate_view_form" model="ir.ui.view">
+        <field name="name">reema.piece.rate.view.form</field>
+        <field name="model">reema.piece.rate</field>
+        <field name="arch" type="xml">
+            <form string="Piece Rate">
+                <sheet>
+                    <group>
+                        <group string="Process Context">
+                            <field name="hall_id"/>
+                            <field name="construction_type"/>
+                            <field name="uom_id"/>
+                        </group>
+                        <group string="Product Attributes">
+                            <field name="ball_size"/>
+                            <field name="complexity_level"/>
+                            <field name="lamination_type"/>
+                        </group>
+                        <group string="Financials">
+                            <field name="rate"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Validity">
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="reema_piece_rate_action" model="ir.actions.act_window">
+        <field name="name">Piece Rate Matrix</field>
+        <field name="res_model">reema.piece.rate</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="reema_mrp_menu_piece_rates" name="Piece Rate Matrix" parent="reema_mrp_menu_config" action="reema_piece_rate_action" sequence="20"/>
+</odoo>

@@ -1,0 +1,24 @@
+# .geminiignore for Odoo 18
+# Ignore core Odoo source (since CLI knows the framework)
+odoo/
+addons/base/
+addons/web/
+
+archive/
+
+# Ignore Python environment and cache
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore data and logs
+*.log
+filestore/
+sessions/
+
+# Ignore git and IDE
+.git/
+.vscode/
+.idea/

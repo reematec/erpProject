@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 
+        Form View: Updated to support multi-size sampling and 
+        lifecycle status tracking (Draft -> In Progress -> Completed -> Shipped).
+    -->
+    <record id="view_reema_sampling_blueprint_form" model="ir.ui.view">
+        <field name="name">reema.sampling.blueprint.form</field>
+        <field name="model">reema.sampling.blueprint</field>
+        <field name="arch" type="xml">
+            <form>
+                <!-- Header: Contains buttons and the status bar -->
+                <header>
+                    <button name="action_print_sampling" string="Print" type="object" class="oe_highlight"/>
+                    <!-- Statusbar: 'clickable' option allows users to manually change the state -->
+                    <field name="state" widget="statusbar" statusbar_visible="draft,in_progress,completed,shipped" options="{'clickable': '1'}"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="reference" readonly="1"/>
+                        </h1>
+                        <label for="name" string="Sample Name"/>
+                        <h2>
+                            <field name="name" placeholder="e.g. World Cup 2026 Pro"/>
+                        </h2>
+                    </div>
+                    
+                    <!-- Main Information Group -->
+                    <group>
+                        <group string="Basic Details">
+                            <field name="model_alias"/>
+                            <field name="customer_id"/>
+                            <field name="sampling_date"/>
+                        </group>
+                        <group string="Status &amp; Tracking">
+                            <field name="completion_date"/>
+                            <field name="shipping_date"/>
+                            <field name="reference_piece_kept"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Design specifications">
+                            <field name="ball_type"/>
+                            <field name="construction_type"/>
+                            <field name="number_of_panels"/>
+                        </group>
+                        <group string="Technical Requirements">
+                            <field name="weight_range"/>
+                            <field name="circumference"/>
+                            <field name="bounce_requirement"/>
+                        </group>
+                    </group>
+
+                    <!-- File Uploads Section (Moved before Size Details as requested) -->
+                    <group string="Attachments &amp; Layouts">
+                        <group>
+                            <label for="layout_file" string="Layout Image/PDF"/>
+                            <div class="o_row">
+                                <field name="layout_file" filename="layout_filename"/>
+                                <field name="layout_filename" invisible="1"/>
+                            </div>
+                        </group>
+                        <group>
+                            <field name="final_sample_images" widget="many2many_binary" string="Final Sample Images"/>
+                        </group>
+                    </group>
+
+                    <!-- Inline Size Details Section -->
+                    <group string="Size &amp; Production Quantities">
+                        <field name="size_line_ids" nolabel="1">
+                            <list editable="bottom">
+                                <!-- 'sequence' with 'handle' widget allows drag-and-drop indexing -->
+                                <field name="sequence" widget="handle"/>
+                                <field name="ball_size"/>
+                                <field name="cutting_knife_no"/>
+                                <field name="qty_to_produce" string="Quantity"/>
+                            </list>
+                        </field>
+                    </group>
+
+                    <notebook>
+                        <page string="Material Information" name="materials">
+                            <!-- 
+                                Material Lines: 'options' are used here to disable 'create' and 'edit',
+                                ensuring users only select existing materials from the catalog.
+                            -->
+                            <field name="material_line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="product_id" 
+                                           domain="[('type', '=', 'consu')]" 
+                                           string="Material"
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                                    <field name="description"/>
+                                    <field name="notes" string="Notes"/>
+                                </list>
+                            </field>
+                        </page>
+                        <!-- General Notes Tab -->
+                        <page string="General Notes" name="general_notes">
+                            <field name="notes" placeholder="Add any additional requirements..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_sampling_blueprint_tree" model="ir.ui.view">
+        <field name="name">reema.sampling.blueprint.list</field>
+        <field name="model">reema.sampling.blueprint</field>
+        <field name="arch" type="xml">
+            <list>
+                <!-- Layout Preview added to the list view for easy identification -->
+                <field name="layout_file" widget="image" options="{'size': [40, 40]}" string="Layout"/>
+                <field name="reference"/>
+                <field name="name"/>
+                <field name="model_alias"/>
+                <field name="customer_id"/>
+                <field name="sampling_date"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'completed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reema_sampling_blueprint" model="ir.actions.act_window">
+        <field name="name">Sampling Overview</field>
+        <field name="res_model">reema.sampling.blueprint</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first sample!
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_reema_sampling_root" 
+              name="Sampling" 
+              sequence="10" 
+              web_icon="reema_sampling,static/description/icon.png"/>
+
+    <menuitem id="menu_reema_sampling_blueprint" 
+              name="Samples" 
+              parent="menu_reema_sampling_root" 
+              action="action_reema_sampling_blueprint" 
+              sequence="10"/>
+</odoo>

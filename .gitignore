@@ -1,0 +1,22 @@
+# Odoo Standard
+odoo/
+data/
+odoo-venv/
+*.log
+*.deb
+
+# Database and Sessions
+filestore/
+sessions/
+
+# Sensitive Information
+credential.md
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS
+.DS_Store

@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reema_sampling_blueprint,reema.sampling.blueprint,model_reema_sampling_blueprint,base.group_user,1,1,1,1
+access_reema_sampling_material_line,reema.sampling.material.line,model_reema_sampling_material_line,base.group_user,1,1,1,1
+access_reema_sampling_size_line,reema.sampling.size.line,model_reema_sampling_size_line,base.group_user,1,1,1,1
