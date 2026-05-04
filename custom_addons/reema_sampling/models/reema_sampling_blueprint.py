@@ -6,22 +6,23 @@ from odoo import models, fields, api, _
 # it with our specific sampling requirements.
 class ReemaSamplingBlueprint(models.Model):
     _name = 'reema.sampling.blueprint'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _inherits = {'product.template': 'product_tmpl_id'}
     _description = 'Football Blueprint'
 
     # The connection to the standard product template. 
     # 'ondelete=cascade' ensures that if the sample is deleted, the product template record is removed too.
     product_tmpl_id = fields.Many2one('product.template', string='Product Template', required=True, ondelete='cascade')
-    
+
     # Automatic reference generation using Odoo's sequence system.
     # 'copy=False' prevents the reference from being duplicated when a record is copied.
-    reference = fields.Char(string='Reference', required=True, copy=False, readonly=True, default=lambda self: _('New'))
+    reference = fields.Char(string='Reference', required=True, copy=False, readonly=True, default=lambda self: _('New'), tracking=True)
 
     # These fields collect specific production details required for the sample.
-    model_alias = fields.Char(string='Model Alias')
-    customer_id = fields.Many2one('res.partner', string='Customer')
-    sampling_date = fields.Date(string='Date', default=fields.Date.context_today)
-    
+    model_alias = fields.Char(string='Model Alias', tracking=True)
+    customer_id = fields.Many2one('res.partner', string='Customer', tracking=True)
+    sampling_date = fields.Date(string='Date', default=fields.Date.context_today, tracking=True)
+
     # Fields for status tracking of the sample production lifecycle.
     state = fields.Selection([
         ('draft', 'Draft'),
@@ -29,7 +30,7 @@ class ReemaSamplingBlueprint(models.Model):
         ('completed', 'Completed'),
         ('shipped', 'Shipped'),
         ('cancelled', 'Cancelled')
-    ], string='Status', default='draft', required=True)
+    ], string='Status', default='draft', required=True, tracking=True)
     
     completion_date = fields.Date(string='Ready Till Date')
     shipping_date = fields.Date(string='Shipping Date')
@@ -40,9 +41,14 @@ class ReemaSamplingBlueprint(models.Model):
     layout_file = fields.Binary(string='Layout Image/PDF')
     layout_filename = fields.Char(string='Layout Filename')
     
-    # 'Many2many' to 'ir.attachment' allows uploading multiple files (images/docs) 
+    # 'Many2many' to 'ir.attachment' allows uploading multiple files (images/docs)
     # for the final samples, providing a flexible way to document the result.
     final_sample_images = fields.Many2many('ir.attachment', string='Final Sample Images')
+
+    # Force the product type to 'consu' (Consumable) so it doesn't track inventory by default.
+    # This addresses the requirement that samples should not show in stock.
+    # We use related='product_tmpl_id.type' to ensure it points to the underlying template field.
+    type = fields.Selection(related='product_tmpl_id.type', default='consu', readonly=True)
 
     # 'Selection' fields provide predefined choices, enforcing data integrity 
     # instead of allowing users to type arbitrary, inconsistent text.
@@ -67,6 +73,12 @@ class ReemaSamplingBlueprint(models.Model):
     circumference = fields.Char(string='Circumference (cm)')
     bounce_requirement = fields.Char(string='Bounce Requirement')
     
+    # 'color' field captures the primary design color of the sample.
+    # This will be used to auto-populate the Invoice later.
+    color = fields.Char(string='Primary Color', tracking=True)
+    
+    hs_code = fields.Char(string='HS Code', tracking=True)
+    
     notes = fields.Text(string='Notes')
     
     # One2many relationships allow us to manage child records (Sizes and Materials)
@@ -79,22 +91,21 @@ class ReemaSamplingBlueprint(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
+            # Force the product type to 'consu' (Consumable) so it doesn't track inventory.
+            vals['type'] = 'consu'
             if vals.get('reference', _('New')) == _('New'):
                 vals['reference'] = self.env['ir.sequence'].next_by_code('reema.sampling.blueprint') or _('New')
         return super().create(vals_list)
 
-    # Placeholder for the print action. This will be connected to a QWeb report later.
+    def write(self, vals):
+        # Prevent changing the type away from 'consu'.
+        if 'type' in vals and vals['type'] != 'consu':
+            vals['type'] = 'consu'
+        return super().write(vals)
+
     def action_print_sampling(self):
-        """ This method will be used to trigger the PDF report generation. """
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('Print Action'),
-                'message': _('Printing functionality is being prepared.'),
-                'sticky': False,
-            }
-        }
+        # Looks up the registered report action by its full XML name and triggers PDF generation.
+        return self.env.ref('reema_sampling.action_report_reema_sampling').report_action(self)
 
 # This model allows defining multiple sizes for a single sample layout.
 # It makes the system flexible for multi-size production orders.

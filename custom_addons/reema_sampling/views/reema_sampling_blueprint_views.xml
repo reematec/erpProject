@@ -41,10 +41,11 @@
                     </group>
 
                     <group>
-                        <group string="Design specifications">
+                        <group string="Design Specification">
                             <field name="ball_type"/>
                             <field name="construction_type"/>
                             <field name="number_of_panels"/>
+                            <field name="color"/>
                         </group>
                         <group string="Technical Requirements">
                             <field name="weight_range"/>
@@ -104,6 +105,15 @@
                         </page>
                     </notebook>
                 </sheet>
+                <!-- 
+                    Chatter: This section enables the activity log, messaging, and followers 
+                    on the right side (or bottom) of the form. 
+                -->
+                <chatter>
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
             </form>
         </field>
     </record>
@@ -125,10 +135,52 @@
         </field>
     </record>
 
+    <!-- 
+        Kanban View: Acts as a dashboard for the sampling department. 
+        It organizes records into columns based on their 'state'.
+    -->
+    <record id="view_reema_sampling_blueprint_kanban" model="ir.ui.view">
+        <field name="name">reema.sampling.blueprint.kanban</field>
+        <field name="model">reema.sampling.blueprint</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" class="o_kanban_small_column" quick_create="false">
+                <field name="state"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_global_click shadow-sm border-0">
+                            <div class="o_kanban_image" t-if="record.layout_file.raw_value">
+                                <field name="layout_file" widget="image"/>
+                            </div>
+                            <div class="oe_kanban_details">
+                                <strong class="o_kanban_record_title">
+                                    <field name="reference"/> - <field name="name"/>
+                                </strong>
+                                <div class="text-muted">
+                                    <field name="customer_id"/>
+                                </div>
+                                <div class="mt-2">
+                                    <span>Date: <field name="sampling_date"/></span>
+                                </div>
+                                <div class="o_kanban_record_bottom mt-2">
+                                    <div class="oe_kanban_bottom_left">
+                                        <field name="construction_type"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right">
+                                        <field name="activity_ids" widget="kanban_activity"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="action_reema_sampling_blueprint" model="ir.actions.act_window">
         <field name="name">Sampling Overview</field>
         <field name="res_model">reema.sampling.blueprint</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">kanban,list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Create your first sample!
@@ -136,10 +188,9 @@
         </field>
     </record>
 
-    <menuitem id="menu_reema_sampling_root" 
-              name="Sampling" 
-              sequence="10" 
-              web_icon="reema_sampling,static/description/icon.png"/>
+    <menuitem id="menu_reema_sampling_root"
+              name="Sampling"
+              sequence="10"/>
 
     <menuitem id="menu_reema_sampling_blueprint" 
               name="Samples" 

@@ -8,11 +8,12 @@
         Includes blueprint creation with technical specifications and material requirements.
     """,
     'author': 'Gemini CLI',
-    'depends': ['product', 'mrp'],
+    'depends': ['product', 'mrp', 'mail'],
     'data': [
         'security/ir.model.access.csv',
         'data/reema_sampling_data.xml',
         'views/reema_sampling_blueprint_views.xml',
+        'reports/reema_sampling_report.xml',
     ],
     'installable': True,
     'application': False,

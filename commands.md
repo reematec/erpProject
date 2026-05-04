@@ -68,7 +68,8 @@ python3 odoo/odoo-bin -c odoo.conf -d odoo18_sgo_football_dev -i mrp --without-d
   ┌──────────────┬──────────────────────────────────────────────────────────────┐
   │ Action       │ Command                                                      │
   ├──────────────┼──────────────────────────────────────────────────────────────┤
-  │ Start Odoo   │ ./odoo-venv/bin/python3 odoo/odoo-bin -c odoo.conf --dev=all │
+  │ Start env    │ source odoo-venv/bin/activate                                │
+  │ Start Odoo   │ python3 odoo/odoo-bin -c odoo.conf --dev=all                 │
   │ Stop Odoo    │ Press Ctrl + C in the terminal                               │
   │ Restart Odoo │ Just stop and run the Start command again                    │
   └──────────────┴──────────────────────────────────────────────────────────────┘

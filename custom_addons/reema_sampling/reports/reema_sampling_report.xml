@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Report Action: This registers the PDF report in Odoo.
+        - report_type="qweb-pdf" tells Odoo to render the template and convert to PDF via wkhtmltopdf.
+        - binding_model_id links it to reema.sampling.blueprint so it also appears in the Print menu.
+        - The 'Print' button in the form calls action_print_sampling(), which returns this action by name.
+    -->
+    <record id="action_report_reema_sampling" model="ir.actions.report">
+        <field name="name">Sampling Blueprint</field>
+        <field name="model">reema.sampling.blueprint</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">reema_sampling.report_reema_sampling_template</field>
+        <field name="report_file">reema_sampling.report_reema_sampling_template</field>
+        <field name="print_report_name">'Blueprint - %s' % (object.reference)</field>
+        <field name="binding_model_id" ref="model_reema_sampling_blueprint"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <!--
+        QWeb Template: The actual HTML layout that wkhtmltopdf converts to PDF.
+        't-call="web.external_layout"' wraps the content in the company header/footer
+        (logo, company name, address) automatically.
+        't-foreach="docs"' loops over records — supports bulk printing of multiple blueprints.
+    -->
+    <template id="report_reema_sampling_template">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+
+                        <!-- Title Block -->
+                        <div class="row mb-4">
+                            <div class="col-8">
+                                <h2 style="margin-bottom:2px;">
+                                    <span t-field="o.reference"/> — <span t-field="o.name"/>
+                                </h2>
+                                <t t-if="o.model_alias">
+                                    <p class="text-muted" style="margin:0;">Alias: <span t-field="o.model_alias"/></p>
+                                </t>
+                            </div>
+                            <div class="col-4 text-right">
+                                <!-- Show the layout image in the top-right corner if one is uploaded.
+                                     Binary fields arrive as base64-encoded bytes; .decode() converts to string. -->
+                                <t t-if="o.layout_file">
+                                    <img t-att-src="'data:image/png;base64,' + o.layout_file.decode('utf-8')"
+                                         style="max-height:90px; max-width:140px; object-fit:contain;"/>
+                                </t>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- Section 1: Basic Details + Status -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Customer</strong></td>
+                                        <td><span t-field="o.customer_id"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Sample Date</strong></td>
+                                        <td><span t-field="o.sampling_date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Status</strong></td>
+                                        <td><span t-field="o.state"/></td>
+                                    </tr>
+                                    <tr t-if="o.completion_date">
+                                        <td><strong>Ready Till</strong></td>
+                                        <td><span t-field="o.completion_date"/></td>
+                                    </tr>
+                                    <tr t-if="o.shipping_date">
+                                        <td><strong>Shipping Date</strong></td>
+                                        <td><span t-field="o.shipping_date"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:50%;"><strong>HS Code</strong></td>
+                                        <td><span t-field="o.hs_code"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Ball Type</strong></td>
+                                        <td><span t-field="o.ball_type"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Construction</strong></td>
+                                        <td><span t-field="o.construction_type"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Reference Piece</strong></td>
+                                        <td>
+                                            <t t-if="o.reference_piece_kept">Yes</t>
+                                            <t t-else="">No</t>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Technical Specifications -->
+                        <h5 class="mt-2" style="background:#f0f0f0; padding:4px 8px; border-left:4px solid #875A7B;">
+                            Technical Specifications
+                        </h5>
+                        <div class="row">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:50%;"><strong>No. of Panels</strong></td>
+                                        <td><span t-field="o.number_of_panels"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Primary Color</strong></td>
+                                        <td><span t-field="o.color"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:50%;"><strong>Weight Range</strong></td>
+                                        <td><span t-field="o.weight_range"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Circumference</strong></td>
+                                        <td><span t-field="o.circumference"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Bounce Req.</strong></td>
+                                        <td><span t-field="o.bounce_requirement"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Size & Production Quantities -->
+                        <h5 class="mt-2" style="background:#f0f0f0; padding:4px 8px; border-left:4px solid #875A7B;">
+                            Size &amp; Production Quantities
+                        </h5>
+                        <table class="table table-sm o_main_table">
+                            <thead style="background:#f8f8f8;">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Size</th>
+                                    <th>Cutting Knife No.</th>
+                                    <th class="text-right">Quantity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.size_line_ids" t-as="line">
+                                    <tr>
+                                        <td><t t-esc="line_index + 1"/></td>
+                                        <td><span t-field="line.ball_size"/></td>
+                                        <td><span t-field="line.cutting_knife_no"/></td>
+                                        <td class="text-right"><span t-field="line.qty_to_produce"/></td>
+                                    </tr>
+                                </t>
+                                <t t-if="not o.size_line_ids">
+                                    <tr><td colspan="4" class="text-muted text-center">No sizes defined.</td></tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Section 4: Material Information -->
+                        <h5 class="mt-3" style="background:#f0f0f0; padding:4px 8px; border-left:4px solid #875A7B;">
+                            Material Information
+                        </h5>
+                        <table class="table table-sm o_main_table">
+                            <thead style="background:#f8f8f8;">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Material</th>
+                                    <th>Description</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.material_line_ids" t-as="mat">
+                                    <tr>
+                                        <td><t t-esc="mat_index + 1"/></td>
+                                        <td><span t-field="mat.product_id"/></td>
+                                        <td><span t-field="mat.description"/></td>
+                                        <td><span t-field="mat.notes"/></td>
+                                    </tr>
+                                </t>
+                                <t t-if="not o.material_line_ids">
+                                    <tr><td colspan="4" class="text-muted text-center">No materials defined.</td></tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Section 5: General Notes (only shown if present) -->
+                        <t t-if="o.notes">
+                            <h5 class="mt-3" style="background:#f0f0f0; padding:4px 8px; border-left:4px solid #875A7B;">
+                                Notes
+                            </h5>
+                            <p style="font-size:13px; white-space:pre-wrap;"><span t-field="o.notes"/></p>
+                        </t>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

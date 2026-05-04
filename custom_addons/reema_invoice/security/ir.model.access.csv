@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reema_invoice_user,reema.invoice user,model_reema_invoice,reema_invoice.group_reema_invoice_user,1,1,1,1
+access_reema_invoice_line_user,reema.invoice.line user,model_reema_invoice_line,reema_invoice.group_reema_invoice_user,1,1,1,1
+access_reema_invoice_admin,reema.invoice admin,model_reema_invoice,base.group_system,1,1,1,1
+access_reema_invoice_line_admin,reema.invoice.line admin,model_reema_invoice_line,base.group_system,1,1,1,1

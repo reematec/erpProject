@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_report_reema_invoice" model="ir.actions.report">
+        <field name="name">Pro Forma Invoice</field>
+        <field name="model">reema.invoice</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">reema_invoice.report_reema_invoice_document</field>
+        <field name="report_file">reema_invoice.report_reema_invoice_document</field>
+        <field name="print_report_name">'PI - %s' % (object.name)</field>
+        <field name="binding_model_id" ref="model_reema_invoice"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_reema_invoice_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+
+                        <!-- ── Title ─────────────────────────────────────── -->
+                        <div class="row mt-4 mb-2">
+                            <div class="col-12 text-center">
+                                <h2 style="text-transform:uppercase; letter-spacing:2px;">
+                                    Pro Forma Invoice
+                                </h2>
+                                <h4><span t-field="o.name"/></h4>
+                            </div>
+                        </div>
+
+                        <!-- ── Addresses ─────────────────────────────────── -->
+                        <div class="row mb-4">
+                            <div class="col-6">
+                                <strong>From (Exporter):</strong>
+                                <div style="white-space: pre-line;"><span t-field="o.our_address"/></div>
+                            </div>
+                            <div class="col-6">
+                                <strong>To (Importer / Client):</strong>
+                                <div style="white-space: pre-line;"><span t-field="o.client_address"/></div>
+                            </div>
+                        </div>
+
+                        <!-- ── Order / Shipping details ───────────────────── -->
+                        <div class="row mb-4" style="font-size:13px;">
+                            <div class="col-3">
+                                <strong>PI Date:</strong><br/>
+                                <span t-field="o.date"/>
+                            </div>
+                            <div class="col-3">
+                                <strong>Client Order No:</strong><br/>
+                                <span t-field="o.client_order_number"/>
+                            </div>
+                            <div class="col-3">
+                                <strong>Client Order Date:</strong><br/>
+                                <span t-field="o.client_order_date"/>
+                            </div>
+                            <div class="col-3">
+                                <strong>Payment Terms:</strong><br/>
+                                <span t-field="o.payment_terms_id"/>
+                            </div>
+                        </div>
+                        <div class="row mb-4" style="font-size:13px;">
+                            <div class="col-3">
+                                <strong>Shipping Method:</strong><br/>
+                                <span t-field="o.transport_method"/>
+                            </div>
+                            <div class="col-3">
+                                <strong>Shipping Date:</strong><br/>
+                                <span t-field="o.shipping_date"/>
+                            </div>
+                            <div class="col-3">
+                                <strong>Incoterms:</strong><br/>
+                                <span t-field="o.incoterm_id"/>
+                            </div>
+                            <div class="col-3">
+                                <strong>Incoterm Location:</strong><br/>
+                                <span t-field="o.incoterm_location"/>
+                            </div>
+                        </div>
+                        <div class="row mb-4" style="font-size:13px;">
+                            <div class="col-3">
+                                <strong>Destination:</strong><br/>
+                                <span t-field="o.destination"/>
+                            </div>
+                            <div class="col-3">
+                                <strong>Country of Origin:</strong><br/>
+                                <span t-field="o.country_of_origin"/>
+                            </div>
+                        </div>
+
+                        <!-- ── Line Items ─────────────────────────────────── -->
+                        <table class="table table-sm o_main_table mt-2">
+                            <thead style="background-color:#f5f5f5;">
+                                <tr>
+                                    <th>Sample Code</th>
+                                    <th>Description</th>
+                                    <th>Client SKU</th>
+                                    <th>Size</th>
+                                    <th>Color</th>
+                                    <th>HS Code</th>
+                                    <th>EAN</th>
+                                    <th class="text-right">Qty</th>
+                                    <th class="text-right">Unit Price</th>
+                                    <th class="text-right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.line_ids" t-as="line">
+                                    <tr>
+                                        <td><span t-field="line.sample_id.reference"/></td>
+                                        <td><span t-field="line.sample_name"/></td>
+                                        <td><span t-field="line.client_sku"/></td>
+                                        <td><span t-field="line.size_id.ball_size"/></td>
+                                        <td><span t-field="line.sample_color"/></td>
+                                        <td><span t-field="line.hs_code"/></td>
+                                        <td><span t-field="line.ean"/></td>
+                                        <td class="text-right"><span t-field="line.qty"/></td>
+                                        <td class="text-right"><span t-field="line.price_unit"/></td>
+                                        <td class="text-right"><span t-field="line.price_subtotal"/></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- ── Totals ─────────────────────────────────────── -->
+                        <div class="row">
+                            <div class="col-6 offset-6">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td>Total Qty</td>
+                                        <td class="text-right"><span t-field="o.total_qty"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Total Amount</td>
+                                        <td class="text-right"><span t-field="o.total_amount"/></td>
+                                    </tr>
+                                    <tr t-if="o.handling_charges">
+                                        <td>Handling Charges</td>
+                                        <td class="text-right"><span t-field="o.handling_charges"/></td>
+                                    </tr>
+                                    <tr t-if="o.courier_charges">
+                                        <td>Courier Charges</td>
+                                        <td class="text-right"><span t-field="o.courier_charges"/></td>
+                                    </tr>
+                                    <tr style="font-weight:bold; border-top: 2px solid #000;">
+                                        <td>Net Total Payable</td>
+                                        <td class="text-right"><span t-field="o.net_total_payable"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- ── Bank Details ───────────────────────────────── -->
+                        <div class="row mt-4" t-if="o.bank_name">
+                            <div class="col-12">
+                                <strong>Bank Details:</strong><br/>
+                                <t t-if="o.bank_name">Bank: <span t-field="o.bank_name"/><br/></t>
+                                <t t-if="o.bank_title">Account Title: <span t-field="o.bank_title"/><br/></t>
+                                <t t-if="o.account_num">Account No: <span t-field="o.account_num"/><br/></t>
+                                <t t-if="o.iban">IBAN: <span t-field="o.iban"/><br/></t>
+                                <t t-if="o.swift">SWIFT/BIC: <span t-field="o.swift"/><br/></t>
+                                <t t-if="o.bank_address">Address: <span t-field="o.bank_address"/></t>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>
