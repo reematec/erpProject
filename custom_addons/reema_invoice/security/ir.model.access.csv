@@ -3,3 +3,12 @@ access_reema_invoice_user,reema.invoice user,model_reema_invoice,reema_invoice.g
 access_reema_invoice_line_user,reema.invoice.line user,model_reema_invoice_line,reema_invoice.group_reema_invoice_user,1,1,1,1
 access_reema_invoice_admin,reema.invoice admin,model_reema_invoice,base.group_system,1,1,1,1
 access_reema_invoice_line_admin,reema.invoice.line admin,model_reema_invoice_line,base.group_system,1,1,1,1
+access_reema_bank_account_user,reema.bank.account user,model_reema_bank_account,reema_invoice.group_reema_invoice_user,1,0,0,0
+access_reema_bank_account_admin,reema.bank.account admin,model_reema_bank_account,base.group_system,1,1,1,1
+access_reema_invoice_document_user,reema.invoice.document user,model_reema_invoice_document,reema_invoice.group_reema_invoice_user,1,1,1,1
+access_reema_invoice_document_admin,reema.invoice.document admin,model_reema_invoice_document,base.group_system,1,1,1,1
+access_reema_invoice_charge_user,reema.invoice.charge user,model_reema_invoice_charge,reema_invoice.group_reema_invoice_user,1,1,1,1
+access_reema_invoice_charge_admin,reema.invoice.charge admin,model_reema_invoice_charge,base.group_system,1,1,1,1
+access_reema_invoice_packing,reema.invoice packing,model_reema_invoice,reema_invoice.group_reema_packing_user,1,0,0,0
+access_reema_invoice_line_packing,reema.invoice.line packing,model_reema_invoice_line,reema_invoice.group_reema_packing_user,1,0,0,0
+access_reema_invoice_document_packing,reema.invoice.document packing,model_reema_invoice_document,reema_invoice.group_reema_packing_user,1,0,0,0

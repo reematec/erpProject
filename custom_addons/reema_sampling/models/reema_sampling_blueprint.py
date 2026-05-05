@@ -103,6 +103,16 @@ class ReemaSamplingBlueprint(models.Model):
             vals['type'] = 'consu'
         return super().write(vals)
 
+    @api.model
+    def _name_search(self, name='', domain=None, operator='ilike', limit=100, order=None):
+        # _rec_name is 'name' (product name), so the default search already works by name.
+        # This override also allows searching by reference code — useful when a user
+        # remembers the code and types it in the invoice line Name dropdown.
+        domain = domain or []
+        if name:
+            domain = ['|', ('name', operator, name), ('reference', operator, name)] + domain
+        return self._search(domain, limit=limit, order=order)
+
     def action_print_sampling(self):
         # Looks up the registered report action by its full XML name and triggers PDF generation.
         return self.env.ref('reema_sampling.action_report_reema_sampling').report_action(self)

@@ -57,27 +57,21 @@
                     </div>
 
                     <!--
-                        Main section: Customer Details (left) + Shipping and Terms (right).
-                        ALL required fields from the task are visible here — no hidden tabs.
+                        Customer Details in two columns — left side holds the client identity
+                        fields, right side holds the order reference fields. This halves the
+                        vertical height compared to a single-column stack.
                     -->
-                    <group>
-                        <group string="Customer Details">
+                    <group string="Customer Details">
+                        <group>
                             <field name="partner_id"
                                    options="{'no_create': True, 'no_edit': True}"/>
                             <field name="client_address"/>
                             <field name="date"/>
+                        </group>
+                        <group>
                             <field name="client_order_number"/>
                             <field name="client_order_date"/>
                             <field name="payment_terms_id"/>
-                        </group>
-                        <group string="Shipping and Terms">
-                            <field name="our_address"/>
-                            <field name="country_of_origin"/>
-                            <field name="transport_method"/>
-                            <field name="shipping_date"/>
-                            <field name="incoterm_id"/>
-                            <field name="incoterm_location"/>
-                            <field name="destination"/>
                         </group>
                     </group>
 
@@ -87,16 +81,20 @@
                         <page string="Products / Samples" name="products">
                             <field name="line_ids">
                                 <!--
-                                    This is a plain custom model — "Add a Section", "Add a Note",
-                                    and "Catalog" buttons will NOT appear (they only exist on
-                                    account.move.line which has display_type / product catalog support).
-                                    There are also NO taxes fields in this model by design.
+                                    sample_id is the Name selector — searches and displays by
+                                    product name (same UX as the Client field).
+                                    Typing a reference code also works via _name_search override.
+                                    Domain restricts the dropdown to samples belonging to the
+                                    selected client — prevents picking wrong-client samples.
                                 -->
                                 <list editable="bottom" no_open="True">
-                                    <field name="sample_id"    options="{'no_create': True}"/>
-                                    <field name="sample_name"  string="Name"/>
+                                    <field name="sample_id"
+                                           domain="[('customer_id', '=', parent.partner_id)]"
+                                           options="{'no_create': True}" string="Name"/>
+                                    <field name="sample_code"  string="Sample Code"/>
+                                    <field name="description"  string="Description"/>
                                     <field name="client_sku"   string="Client SKU"/>
-                                    <field name="size_id"      options="{'no_create': True}"/>
+                                    <field name="size"         string="Size"/>
                                     <field name="sample_color" string="Color"/>
                                     <field name="hs_code"      string="HS Code"/>
                                     <field name="ean"          string="EAN"/>
@@ -106,22 +104,102 @@
                                 </list>
                             </field>
 
-                            <!-- Totals block — no taxes row -->
-                            <group class="oe_subtotal_footer oe_right">
-                                <field name="total_qty"/>
-                                <field name="total_amount" widget="monetary"/>
-                                <field name="handling_charges" widget="monetary"/>
-                                <field name="courier_charges"  widget="monetary"/>
-                                <div class="oe_subtotal_footer_separator oe_inline o_td_label">
-                                    <label for="net_total_payable"/>
+                            <!--
+                                Totals + Charges block, right-aligned.
+                                Order: Total Qty → Total Amount → [each named charge] → Net Total Payable.
+                                Using a Bootstrap half-column (ms-auto pushes it to the right side).
+                                The charge_ids inline list sits between Total Amount and the grand
+                                total so users see the exact build-up without any accumulation.
+                            -->
+                            <div class="row mt-3">
+                                <div class="col-6 ms-auto">
+                                    <table class="table table-sm table-borderless mb-0">
+                                        <tr>
+                                            <td class="text-muted">Total Qty</td>
+                                            <td class="text-end">
+                                                <field name="total_qty" nolabel="1"/>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Total Amount</td>
+                                            <td class="text-end">
+                                                <field name="total_amount" nolabel="1" widget="monetary"/>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <field name="charge_ids">
+                                        <list editable="bottom" no_open="True">
+                                            <field name="name"   placeholder="e.g. Handling Charges"/>
+                                            <field name="amount" widget="monetary"/>
+                                        </list>
+                                    </field>
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td class="border-top fw-bold pt-2">Net Total Payable</td>
+                                            <td class="text-end border-top pt-2">
+                                                <field name="net_total_payable" nolabel="1" widget="monetary"/>
+                                            </td>
+                                        </tr>
+                                    </table>
                                 </div>
-                                <field name="net_total_payable" nolabel="1"
-                                       class="oe_subtotal_footer_separator" widget="monetary"/>
+                            </div>
+                        </page>
+
+                        <!-- ── Shipping &amp; Terms tab ──────────────────────────────── -->
+                        <!--
+                            Moved from the main form into its own tab so the header stays
+                            compact. Positioned second — after Products, before Bank Details.
+                        -->
+                        <page string="Shipping &amp; Terms" name="shipping">
+                            <group>
+                                <group string="Terms &amp; Logistics">
+                                    <field name="our_address"/>
+                                    <field name="country_of_origin"/>
+                                    <field name="transport_method"/>
+                                    <field name="shipping_date"/>
+                                    <field name="incoterm_id"/>
+                                    <field name="incoterm_location"/>
+                                    <field name="destination"/>
+                                </group>
+                                <group string="Carton &amp; Weight">
+                                    <field name="carton_qty"/>
+                                    <field name="carton_size"/>
+                                    <field name="total_cbm"/>
+                                    <field name="gross_weight"/>
+                                    <field name="net_weight"/>
+                                </group>
                             </group>
+
+                            <!--
+                                Shipping Documents — each row is a named document category
+                                (e.g. "Sticker") with any number of files attached.
+                                Files are stored in Odoo's filestore (disk), not in the DB.
+                                The many2many_binary widget in the popup shows an "Attach Files"
+                                button and lists uploaded files with preview/download links.
+                                Workflow: type name inline → click the → arrow to open popup
+                                → click "Attach Files" to upload → close popup.
+                            -->
+                            <separator string="Shipping Documents"/>
+                            <field name="document_ids">
+                                <list>
+                                    <field name="name"       string="Document Name"/>
+                                    <field name="file_count" string="Files" readonly="True"/>
+                                </list>
+                            </field>
                         </page>
 
                         <!-- ── Bank Details tab ─────────────────────────────────────── -->
                         <page string="Bank Details" name="bank_details">
+                            <!--
+                                Selecting bank_id fills all detail fields automatically.
+                                The detail fields remain editable for one-off adjustments
+                                without changing the master bank record.
+                            -->
+                            <group>
+                                <field name="bank_id"
+                                       options="{'no_create': True}"
+                                       placeholder="Select a bank to auto-fill details…"/>
+                            </group>
                             <group>
                                 <group>
                                     <field name="bank_name"/>
@@ -146,6 +224,85 @@
                 </chatter>
 
             </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         SHIPPING DOCUMENT POPUP FORM
+         This form opens when the user clicks a row in the Shipping Documents
+         list. File upload lives here so it is never inside an editable inline
+         list (which would cause the name-erasure bug on binary widget blur).
+    ════════════════════════════════════════════════════════════════════════ -->
+    <record id="view_reema_invoice_document_form" model="ir.ui.view">
+        <field name="name">reema.invoice.document.form</field>
+        <field name="model">reema.invoice.document</field>
+        <field name="arch" type="xml">
+            <form string="Shipping Document">
+                <sheet>
+                    <group>
+                        <field name="name" string="Document Name"
+                               placeholder="e.g. Sticker, Hologram Layout, Carton Marking"/>
+                    </group>
+                    <!--
+                        many2many_binary shows an "Attach Files" button and lists all
+                        uploaded files. Files go to Odoo's filestore on disk (not in DB).
+                        Images show as thumbnails; PDFs show as download links.
+                        Multiple files per document type are supported.
+                    -->
+                    <field name="attachment_ids" widget="many2many_binary" string="Files"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         BANK ACCOUNTS — list and form for the predefined bank master list
+    ════════════════════════════════════════════════════════════════════════ -->
+    <record id="view_reema_bank_account_list" model="ir.ui.view">
+        <field name="name">reema.bank.account.list</field>
+        <field name="model">reema.bank.account</field>
+        <field name="arch" type="xml">
+            <list string="Bank Accounts">
+                <field name="name"/>
+                <field name="account_title"/>
+                <field name="account_number"/>
+                <field name="iban"/>
+                <field name="swift"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_bank_account_form" model="ir.ui.view">
+        <field name="name">reema.bank.account.form</field>
+        <field name="model">reema.bank.account</field>
+        <field name="arch" type="xml">
+            <form string="Bank Account">
+                <sheet>
+                    <group>
+                        <group string="Bank Information">
+                            <field name="name"/>
+                            <field name="account_title"/>
+                            <field name="address"/>
+                        </group>
+                        <group string="Account Details">
+                            <field name="account_number"/>
+                            <field name="iban"/>
+                            <field name="swift"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reema_bank_accounts" model="ir.actions.act_window">
+        <field name="name">Bank Accounts</field>
+        <field name="res_model">reema.bank.account</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Add a bank account — select it on any Pro Forma Invoice to auto-fill details.
+            </p>
         </field>
     </record>
 
@@ -175,5 +332,196 @@
               parent="menu_reema_invoice_root"
               action="action_reema_invoice"
               sequence="10"/>
+
+    <!-- Configuration submenu — admin defines banks here once; staff select on invoices -->
+    <menuitem id="menu_reema_invoice_config"
+              name="Configuration"
+              parent="menu_reema_invoice_root"
+              sequence="90"/>
+
+    <menuitem id="menu_reema_bank_accounts"
+              name="Bank Accounts"
+              parent="menu_reema_invoice_config"
+              action="action_reema_bank_accounts"
+              sequence="10"/>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         PACKING STAFF VIEWS
+         Packing Staff see only accepted/closed invoices in read-only mode.
+         No prices, no bank details, no additional charges — only carton info
+         and shipping documents they need to prepare and ship the order.
+    ════════════════════════════════════════════════════════════════════════ -->
+
+    <!--
+        Packing list: PI Number, Client, Shipping Date, and carton count.
+        Decoration-success highlights accepted invoices so they stand out.
+        This is the queue packing staff work from.
+    -->
+    <record id="view_reema_invoice_packing_list" model="ir.ui.view">
+        <field name="name">reema.invoice.packing.list</field>
+        <field name="model">reema.invoice</field>
+        <field name="arch" type="xml">
+            <list string="Packing Queue" decoration-success="state == 'accepted'">
+                <field name="name"               string="PI Number"/>
+                <field name="partner_id"         string="Client"/>
+                <field name="client_order_number" string="Order No"/>
+                <field name="shipping_date"      string="Shipping Date"/>
+                <field name="carton_qty"         string="Cartons"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'accepted'"
+                       decoration-muted="state == 'closed'"/>
+            </list>
+        </field>
+    </record>
+
+    <!--
+        Packing form: read-only throughout (no editable="bottom" anywhere).
+        Shows product lines (name, size, color, qty only — NO unit price or amount).
+        Shows carton/weight details and the shipping documents with their files.
+        Bank details tab is intentionally omitted — financial data not relevant to packing.
+    -->
+    <record id="view_reema_invoice_packing_form" model="ir.ui.view">
+        <field name="name">reema.invoice.packing.form</field>
+        <field name="model">reema.invoice</field>
+        <field name="arch" type="xml">
+            <form string="Packing Order" edit="0">
+
+                <header>
+                    <!-- Status bar is informational only — no buttons for packing staff -->
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pending,sent,accepted,closed"/>
+                </header>
+
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+
+                    <group string="Order Details">
+                        <group>
+                            <field name="partner_id"         readonly="1"/>
+                            <field name="client_address"     readonly="1"/>
+                            <field name="date"               readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="client_order_number" readonly="1"/>
+                            <field name="client_order_date"  readonly="1"/>
+                            <field name="shipping_date"      readonly="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+
+                        <!-- Product lines — qty and sizes only, no pricing columns -->
+                        <page string="Products / Samples" name="products">
+                            <field name="line_ids" readonly="1">
+                                <list string="Products">
+                                    <field name="sample_code"  string="Sample Code"/>
+                                    <field name="sample_name"  string="Name"/>
+                                    <field name="description"  string="Description"/>
+                                    <field name="client_sku"   string="Client SKU"/>
+                                    <field name="size"         string="Size"/>
+                                    <field name="sample_color" string="Color"/>
+                                    <field name="qty"          string="Qty"/>
+                                </list>
+                            </field>
+                            <div class="row mt-3">
+                                <div class="col-4 ms-auto">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td class="text-muted">Total Qty</td>
+                                            <td class="text-end">
+                                                <field name="total_qty" nolabel="1" readonly="1"/>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </page>
+
+                        <!-- Carton details + shipping documents — the core packing workflow -->
+                        <page string="Shipping &amp; Documents" name="shipping">
+                            <group>
+                                <group string="Terms &amp; Logistics">
+                                    <field name="transport_method"  readonly="1"/>
+                                    <field name="shipping_date"     readonly="1"/>
+                                    <field name="destination"       readonly="1"/>
+                                    <field name="incoterm_id"       readonly="1"/>
+                                    <field name="incoterm_location" readonly="1"/>
+                                </group>
+                                <group string="Carton &amp; Weight">
+                                    <field name="carton_qty"   readonly="1"/>
+                                    <field name="carton_size"  readonly="1"/>
+                                    <field name="total_cbm"    readonly="1"/>
+                                    <field name="gross_weight" readonly="1"/>
+                                    <field name="net_weight"   readonly="1"/>
+                                </group>
+                            </group>
+
+                            <!--
+                                Shipping documents list — packing staff can view and download files
+                                but cannot upload or delete. The popup form still works read-only.
+                            -->
+                            <separator string="Shipping Documents"/>
+                            <field name="document_ids" readonly="1">
+                                <list string="Documents">
+                                    <field name="name"       string="Document Name"/>
+                                    <field name="file_count" string="Files"/>
+                                </list>
+                            </field>
+                        </page>
+
+                    </notebook>
+                </sheet>
+
+            </form>
+        </field>
+    </record>
+
+    <!--
+        Packing action — filtered to accepted and closed invoices only.
+        Pending/Sent/Rejected are not relevant to the packing team.
+    -->
+    <record id="action_reema_invoice_packing" model="ir.actions.act_window">
+        <field name="name">Packing Queue</field>
+        <field name="res_model">reema.invoice</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', 'in', ['accepted', 'closed'])]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No accepted invoices to pack yet.
+            </p>
+        </field>
+    </record>
+
+    <!--
+        Bind the packing-specific views to the packing action.
+        Using ir.actions.act_window.view records is the correct way to pin
+        specific views to an action without using the brittle view_ids eval syntax.
+    -->
+    <record id="act_window_view_packing_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_reema_invoice_packing_list"/>
+        <field name="act_window_id" ref="action_reema_invoice_packing"/>
+    </record>
+
+    <record id="act_window_view_packing_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_reema_invoice_packing_form"/>
+        <field name="act_window_id" ref="action_reema_invoice_packing"/>
+    </record>
+
+    <!--
+        Packing menu — visible only to Packing Staff (and admins who see everything).
+        Sits alongside "All Invoices" under the Pro Forma Invoices root.
+    -->
+    <menuitem id="menu_reema_invoice_packing"
+              name="Packing Queue"
+              parent="menu_reema_invoice_root"
+              action="action_reema_invoice_packing"
+              groups="reema_invoice.group_reema_packing_user"
+              sequence="20"/>
 
 </odoo>

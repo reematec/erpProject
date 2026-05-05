@@ -58,7 +58,25 @@ class ReemaInvoice(models.Model):
     incoterm_location  = fields.Char(string='Incoterm Location', default='Sialkot, Pakistan')
     destination        = fields.Char(string='Destination')
 
+    # ── Carton & Weight ───────────────────────────────────────────────────────
+    # These fields feed the packing details section of the PI PDF.
+    carton_qty   = fields.Integer(string='Number of Cartons')
+    carton_size  = fields.Char(string='Carton Size (L×W×H cm)')
+    total_cbm    = fields.Float(string='Total CBM', digits=(10, 3))
+    gross_weight = fields.Float(string='Gross Weight (kg)', digits=(10, 2))
+    net_weight   = fields.Float(string='Net Weight (kg)', digits=(10, 2))
+
+    # Inline shipping documents — each row has a custom label + one file.
+    # Using a child model lets users upload multiple files with meaningful names
+    # (e.g. "Sticker", "Hologram Layout", "Carton Marking") instead of unnamed attachments.
+    document_ids = fields.One2many(
+        'reema.invoice.document', 'invoice_id', string='Shipping Documents',
+    )
+
     # ── Bank Details ──────────────────────────────────────────────────────────
+    # Selecting a bank fills all the detail fields automatically (onchange below).
+    # The detail fields remain editable so one-off overrides are possible per invoice.
+    bank_id      = fields.Many2one('reema.bank.account', string='Select Bank')
     bank_name    = fields.Char(string='Bank Name')
     bank_title   = fields.Char(string='Account Title')
     bank_address = fields.Text(string='Bank Address')
@@ -80,11 +98,16 @@ class ReemaInvoice(models.Model):
         string='Total Amount', compute='_compute_totals', store=True,
         currency_field='currency_id',
     )
-    handling_charges = fields.Monetary(
-        string='Handling Charges', currency_field='currency_id',
+    # Inline additional charges — each row has a custom label and an amount.
+    # This replaces the old fixed handling_charges / courier_charges fields
+    # so the user can add any number of charges (Handling, Courier, Insurance, etc.)
+    # or leave the list empty when none apply.
+    charge_ids = fields.One2many(
+        'reema.invoice.charge', 'invoice_id', string='Additional Charges',
     )
-    courier_charges = fields.Monetary(
-        string='Courier Charges', currency_field='currency_id',
+    total_charges = fields.Monetary(
+        string='Total Charges', compute='_compute_totals', store=True,
+        currency_field='currency_id',
     )
     net_total_payable = fields.Monetary(
         string='Net Total Payable', compute='_compute_totals', store=True,
@@ -93,17 +116,40 @@ class ReemaInvoice(models.Model):
 
     # ── Computed / onchange ───────────────────────────────────────────────────
 
-    @api.depends('line_ids.qty', 'line_ids.price_subtotal', 'handling_charges', 'courier_charges')
+    @api.depends('line_ids.qty', 'line_ids.price_subtotal', 'charge_ids.amount')
     def _compute_totals(self):
         for rec in self:
             rec.total_qty         = sum(rec.line_ids.mapped('qty'))
             rec.total_amount      = sum(rec.line_ids.mapped('price_subtotal'))
-            rec.net_total_payable = rec.total_amount + rec.handling_charges + rec.courier_charges
+            rec.total_charges     = sum(rec.charge_ids.mapped('amount'))
+            rec.net_total_payable = rec.total_amount + rec.total_charges
 
     @api.onchange('partner_id')
     def _onchange_partner_id(self):
         # Pulls the partner's full formatted postal address into the text field.
         self.client_address = self.partner_id._display_address() if self.partner_id else False
+
+    @api.onchange('bank_id')
+    def _onchange_bank_id(self):
+        # When a bank is selected from the predefined list, copy all its details
+        # into the individual fields so they appear on the PDF.
+        # The individual fields stay editable — useful for one-off changes without
+        # modifying the master bank record.
+        if self.bank_id:
+            b = self.bank_id
+            self.bank_name    = b.name
+            self.bank_title   = b.account_title
+            self.bank_address = b.address
+            self.account_num  = b.account_number
+            self.iban         = b.iban
+            self.swift        = b.swift
+        else:
+            self.bank_name    = False
+            self.bank_title   = False
+            self.bank_address = False
+            self.account_num  = False
+            self.iban         = False
+            self.swift        = False
 
     def _compute_our_address(self):
         for rec in self:
@@ -146,20 +192,31 @@ class ReemaInvoiceLine(models.Model):
     invoice_id = fields.Many2one('reema.invoice', string='Invoice', ondelete='cascade')
 
     # Linking to the Sampling Blueprint gives us the product DNA automatically.
+    # string='Sample' here — the view labels it "Name" in the column header.
     sample_id = fields.Many2one(
-        'reema.sampling.blueprint', string='Sample Code', required=True,
+        'reema.sampling.blueprint', string='Sample', required=True,
     )
 
-    # These fields are read-only and auto-populate when sample_id is selected.
-    sample_name  = fields.Char(string='Name',    related='sample_id.name',    readonly=True)
-    sample_color = fields.Char(string='Color',   related='sample_id.color',   readonly=True)
-    hs_code      = fields.Char(string='HS Code', related='sample_id.hs_code', readonly=True)
-    ean          = fields.Char(string='EAN',     related='sample_id.barcode', readonly=True)
+    # sample_name auto-fills from the sample's product name but stays editable.
+    # In Odoo a non-related Char field is always editable; we populate it in onchange.
+    sample_name  = fields.Char(string='Name')
+    # sample_code stores the reference (e.g. RG/2026-0001) — auto-filled when sample_id
+    # is selected via onchange. Stored as Char so the code is stable on the PDF even if
+    # the sample reference is later changed.
+    sample_code  = fields.Char(string='Sample Code')
+    description  = fields.Char(string='Description')
 
-    client_sku = fields.Char(string='Client SKU')
+    # Color, HS Code, and EAN pre-fill from the sample but can be overridden per line.
+    # (Previously they were related/readonly, which prevented editing — this is the fix.)
+    sample_color = fields.Char(string='Color')
+    hs_code      = fields.Char(string='HS Code')
+    ean          = fields.Char(string='EAN')
 
-    # Size is filtered to only show sizes defined on the selected sample (via onchange domain).
-    size_id = fields.Many2one('reema.sampling.size.line', string='Size', required=True)
+    client_sku   = fields.Char(string='Client SKU')
+
+    # Free-text size — no longer locked to the sample's size dropdown.
+    # The user can type any value (e.g. "Size 5", "Custom", "XL") without being restricted.
+    size         = fields.Char(string='Size')
 
     qty           = fields.Float(string='Qty', default=1.0)
     price_unit    = fields.Monetary(string='Unit Price', currency_field='currency_id')
@@ -176,7 +233,67 @@ class ReemaInvoiceLine(models.Model):
 
     @api.onchange('sample_id')
     def _onchange_sample_id(self):
-        # Restrict the Size dropdown to sizes that belong to the chosen sample only.
+        # Pre-fill all line fields from the selected sample.
+        # Because these are now plain Char fields (not related), the user can still edit them
+        # after selection — for example to override the color for a specific order.
         if self.sample_id:
-            return {'domain': {'size_id': [('blueprint_id', '=', self.sample_id.id)]}}
-        return {'domain': {'size_id': []}}
+            s = self.sample_id
+            self.sample_name  = s.name
+            self.sample_code  = s.reference
+            self.sample_color = s.color
+            self.hs_code      = s.hs_code
+            self.ean          = s.barcode
+
+
+class ReemaInvoiceDocument(models.Model):
+    """One shipping document category per row — a label plus its attached files.
+
+    Why ir.attachment instead of fields.Binary:
+    - Binary stores the entire file as base64 in PostgreSQL, which bloats the DB
+      and causes render-resets when the binary widget fires blur in editable lists.
+    - ir.attachment stores files in Odoo's filestore (disk), keeping the DB lean.
+    - The many2many_binary widget gives users a clear "Attach Files" button with
+      in-place preview for images and download links for PDFs.
+    """
+    _name = 'reema.invoice.document'
+    _description = 'Invoice Shipping Document'
+
+    invoice_id = fields.Many2one('reema.invoice', ondelete='cascade')
+    # Custom label — e.g. "Sticker", "Hologram Layout", "Carton Marking"
+    name = fields.Char(string='Document Name')
+    # Files stored as ir.attachment records (Odoo filestore / disk).
+    # Multiple files per document type are supported (e.g. 3 sticker image variants).
+    attachment_ids = fields.Many2many(
+        'ir.attachment',
+        relation='reema_inv_doc_att_rel',
+        column1='doc_id',
+        column2='att_id',
+        string='Files',
+    )
+    # Computed count shown in the inline list so users can see at a glance
+    # how many files each document type has without opening the popup.
+    file_count = fields.Integer(
+        string='File Count', compute='_compute_file_count', store=False,
+    )
+
+    @api.depends('attachment_ids')
+    def _compute_file_count(self):
+        for rec in self:
+            rec.file_count = len(rec.attachment_ids)
+
+
+class ReemaInvoiceCharge(models.Model):
+    """One additional charge per row — description + amount.
+    Replaces the old fixed handling_charges / courier_charges fields.
+    The user can add any number of rows (Handling, Courier, Insurance, etc.)
+    or leave the list empty when there are no extras.
+    """
+    _name = 'reema.invoice.charge'
+    _description = 'Invoice Additional Charge'
+
+    invoice_id  = fields.Many2one('reema.invoice', ondelete='cascade')
+    name        = fields.Char(string='Description', required=True)
+    amount      = fields.Monetary(currency_field='currency_id')
+    # currency_id is pulled from the parent invoice so the monetary widget
+    # displays the correct symbol without the user having to set it manually.
+    currency_id = fields.Many2one('res.currency', related='invoice_id.currency_id')

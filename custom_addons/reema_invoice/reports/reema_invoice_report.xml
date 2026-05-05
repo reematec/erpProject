@@ -88,11 +88,40 @@
                             </div>
                         </div>
 
+                        <!-- ── Packing Details (only shown when any value is set) ── -->
+                        <div class="row mb-4" style="font-size:13px;"
+                             t-if="o.carton_qty or o.carton_size or o.total_cbm or o.gross_weight or o.net_weight">
+                            <div class="col-12">
+                                <strong>Packing Details:</strong>
+                            </div>
+                            <div class="col-2" t-if="o.carton_qty">
+                                <strong>No. of Cartons:</strong><br/>
+                                <span t-field="o.carton_qty"/>
+                            </div>
+                            <div class="col-3" t-if="o.carton_size">
+                                <strong>Carton Size:</strong><br/>
+                                <span t-field="o.carton_size"/>
+                            </div>
+                            <div class="col-2" t-if="o.total_cbm">
+                                <strong>Total CBM:</strong><br/>
+                                <span t-field="o.total_cbm"/>
+                            </div>
+                            <div class="col-2" t-if="o.gross_weight">
+                                <strong>Gross Weight:</strong><br/>
+                                <span t-field="o.gross_weight"/> kg
+                            </div>
+                            <div class="col-2" t-if="o.net_weight">
+                                <strong>Net Weight:</strong><br/>
+                                <span t-field="o.net_weight"/> kg
+                            </div>
+                        </div>
+
                         <!-- ── Line Items ─────────────────────────────────── -->
                         <table class="table table-sm o_main_table mt-2">
                             <thead style="background-color:#f5f5f5;">
                                 <tr>
                                     <th>Sample Code</th>
+                                    <th>Name</th>
                                     <th>Description</th>
                                     <th>Client SKU</th>
                                     <th>Size</th>
@@ -107,10 +136,11 @@
                             <tbody>
                                 <t t-foreach="o.line_ids" t-as="line">
                                     <tr>
-                                        <td><span t-field="line.sample_id.reference"/></td>
+                                        <td><span t-field="line.sample_code"/></td>
                                         <td><span t-field="line.sample_name"/></td>
+                                        <td><span t-field="line.description"/></td>
                                         <td><span t-field="line.client_sku"/></td>
-                                        <td><span t-field="line.size_id.ball_size"/></td>
+                                        <td><span t-field="line.size"/></td>
                                         <td><span t-field="line.sample_color"/></td>
                                         <td><span t-field="line.hs_code"/></td>
                                         <td><span t-field="line.ean"/></td>
@@ -134,14 +164,13 @@
                                         <td>Total Amount</td>
                                         <td class="text-right"><span t-field="o.total_amount"/></td>
                                     </tr>
-                                    <tr t-if="o.handling_charges">
-                                        <td>Handling Charges</td>
-                                        <td class="text-right"><span t-field="o.handling_charges"/></td>
-                                    </tr>
-                                    <tr t-if="o.courier_charges">
-                                        <td>Courier Charges</td>
-                                        <td class="text-right"><span t-field="o.courier_charges"/></td>
-                                    </tr>
+                                    <!-- Each named charge appears on its own row -->
+                                    <t t-foreach="o.charge_ids" t-as="charge">
+                                        <tr>
+                                            <td><span t-field="charge.name"/></td>
+                                            <td class="text-right"><span t-field="charge.amount"/></td>
+                                        </tr>
+                                    </t>
                                     <tr style="font-weight:bold; border-top: 2px solid #000;">
                                         <td>Net Total Payable</td>
                                         <td class="text-right"><span t-field="o.net_total_payable"/></td>

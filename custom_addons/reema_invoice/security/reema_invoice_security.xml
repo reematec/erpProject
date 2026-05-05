@@ -10,4 +10,13 @@
         <field name="category_id" ref="module_category_reema_invoice"/>
         <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
     </record>
+
+    <!-- Packing Staff — read-only access to accepted/closed invoices.
+         They can see carton details and download shipping documents.
+         No prices, no bank details, no charges visible. -->
+    <record id="group_reema_packing_user" model="res.groups">
+        <field name="name">Packing Staff</field>
+        <field name="category_id" ref="module_category_reema_invoice"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
 </odoo>

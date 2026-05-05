@@ -8,13 +8,108 @@
 7. After each task is finished, verify no errors exist and the application is working.
 
 ## Current Tasks
-[ ] Pro Forma Invoice Revision
-    - size field must be text, if already not in db, it allows to enter custom value. currently showing this. reema.sampling.size.line.5
-    - sample code should fill from sample it is not easy to remember the codes, it easy to remember name so allow the user to search by name and both field from it.
-    - colors must also be arbitrary field, it could be picked from sample original field but it also allow new values. HS code and Ean also not getting entered. 
-    - line field must also have description field.
-    - bank details must be selectable from predefined banks. user just select the bank and reset of the fields should fill up auto. just like customer is selected and his address fills up auto.  
-    - discuss first before implementing on this task, if you need, you may create a form for defining the banks just like odoo default has feature to define company but before doing that let me know who it will connect to accounts and chart of accounts so i can thinks should it be done now, or later
+[x] Charges in correct totals order + document file upload fix — Completed May 5, 2026.
+    - Totals block restructured: Total Qty → Total Amount → [named charges inline] → Net Total Payable.
+      Used Bootstrap col-6/ms-auto div to right-align, with tables above/below the charge_ids list.
+      Each charge now appears individually between Total Amount and Net Total Payable.
+    - Switched ReemaInvoiceDocument from fields.Binary to Many2many('ir.attachment').
+      Files now stored in Odoo filestore (disk), not in PostgreSQL.
+      Added file_count computed field for inline list display.
+      Popup form uses widget="many2many_binary" — shows "Attach Files" button + preview/download links.
+      Supports multiple files per document category.
+    - Packing team access: discussed. Recommended Option A (read-only view in existing module,
+      no new module) to implement when needed. Option B (reema_packing module) if packing staff
+      need to write data (e.g. confirm shipment).
+    - Files: reema_invoice.py, views/reema_invoice_views.xml.
+
+[x] Packing team document access (Option A) — Completed May 5, 2026.
+    - Added "Packing Staff" security group (group_reema_packing_user) to reema_invoice_security.xml,
+      under the same Reema Invoice category as Export Staff.
+    - Added read-only access in ir.model.access.csv for packing group:
+      reema.invoice, reema.invoice.line, reema.invoice.document (read=1, write/create/unlink=0).
+      No access to reema.invoice.charge or reema.bank.account (financial data).
+    - Added packing list view (view_reema_invoice_packing_list): PI Number, Client, Order No,
+      Shipping Date, Cartons, State. Filtered to accepted/closed invoices only.
+    - Added packing form view (view_reema_invoice_packing_form): fully read-only (edit="0").
+      Shows Order Details, Products tab (no Unit Price / Amount columns), and
+      Shipping & Documents tab (logistics fields + document list with file counts).
+      Bank Details tab is intentionally absent — no financial data for packing staff.
+    - Added action_reema_invoice_packing with domain [('state', 'in', ['accepted','closed'])].
+      Bound to packing-specific list and form views via ir.actions.act_window.view records.
+    - Added "Packing Queue" menu under Pro Forma Invoices root, visible only to Packing Staff group.
+    - Fixed duplicate-label warnings: total_charges string→"Total Charges"; file_count string→"File Count".
+    - Files: security/reema_invoice_security.xml, security/ir.model.access.csv,
+      views/reema_invoice_views.xml, models/reema_invoice.py.
+
+[x] UI fixes — 2-column customer info, charge names, document bug — Completed May 5, 2026.
+    - Customer Details split into 2 columns: Client/Address/Date on left, Order No/Order Date/
+      Payment Terms on right. Done by nesting two <group> elements inside the parent group.
+    - Removed "Additional Charges" aggregate from totals footer. Charges already visible
+      individually by name in the charge_ids inline list above — no need to repeat them
+      accumulated. Footer now shows Total Amount → Net Total Payable only.
+    - Fixed document name disappearing bug: root cause was Binary widget inside editable
+      inline list firing blur on click, which re-rendered the row from server (clearing unsaved
+      name). Fix: removed Binary widget from inline list; the list now shows Document Name
+      (editable) + Filename (read-only). A popup form (view_reema_invoice_document_form) handles
+      the actual file upload safely — user types name inline, commits, then opens row to upload.
+    - Files: reema_invoice.py (removed required=True from document name),
+      views/reema_invoice_views.xml.
+
+
+[x] Shipping tab, inline documents, inline charges, sample filter — Completed May 5, 2026.
+    - Moved Shipping &amp; Terms from the main form into its own notebook tab, positioned
+      between Products/Samples and Bank Details.
+    - Added Carton &amp; Weight group in Shipping tab: Number of Cartons, Carton Size (L×W×H),
+      Total CBM, Gross Weight (kg), Net Weight (kg).
+    - Added inline Shipping Documents list (reema.invoice.document model): each row has a
+      custom Document Name and a file upload (Binary). Supports any number of rows —
+      Sticker, Hologram Layout, Carton Marking, etc.
+    - Removed fixed handling_charges / courier_charges fields; replaced with inline
+      Additional Charges list (reema.invoice.charge model): Description + Amount per row.
+      Charges are optional — leave the list empty if none apply. net_total_payable
+      recomputes from charge_ids.
+    - Added domain filter on sample_id in invoice lines: only samples whose customer_id
+      matches the selected client appear in the dropdown.
+    - PDF report: added Packing Details section (cartons, CBM, weight); charges now loop
+      over charge_ids with their custom names.
+    - Files: reema_invoice.py (new models + fields), views/reema_invoice_views.xml,
+      reports/reema_invoice_report.xml, security/ir.model.access.csv.
+
+
+
+
+[x] Pro Forma Invoice Revision — Bank Details — Completed May 5, 2026.
+    - Created reema.bank.account model (custom, no accounting link — Option A).
+    - Fields: Bank Name, Account Title, Address, Account Number, IBAN, SWIFT, active.
+    - Added bank_id Many2one to reema.invoice with onchange that auto-fills all bank detail fields.
+    - Detail fields remain editable per-invoice for one-off overrides.
+    - Bank Details tab now shows a "Select Bank" dropdown at the top, followed by the filled fields.
+    - Added Configuration > Bank Accounts submenu under the Pro Forma Invoices menu for admin setup.
+    - Export Staff users can read banks; only admins can create/edit/delete bank records.
+    - Files: reema_invoice/models/reema_bank_account.py (new), models/__init__.py,
+      reema_invoice.py, views/reema_invoice_views.xml, security/ir.model.access.csv.
+
+[x] Sample Code — Name-first search and auto-fill — Completed May 5, 2026.
+    - Reverted _rec_name override on ReemaSamplingBlueprint so dropdown shows product name (like Client field).
+    - Kept _name_search override so typing a reference code also finds the sample.
+    - Added sample_code Char field to reema.invoice.line; auto-fills with sample_id.reference via onchange.
+    - Column order in invoice line: Name (sample_id Many2one, searchable) → Sample Code (auto-fill) → rest.
+    - PDF report uses stored sample_code and sample_name fields for stability.
+
+[x] Pro Forma Invoice Revision — Lines & Sample — Completed May 5, 2026.
+    - Size field: removed Many2one size_id (reema.sampling.size.line), replaced with free-text Char `size`.
+      Users can now type any size value (Size 5, Custom, XL) without being restricted to the sample's sizes.
+    - Sample code search: added _rec_name='reference' to ReemaSamplingBlueprint so the dropdown shows
+      reference codes. Added _name_search() override so users can still search by product name (easy to
+      remember), and the reference auto-fills the Sample Code column on selection.
+    - Color / HS Code / EAN editable: converted from related/readonly fields to plain Char fields.
+      They pre-fill via _onchange_sample_id when a sample is selected, but can be overridden per line.
+    - Description field: added Char `description` field to reema.invoice.line, visible in the line grid
+      and in the PDF report.
+    - Files changed: reema_sampling/models/reema_sampling_blueprint.py,
+      reema_invoice/models/reema_invoice.py, reema_invoice/views/reema_invoice_views.xml,
+      reema_invoice/reports/reema_invoice_report.xml.
+    - Both modules upgraded with no errors.
 
 [x] Invoice Module - Completed May 4, 2026.
     - Built reema_invoice module from scratch.
