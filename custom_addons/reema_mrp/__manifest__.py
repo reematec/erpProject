@@ -15,6 +15,7 @@
         'views/mrp_views.xml',
         'views/reema_piece_rate_views.xml',
         'views/reema_production_order_views.xml',
+        'views/reema_wo_batch_views.xml',
     ],
     'installable': True,
     'application': True,

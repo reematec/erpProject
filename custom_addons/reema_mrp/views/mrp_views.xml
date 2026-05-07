@@ -38,9 +38,26 @@
         <field name="inherit_id" ref="mrp.mrp_production_workorder_tree_editable_view"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='workcenter_id']" position="after">
-                <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                <field name="contractor_ids" widget="many2many_tags" options="{'no_create': True, 'no_edit': True}"/>
                 <field name="piece_rate_id" readonly="1"/>
                 <field name="labor_cost" sum="Total Labor"/>
+                <field name="qty_batch_completed" string="Completed" readonly="1"/>
+                <button name="action_log_batch" type="object"
+                        icon="fa-plus-circle"
+                        title="Log batch progress"
+                        invisible="state in ('done', 'cancel')"/>
+            </xpath>
+            <!-- Operation name is set from the BOM — floor operators must not rename it -->
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <!-- Work center is defined in the BOM and must not change after MO creation -->
+            <xpath expr="//field[@name='workcenter_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <!-- Disable delete — work orders are managed at BOM level, not removed mid-production -->
+            <xpath expr="//list" position="attributes">
+                <attribute name="delete">0</attribute>
             </xpath>
             <!-- Hide expected and real duration — not relevant for floor operators -->
             <xpath expr="//field[@name='duration_expected']" position="attributes">

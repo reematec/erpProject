@@ -1,12 +1,24 @@
 from odoo import models, fields, api
+from odoo.exceptions import UserError
 
 
 class MrpWorkorder(models.Model):
     _inherit = 'mrp.workorder'
 
-    contractor_id = fields.Many2one('res.partner', string='Contractor', domain=[('supplier_rank', '>', 0)])
+    contractor_ids = fields.Many2many(
+        'res.partner',
+        'mrp_workorder_contractor_rel',
+        'workorder_id', 'partner_id',
+        string='Contractors',
+        domain=[('supplier_rank', '>', 0)],
+    )
     piece_rate_id = fields.Many2one('reema.piece.rate', string='Applied Piece Rate', compute='_compute_piece_rate', store=True)
     labor_cost = fields.Float(string='Labor Cost', compute='_compute_labor_cost', store=True)
+
+    # Batch progress tracking
+    batch_entry_ids = fields.One2many('reema.wo.batch.entry', 'workorder_id', string='Batch Entries')
+    qty_batch_completed = fields.Float(string='Completed So Far', compute='_compute_qty_batch_completed', store=True)
+    batch_released = fields.Boolean(string='Released to Next Hall', default=False)
 
     @api.depends('production_id.construction_type', 'production_id.ball_size', 'workcenter_id', 'production_id.complexity_level')
     def _compute_piece_rate(self):
@@ -20,24 +32,67 @@ class MrpWorkorder(models.Model):
             ], limit=1)
             wo.piece_rate_id = rate.id if rate else False
 
-    @api.depends('qty_produced', 'piece_rate_id')
+    @api.depends('batch_entry_ids.labor_cost', 'qty_produced', 'piece_rate_id')
     def _compute_labor_cost(self):
         for wo in self:
-            wo.labor_cost = wo.qty_produced * (wo.piece_rate_id.rate if wo.piece_rate_id else 0.0)
+            if wo.batch_entry_ids:
+                # Batch flow: labor cost summed from each contractor's entries
+                wo.labor_cost = sum(wo.batch_entry_ids.mapped('labor_cost'))
+            else:
+                # Standard single-finish flow: qty_produced × hall rate
+                wo.labor_cost = wo.qty_produced * (wo.piece_rate_id.rate if wo.piece_rate_id else 0.0)
+
+    @api.depends('batch_entry_ids.qty')
+    def _compute_qty_batch_completed(self):
+        for wo in self:
+            wo.qty_batch_completed = sum(wo.batch_entry_ids.mapped('qty'))
+
+    # Extend state computation: a work order blocked by a predecessor is also unblocked
+    # when the predecessor sets batch_released=True (partial completion released to next hall).
+    @api.depends('blocked_by_workorder_ids.batch_released')
+    def _compute_state(self):
+        super()._compute_state()
+        for wo in self:
+            if self._context.get('no_recursion'):
+                continue
+            if wo.state != 'pending':
+                continue
+            predecessors = wo.blocked_by_workorder_ids.with_context(no_recursion=True)
+            if not predecessors:
+                continue
+            all_released = all(
+                p.state in ('done', 'cancel') or p.batch_released
+                for p in predecessors
+            )
+            if all_released:
+                wo.state = 'ready' if wo.production_availability == 'assigned' else 'waiting'
+
+    def action_log_batch(self):
+        self.ensure_one()
+        if self.state in ('done', 'cancel'):
+            raise UserError('Cannot log progress on a finished or cancelled work order.')
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Log Batch Progress',
+            'res_model': 'reema.batch.entry.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_workorder_id': self.id},
+        }
 
     def button_finish(self):
         res = super().button_finish()
         for wo in self:
             wc = wo.workcenter_id
-            # Skip halls with no SFG product or no location configured
             if not wc.sfg_product_id or not wc.location_id:
+                continue
+            # Batch entries already created SFG moves per log entry — skip double-creation
+            if wo.batch_entry_ids:
                 continue
             qty = wo.qty_produced
             if not qty:
                 continue
             # Move SFG product from virtual production location into this hall's stock location.
-            # Source is the virtual production location (consumed materials "become" the SFG here).
-            # Destination is the hall's own location — stays there until physically picked up.
             production_loc = self.env.ref('stock.location_production')
             move = self.env['stock.move'].create({
                 'name': f'SFG: {wc.sfg_product_id.name}',

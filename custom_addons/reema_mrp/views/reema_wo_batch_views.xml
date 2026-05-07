@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Log Batch Progress wizard -->
+    <record id="view_reema_batch_entry_wizard_form" model="ir.ui.view">
+        <field name="name">reema.batch.entry.wizard.form</field>
+        <field name="model">reema.batch.entry.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Log Batch Progress">
+                <group>
+                    <group string="Work Order">
+                        <field name="workorder_id" readonly="1"/>
+                        <field name="workcenter_name" readonly="1"/>
+                    </group>
+                    <group string="Progress">
+                        <field name="qty_production" readonly="1"/>
+                        <field name="qty_batch_completed" readonly="1"/>
+                    </group>
+                </group>
+                <group>
+                    <field name="available_contractor_ids" invisible="1"/>
+                    <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                    <field name="qty" autofocus="1"/>
+                    <field name="notes" placeholder="Optional: e.g. 'Morning shift batch'"/>
+                </group>
+                <footer>
+                    <button name="action_confirm" type="object" string="Save" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

@@ -200,12 +200,12 @@ class MrpWorkorderReema(models.Model):
 
     def button_start(self, raise_on_invalid_state=False):
         for wo in self:
-            # Block 1: contractor must be assigned before work can start.
-            if not wo.contractor_id:
+            # Block 1: at least one contractor must be assigned before work can start.
+            if not wo.contractor_ids:
                 raise UserError(
                     f'Cannot start "{wo.workcenter_id.name}".\n\n'
                     f'No contractor assigned to this work order. '
-                    f'Assign a contractor before starting production.'
+                    f'Assign at least one contractor before starting production.'
                 )
             # Block 2: Store Keeper must have issued at least some materials.
             # Partial issue is fine — halls process what is available.
@@ -219,6 +219,19 @@ class MrpWorkorderReema(models.Model):
                     f'The Store Keeper must validate the material transfer in Inventory '
                     f'before production can begin.'
                 )
+            # Block 3: subsequent halls need SFG output from the previous hall.
+            # Even 1 unit is enough — cutting can start on whatever lamination has ready.
+            # Skip this check if the predecessor is already fully done or cancelled.
+            for pred in wo.blocked_by_workorder_ids:
+                if pred.state in ('done', 'cancel'):
+                    continue
+                if pred.qty_batch_completed == 0:
+                    raise UserError(
+                        f'Cannot start "{wo.workcenter_id.name}".\n\n'
+                        f'No output received from {pred.workcenter_id.name} yet.\n\n'
+                        f'The {pred.workcenter_id.name} supervisor must log at least one '
+                        f'batch before this work order can start.'
+                    )
         return super().button_start(raise_on_invalid_state=raise_on_invalid_state)
 
 

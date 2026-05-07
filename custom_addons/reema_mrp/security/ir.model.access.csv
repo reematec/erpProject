@@ -5,3 +5,6 @@ access_reema_production_order_user,reema.production.order user,model_reema_produ
 access_reema_production_order_admin,reema.production.order admin,model_reema_production_order,base.group_system,1,1,1,1
 access_reema_production_order_line_user,reema.production.order.line user,model_reema_production_order_line,base.group_user,1,0,0,0
 access_reema_production_order_line_admin,reema.production.order.line admin,model_reema_production_order_line,base.group_system,1,1,1,1
+access_reema_wo_batch_entry_user,reema.wo.batch.entry user,model_reema_wo_batch_entry,base.group_user,1,1,1,0
+access_reema_wo_batch_entry_admin,reema.wo.batch.entry admin,model_reema_wo_batch_entry,base.group_system,1,1,1,1
+access_reema_batch_entry_wizard_user,reema.batch.entry.wizard user,model_reema_batch_entry_wizard,base.group_user,1,1,1,1
