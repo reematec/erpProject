@@ -1,2 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_reema_piece_rate,reema.piece.rate,model_reema_piece_rate,base.group_user,1,1,1,1
+access_reema_piece_rate_user,reema.piece.rate user,model_reema_piece_rate,base.group_user,1,0,0,0
+access_reema_piece_rate_admin,reema.piece.rate admin,model_reema_piece_rate,base.group_system,1,1,1,1
+access_reema_production_order_user,reema.production.order user,model_reema_production_order,base.group_user,1,0,0,0
+access_reema_production_order_admin,reema.production.order admin,model_reema_production_order,base.group_system,1,1,1,1
+access_reema_production_order_line_user,reema.production.order.line user,model_reema_production_order_line,base.group_user,1,0,0,0
+access_reema_production_order_line_admin,reema.production.order.line admin,model_reema_production_order_line,base.group_system,1,1,1,1

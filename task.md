@@ -8,6 +8,503 @@
 7. After each task is finished, verify no errors exist and the application is working.
 
 ## Current Tasks
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PHASE 1 — Foundation
+     Goal: Invoice accepted → MOs appear on Waleed's dashboard with BOM
+     pre-filled. Waleed confirms → Ali Shan sees Work Orders per hall.
+════════════════════════════════════════════════════════════════════════ -->
+[ ] Sampling Status buttons flow revision:
+  - the flow buttons must be draft, in progress, Completed, Sample approved, Production ready.
+  - Shipping must be separate from flow button and only activate one completed. it is possible that sample approved without shipping, just through images.
+
+[ ] Create & Edit must be disabled in sampling blueprint.
+[ ] In sampling BOM must activate when sample status is approved. Before that BOM Button must be disabled.
+[ ] The client field in sample, remove create & Edit
+[ ] the cancel button in MO and sample creates alot of confusion. I often think its the button to go back.
+
+[x] Phase 1.1 — Fix reema_mrp bugs — Completed May 5 2026
+    - Duplicate line was a reporting artifact — actual code was fine.
+    - wizard/ had only __pycache__ (source .py files deleted). Created
+      wizard/__init__.py so the import works without cache dependency.
+    - Added data/ir_sequence_data.xml to manifest data list so the
+      BATCH sequence is loaded into the database on upgrade.
+    - Fixed security: split base.group_user (full CRUD) into two rows —
+      base.group_user (read-only) and base.group_system (full CRUD).
+    - Fixed missing parent menu: reema_mrp_menu_config and
+      reema_mrp_menu_root were referenced but never defined. Added
+      "Production" root menu and "Configuration" submenu to
+      reema_piece_rate_views.xml.
+    - Module upgrades cleanly with EXIT: 0 and no errors.
+    - Files: reema_mrp/wizard/__init__.py (new),
+      reema_mrp/__manifest__.py, reema_mrp/security/ir.model.access.csv,
+      reema_mrp/views/reema_piece_rate_views.xml
+
+[x] Phase 1.2 — Add sample_approved and production_ready statuses to blueprint — Completed May 5 2026
+    - Added sample_approved and production_ready to state field.
+    - Contextual header buttons: Start / Mark Sample Approved / Mark Production Ready /
+      Complete / Ship / Cancel / Reset to Draft.
+    - action_sample_approved schedules a To-Do activity for Waleed to define BOM.
+    - construction_type values changed to MRP abbreviations: ms/hyb/thb/hs.
+      DB migration ran: existing record updated from 'machine_stitched' → 'ms'.
+    - Files: reema_sampling/models/reema_sampling_blueprint.py,
+      reema_sampling/views/reema_sampling_blueprint_views.xml
+
+[x] Phase 1.3 — Smart button on blueprint → BOM — Completed May 5 2026
+    - bom_count computed field; oe_button_box BOM button in blueprint form.
+    - action_view_bom: 0 BOMs → new form pre-filled with blueprint materials (qty 1 each);
+      1 BOM → open directly; 2+ → list view.
+    - Inherited mrp.bom form in reema_mrp: removed Catalog button, hidden
+      Product Attachment column to reduce clutter for Waleed.
+    - Files: reema_sampling/models/reema_sampling_blueprint.py,
+      reema_sampling/views/reema_sampling_blueprint_views.xml,
+      reema_mrp/views/mrp_views.xml
+
+[ ] Phase 1.4 — Set up 17 Work Centers and SFG products (data setup)
+    - Create mrp.workcenter records for all 17 halls in Odoo
+    - Create SFG product records for each hall output:
+      Laminated Sheet, Cut Panel Set, Printed Panel Set, Stitched Shell,
+      Foam-Applied Shell, Turned Shell, Shell with Bladder, Closed Ball,
+      Bound Carcass (THB), Molded Ball (THB), Shaped Ball, Cleaned Ball,
+      Sealed Ball, Packed Carton (FG)
+    - Assign sfg_product_id on each Work Center
+    - Mark QC work centers with is_qc_point = True (Hall 13 and Hall 16)
+    - This is configuration/data, not custom code
+
+[x] Phase 1.5 — SFG stock movement on work order completion — Completed May 7 2026
+    - Added location_id field to mrp.workcenter (hall's own stock location).
+    - Created "Production Halls" view location under WH with 13 child internal
+      locations (one per hall that has an SFG product). Auto-assigned via shell.
+    - Implemented button_finish override on MrpWorkorder: when a work order completes,
+      creates a validated stock.move from Virtual/Production → hall's location_id
+      for qty_produced units of the hall's sfg_product_id.
+    - Halls with no sfg_product_id or no location_id are silently skipped
+      (QC halls, ILO, Packing).
+    - location_id field visible on Work Center form for manual review/adjustment.
+    - Files: reema_mrp/models/mrp_workcenter.py, reema_mrp/models/mrp_workorder.py,
+      reema_mrp/views/mrp_views.xml
+    - Implement the stock movement in reema_mrp/models/mrp_workorder.py
+      button_finish override (hook exists, logic not written)
+    - When Ali Shan completes a work order:
+        1. Deduct input SFG from WIP stock (previous hall's sfg_product_id)
+        2. Add this hall's sfg_product_id to WIP stock (qty = qty_produced)
+        3. Gap between input and output = waste/scrap at that stage
+    - This gives full live WIP inventory tracking at every hall
+    - Files: reema_mrp/models/mrp_workorder.py
+
+[x] Phase 1.6 + 1.7 — Production Order button on invoice + PO model — Completed May 5 2026
+    - reema.production.order model in reema_mrp (name, invoice_id, partner_id,
+      state draft/confirmed/done/cancelled, date_planned, line_ids, mo_count).
+    - reema.production.order.line model (sample_id, size, qty, bom_id, mo_id).
+    - "Create Production Order" button on accepted invoice — hidden once PO exists.
+      Button auto-fills PO lines from invoice lines + auto-detects BOM per blueprint.
+    - Smart button on invoice shows PO count; Production > Production Orders menu added.
+    - reema_mrp now depends on reema_invoice (manufacturing knows about invoices, not reverse).
+    - Files: reema_mrp/models/reema_production_order.py (new),
+      reema_mrp/views/reema_production_order_views.xml (new),
+      reema_mrp/__manifest__.py, reema_mrp/data/ir_sequence_data.xml,
+      reema_mrp/security/ir.model.access.csv
+
+[x] Phase 1.5b — "Create MOs" button on Production Order — Completed May 6 2026
+    - Added action_create_mos() on reema.production.order.
+    - Loops through lines where bom_id is set AND mo_id is empty.
+    - Creates mrp.production per line: product_id from BOM variant, qty, bom_id, origin=PO name.
+    - Sets line.mo_id after creation. Raises UserError if nothing to process.
+    - MO smart button always visible (shows 0 MOs as pending signal).
+    - Files: reema_mrp/models/reema_production_order.py,
+      reema_mrp/views/reema_production_order_views.xml
+
+[x] Phase 1.5d — Enforce BOM Operation Dependencies — Completed May 6 2026
+    - Problem 1: Waleed (or any future user) must manually tick "Operation Dependencies"
+      checkbox in BOM Miscellaneous tab. Easy to forget, breaks work order sequencing silently.
+    - Problem 2: MOs can be created from a BOM where nobody defined any "Blocked By" on
+      operations — work orders start in wrong order or all at once.
+
+    Fix 1 — Auto-enable on every new BOM:
+    - Added MrpBomReemaExt class in reema_production_order.py inheriting mrp.bom.
+    - Overrides allow_operation_dependencies default from False → True.
+    - Every new BOM silently starts with operation dependencies enabled.
+
+    Fix 2 — Hide the checkbox so it cannot be unchecked:
+    - Added xpath in mrp_views.xml to set invisible=True on the
+      allow_operation_dependencies field in BOM Miscellaneous tab.
+    - Users cannot toggle it — it stays on permanently.
+
+    Fix 3 — Block MO creation if no Blocked By is defined at all:
+    - In action_create_mos(), before creating any MO, validates that each BOM
+      with >1 operations has at least one operation with blocked_by_operation_ids set.
+    - If ALL operations have no Blocked By → clear UserError naming the blueprint.
+    - Parallel-track BOMs (multiple operations with no Blocked By) are allowed —
+      only the case where nobody defined any dependency is blocked.
+    - Why: strict "exactly one root" check would break valid parallel workflows
+      in other manufacturing contexts (two halls running simultaneously then merging).
+    - Files: reema_mrp/models/reema_production_order.py,
+      reema_mrp/views/mrp_views.xml
+
+[x] Phase 1.5c (partial) — Reset MO per line — Completed May 6 2026
+    - Problem: BOM is incomplete when MOs are created (during initial setup this
+      is common). Waleed needs to cancel the wrong MO and recreate it after fixing
+      the BOM. Previous workaround required direct DB/shell access — not possible
+      for Waleed.
+    - Solution: added action_reset_mo() on reema.production.order.line.
+      - If MO is in draft or confirmed: cancels it via action_cancel(), then deletes it (unlink).
+        Deleting is safe because no work has been recorded yet.
+      - If MO is in progress or done: raises UserError — cannot reset, coordinate with floor.
+      - Clears mo_id on the line after deletion.
+    - Added undo icon button (fa-undo) in the PO lines list, visible only when mo_id is set.
+      Button shows a confirmation dialog before proceeding.
+    - After reset, Waleed clicks "Create MOs" again — new MO created with the updated BOM.
+    - Files: reema_mrp/models/reema_production_order.py,
+      reema_mrp/views/reema_production_order_views.xml
+
+[ ] Phase 1.5c (remaining) — Sync from Invoice on Production Order
+    - Problem: Invoice quantities change after PO is created (client revision).
+      PO lines stay on old quantities with no indication they're out of sync.
+    - "Sync from Invoice" button visible when PO is confirmed
+    - Compares each PO line qty against its invoice_line_id.qty
+    - Updates PO line qty where they differ
+    - If line has an MO: also updates mrp.production.product_qty on the linked MO
+      (only if MO is still in draft — warn otherwise)
+    - Files: reema_mrp/models/reema_production_order.py,
+      reema_mrp/views/reema_production_order_views.xml
+
+[ ] Phase 1.4 — Set up 17 Work Centers (data setup — no code needed)
+    - In Manufacturing → Configuration → Work Centers, create:
+        Hall 1:  Lamination
+        Hall 2:  Cutting
+        Hall 3:  Printing
+        Hall 4:  Embossing
+        Hall 5:  Skiving
+        Hall 6:  Stitching (MS/HYB)
+        Hall 7:  Foam Attachment (HYB only)
+        Hall 8:  Bladder Preparation
+        Hall 9:  Bladder Attachment / Turning
+        Hall 10: Shell Closing
+        Hall 11: THB Bonding (THB only)
+        Hall 12: Shaping & Inflation
+        Hall 13: Initial QC  ← mark is_qc_point = True
+        Hall 14: Seam Sealing & Cleaning
+        Hall 15: Packing
+        Hall 16: Final QC    ← mark is_qc_point = True
+        Hall 17: Storage / Dispatch
+    - Each Work Center will later get sfg_product_id assigned (Phase 1.5)
+    - This is UI configuration, not code
+
+[ ] Phase 1.8 — Role-based access control (all users)
+    ─────────────────────────────────────────────────────
+    ROLES TO DEFINE:
+
+    Sampling Team (e.g. user: store)
+      Group: group_reema_sampling_user  (in reema_sampling module)
+      Access: Sampling menu only
+        - reema.sampling.blueprint: read, write, create (no delete)
+        - reema.sampling.size.line, reema.sampling.material.line: full
+        - Cannot see: Invoices, Production, Manufacturing menus
+
+    Production Manager (user: Waleed)
+      Group: group_reema_production_manager  (in reema_mrp module)
+      Access: Production + Sampling (read only) + Invoice (no prices/bank)
+        - reema.sampling.blueprint: read only (to view specs/materials)
+        - mrp.bom, mrp.bom.line: full (define and edit BOMs)
+        - reema.production.order, reema.production.order.line: full
+        - mrp.production, mrp.workorder: full
+        - reema.invoice: read only, EXCLUDING price_unit, bank tab fields
+        - Cannot see: Invoice create/edit, Bank Details tab
+
+    Export Staff (user: Sameer) — already implemented
+      Group: group_reema_export_staff  (in reema_invoice module — exists)
+      Access: Invoices + Sampling (read only)
+        - Already working. May need: cannot see Production Orders unless
+          relevant for order status visibility — defer to feedback.
+
+    Floor Supervisor (user: Ali Shan) — Phase 2
+      Group: group_reema_floor_supervisor  (in reema_mrp module)
+      Access: Work Orders only (tablet view)
+        - mrp.workorder: read + write (mark done, enter qty)
+        - Cannot see: BOM, Invoices, full MO form
+        - Deferred to Phase 2.1 (floor interface)
+
+    Finance (user: Irfan) — Phase 2-3
+      Group: group_reema_finance  (in reema_mrp module)
+      Access: Payables approval + reporting
+        - Piece rate payables, contractor ledger
+        - Deferred to Phase 2.3
+
+    ─────────────────────────────────────────────────────
+    IMPLEMENTATION STEPS (when planned):
+
+    Step 1 — reema_sampling security group
+      - Add reema_sampling_security.xml with group_reema_sampling_user
+      - Restrict Sampling menu to this group + Admin
+      - Update ir.model.access.csv: sampling models writable by sampling group
+      - Files: reema_sampling/security/reema_sampling_security.xml (new),
+        reema_sampling/security/ir.model.access.csv,
+        reema_sampling/views/reema_sampling_blueprint_views.xml (menu group attr)
+
+    Step 2 — reema_mrp production manager group
+      - Add reema_mrp_security.xml with group_reema_production_manager
+      - Production menu visible to production manager + Admin
+      - Read-only invoice fields: use field-level groups or separate
+        read-only view for invoice (no price_unit, no bank tab)
+      - Files: reema_mrp/security/reema_mrp_security.xml (new),
+        reema_mrp/security/ir.model.access.csv,
+        reema_mrp/views/reema_production_order_views.xml
+
+    Step 2b — Restrict Cancel MO and Delete on MO
+      - Cancel MO button: visible only to Production Manager + Admin groups
+        (currently visible to all — move to group-restricted visibility)
+      - Delete MO (kebab/action menu): restrict via ir.rule or group access
+        on mrp.production model — floor operators cannot delete MOs
+      - File: reema_mrp/security/reema_mrp_security.xml (when created in Step 2)
+
+    Step 3 — Assign existing users to groups
+      - store user → group_reema_sampling_user
+      - waleed user → group_reema_production_manager
+      - sameer user → already in group_reema_export_staff
+      - Verify each user can only see their designated menus
+
+    Note: Developer mode must be enabled to manage users:
+      http://localhost:8069/web?debug=1 → Settings → Users & Companies → Users
+
+
+[x] Phase 1.5e — Material issuance block on work order start — Completed May 7 2026
+    - Extended button_start on MrpWorkorderReema with a second hard block:
+      checks mo.move_raw_ids — if ALL component moves are not 'done' (nothing issued),
+      raises UserError naming the MO and directing supervisor to the Store Keeper.
+    - Partial issue allowed: if at least one move is 'done', work order can start.
+    - MOs with no raw material moves (no components) are unaffected.
+    - Enforcement chain: Store Keeper skips entry → Supervisor blocked → escalates
+      to Production Manager → Store Keeper interrogated → forced to validate.
+    - File: reema_mrp/models/reema_production_order.py (MrpWorkorderReema.button_start)
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PHASE A — Accounting, Finance & Procurement Foundation
+     Goal: Full double-entry accounting, purchase cycle, and inventory
+     valuation live. Must complete before go-live date.
+     See DESIGN.md for full design decisions and rationale.
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] Phase A.1 — Install Accounting + Purchase + Pakistan Localization
+    - In Odoo Apps: install "Accounting", "Purchase", "Pakistan - Accounting"
+    - Accounting replaces basic Invoicing — enables full double-entry
+    - Purchase enables PO → Receipt → Vendor Bill → Payment flow
+    - Pakistan localization (l10n_pk) provides standard Chart of Accounts + tax config
+    - Verify: Accounting menu appears, Purchase menu appears
+
+[ ] Phase A.2 — Fiscal Year & Currency
+    - Accounting → Configuration → Settings:
+      - Fiscal Year: July 1 – June 30
+      - Default Currency: PKR
+      - Lock: no multi-currency needed (all transactions in PKR)
+    - Create first fiscal year period if not auto-created
+
+[ ] Phase A.3 — Chart of Accounts review
+    - Pakistan localization installs a standard CoA automatically
+    - In-house accountant reviews and renames/adds accounts to match Reema's books
+    - Key accounts to confirm exist (see DESIGN.md → Chart of Accounts section)
+    - Add if missing: Supplier Advances, Customer Advances, Labor Cost, Contractor Cash
+
+[ ] Phase A.4 — Tax Configuration
+    - Sales tax: zero-rated (0%) for all export sales — set as default on customer records
+    - Purchase WHT: configure Section 153 tax (4.5% filer / 9% non-filer)
+    - Add boolean field on supplier (res.partner): withholding_allowed
+      (custom field — needed to flag suppliers who refuse WHT deduction)
+
+[ ] Phase A.5 — Bank Journals & Cash Journals
+    - Create one journal per bank account (2–3 accounts)
+    - Create "Petty Cash" cash journal
+    - Create "Contractor Cash" cash journal
+    - Link each journal to its corresponding CoA account
+
+[ ] Phase A.6 — Warehouse Sub-Locations
+    - Inventory → Configuration → Locations
+    - Under "Reema Warehouse / Input" (or equivalent):
+      - Raw Material Store
+      - Production Halls (parent, virtual)
+        - One child location per hall (17 halls)
+      - Finished Goods Store
+      - Packing Area
+    - Set correct usage type: Internal for all
+
+[x] Phase A.0 — Product Group field on all products — Completed May 7 2026
+    - Added product_group Selection field to product.template (in reema_mrp/models/reema_product.py)
+    - Groups: Raw Material, Packaging, Semi-Finished Good, Finished Good
+    - Field appears on product form (after Internal Category), product list (optional column)
+    - Search view: 4 quick filters (one per group) + Group By option
+    - sfg_product_id on Work Center form now restricted by domain to SFG products only
+    - Indexed for fast filtering across large product lists
+    - Files: reema_mrp/models/reema_product.py (new), reema_mrp/models/__init__.py,
+      reema_mrp/views/mrp_views.xml
+
+[ ] Phase A.7 — Product Categories with AVCO
+    - Inventory → Configuration → Product Categories
+    - "Raw Materials": Costing Method = Average Cost (AVCO), Inventory Valuation = Automated
+    - "Finished Goods": Costing Method = Average Cost (AVCO), Inventory Valuation = Automated
+    - Assign all existing raw material products to Raw Materials category
+    - Assign finished goods products to Finished Goods category
+
+[ ] Phase A.8 — User Roles & Access Rights
+    - See Phase 1.8 detail already in this file (combined with manufacturing roles)
+    - Add new roles for accounting/procurement staff: Accountant, Store Keeper, Gate
+    - Accounting group: full Accounting module, no stock operations
+    - Store Keeper group: Inventory receive/issue, Purchase receipt validation, no payments
+    - Gate group: delivery in/out confirmation only
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PHASE B — Procurement Cycle
+     Goal: All supplier material purchases flow through Odoo with full
+     3-way match: PO → Receipt → Bill → Payment.
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] Phase B.1 — Supplier Master Data
+    - Create supplier records in Contacts for all raw material suppliers
+    - Required fields per supplier: Name, NTN, Address, Bank Details
+    - Add withholding_allowed flag (True/False) per supplier
+    - Assign payment terms where applicable (credit vs cash)
+
+[ ] Phase B.2 — Raw Material Products
+    - Create product records for all raw materials: PU sheets, fabric, latex, thread,
+      bladders, valves, panels, lining, etc.
+    - Set product category → Raw Materials (AVCO)
+    - Set correct Unit of Measure (kg, meters, pcs)
+    - Set reorder rules if applicable
+
+[ ] Phase B.3 — Purchase Flow Walkthrough
+    - Test full cycle: Create PO → Receive goods (Store Keeper) → Create Bill
+      (Accountant) → Register Payment
+    - Verify AVCO cost updates on receipt
+    - Verify journal entries at each step (see DESIGN.md → Procurement Flow)
+    - Verify 3-way match: bill cannot be validated without matching PO and receipt
+
+[ ] Phase B.4 — Advance Payment to Suppliers
+    - Configure advance payment workflow:
+      - Payment registered against supplier before PO receipt
+      - Posted to "Supplier Advances" account (asset)
+      - Cleared when bill is matched and payment applied
+    - Test with a real supplier advance scenario
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PHASE D — Sales & Export Accounting
+     Goal: Pro Forma Invoice → Delivery → Export Invoice → Payment
+     fully recorded in accounting.
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] Phase D.1 — Delivery Order linked to Pro Forma Invoice
+    - When production is complete and goods are ready for export:
+      create Delivery Order from Finished Goods Store
+    - Link delivery to the Pro Forma Invoice
+
+[ ] Phase D.2 — Export Invoice in Accounting
+    - After delivery, create accounting invoice (account.move) linked to Pro Forma
+    - Amount in PKR (rate applied externally)
+    - Tax: zero-rated
+    - Journal entry: Dr Accounts Receivable / Cr Sales Revenue
+
+[ ] Phase D.3 — Customer Advance Payments
+    - Configure advance from customer workflow:
+      - Customer pays deposit before production starts
+      - Posted to "Customer Advances" account (liability)
+      - Cleared when final invoice is raised and payment applied
+
+[ ] Phase D.4 — Customer Payment & Bank Reconciliation
+    - Register PKR payment receipt against export invoice
+    - Reconcile with bank statement
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PHASE E — Controls & Go-Live
+     Goal: Enforce all controls, enter opening balances, lock history,
+     and train staff before going live.
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] Phase E.1 — Physical Inventory Workflow
+    - Configure periodic inventory count process
+    - Each hall location counted separately (WIP per hall)
+    - Discrepancies require reason before adjustment is posted
+
+[ ] Phase E.2 — Opening Balance Entry
+    - On agreed go-live date, enter:
+      1. Raw material stock quantities + AVCO unit cost
+      2. Cash and petty cash balances
+      3. Bank account balances
+      4. Outstanding supplier payables
+      5. Outstanding customer receivables
+    - All entries dated the go-live date
+
+[ ] Phase E.3 — Period Locking & User Training
+    - Lock all accounting periods before go-live date (no back-dating)
+    - Train each role on their specific screens and workflows
+    - Verify each user can only access their designated areas
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PHASE 2 — Production Floor & Costing
+     Goal: Live WIP tracking, material consumption, piece-rate payables.
+     Start only after Phase 1 is stable and team is using it daily.
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] Phase 2.1 — Ali Shan work order interface
+    - Simple per-hall view showing Ali Shan only his current work orders
+    - Mobile-friendly (used on tablet on the factory floor)
+    - Shows: ball type, quantity, contractor, current hall
+    - One button: "Mark Done" with qty field
+
+[ ] Phase 2.2 — Material consumption at correct work order step
+    - Configure "Consumed in Operation" on BOM components:
+        Bladder → consumed at Hall 9 (Bladder Attachment)
+        Foam Panel → consumed at Hall 7 (Foam Attachment, HYB only)
+        Thread → consumed at Hall 6 (Stitching)
+        PU + Fabric → consumed at Hall 2 (Lamination)
+    - System deducts stock at the exact hall where material is physically used
+
+[ ] Phase 2.3 — Piece rate matrix population and activation
+    - After Phase 1 work centers are set up, Waleed fills piece rate matrix:
+        Hall + construction type + ball size + complexity → rate per unit
+    - Contractor payable auto-entry when work order is confirmed by Ali Shan
+    - Irfan sees pending payables per contractor per week for approval
+
+[ ] Phase 2.4 — QC pass / rework / reject buttons
+    - Hall 13 (Initial QC) and Hall 16 (Final QC) get three buttons:
+        Pass → ball moves to next hall, contractor cleared for payment
+        Rework → ball sent back to previous hall, contractor flagged (no double pay)
+        Reject → ball moved to B-Grade warehouse or Scrap location
+    - System records rejection reason for monthly quality reports
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PHASE 3 — Quality, HS & Advanced Costing
+     Goal: Full production control, HS ball ILO tracking, accurate COGS.
+     Start only after Phase 2 is stable.
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] Phase 3.1 — HS ball ILO contractor tracking
+    - Printed Panel Sets issued to ILO contractors (outgoing transfer)
+    - Stitched Shells received back (incoming transfer)
+    - Gatekeeper interface: scan out / scan in
+    - Track "in transit" quantity per contractor
+
+[ ] Phase 3.2 — Yield gap variance reporting
+    - Compare input vs output at each hall (detect waste/theft)
+    - Variance posted to the Manufacturing Order
+    - Monthly report: expected consumption vs actual per hall
+
+[ ] Phase 3.3 — QC rejection cost redistribution
+    - When balls are scrapped in Final QC, redistribute cost of
+      scrapped balls across remaining good balls in the same MO
+    - Use Scrap Entry within the Manufacturing Order
+
+[ ] Phase 3.4 — Full COGS calculation per order
+    - Raw material landed cost + cumulative piece rates + consumables
+      + factory overhead absorption at Final QC stage
+    - Cost report per invoice/client showing true margin
+
+
+
+
+## Completed Tasks
 [x] Charges in correct totals order + document file upload fix — Completed May 5, 2026.
     - Totals block restructured: Total Qty → Total Amount → [named charges inline] → Net Total Payable.
       Used Bootstrap col-6/ms-auto div to right-align, with tables above/below the charge_ids list.
@@ -75,9 +572,6 @@
     - Files: reema_invoice.py (new models + fields), views/reema_invoice_views.xml,
       reports/reema_invoice_report.xml, security/ir.model.access.csv.
 
-
-
-
 [x] Pro Forma Invoice Revision — Bank Details — Completed May 5, 2026.
     - Created reema.bank.account model (custom, no accounting link — Option A).
     - Fields: Bank Name, Account Title, Address, Account Number, IBAN, SWIFT, active.
@@ -129,8 +623,6 @@
     - Logic to map operations based on Construction Type (e.g., skip Turning for HS).
     - Logic to fetch Piece-Rates from matrix.
     - Note: On hold — focus on Invoice module first. -->
-
-## Completed Tasks
 
 [x] Implement Print Report for Sampling Blueprint - Completed May 4, 2026.
     - Created `reports/reema_sampling_report.xml` with a full QWeb PDF template.

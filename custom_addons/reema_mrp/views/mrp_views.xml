@@ -7,9 +7,26 @@
         <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='bom_id']" position="after">
-                <field name="construction_type" options="{'no_create': True, 'no_edit': True}"/>
-                <field name="ball_size" options="{'no_create': True, 'no_edit': True}"/>
-                <field name="complexity_level" options="{'no_create': True, 'no_edit': True}"/>
+                <field name="construction_type" options="{'no_create': True, 'no_edit': True}"
+                       readonly="state != 'draft'"/>
+                <field name="ball_size" options="{'no_create': True, 'no_edit': True}"
+                       readonly="state != 'draft'"/>
+                <field name="complexity_level" options="{'no_create': True, 'no_edit': True}"
+                       readonly="state != 'draft'"/>
+            </xpath>
+            <!-- Responsible becomes readonly once MO is confirmed -->
+            <xpath expr="//field[@name='user_id'][@widget='many2one_avatar']" position="attributes">
+                <attribute name="readonly">state != 'draft'</attribute>
+            </xpath>
+            <!-- Move Cancel to the very end and rename to "Cancel MO" so it's not confused with browser back -->
+            <xpath expr="//header/button[@name='action_cancel']" position="replace"/>
+            <xpath expr="//header/button[@name='button_unbuild']" position="after">
+                <button name="action_cancel" type="object" string="Cancel MO"
+                        data-hotkey="x"
+                        invisible="not id or state in ('done', 'cancel')"
+                        confirm="Are you sure you want to cancel this Manufacturing Order? This cannot be undone."
+                        confirm-label="Yes, Cancel MO"
+                        cancel-label="Go Back"/>
             </xpath>
         </field>
     </record>
@@ -25,10 +42,58 @@
                 <field name="piece_rate_id" readonly="1"/>
                 <field name="labor_cost" sum="Total Labor"/>
             </xpath>
+            <!-- Hide expected and real duration — not relevant for floor operators -->
+            <xpath expr="//field[@name='duration_expected']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='duration']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
         </field>
     </record>
 
-    <!-- Extend WorkCenter Form -->
+    <!-- BOM Form: hide Catalog shortcut and Product Attachment column -->
+    <record id="mrp_bom_reema_form" model="ir.ui.view">
+        <field name="name">mrp.bom.reema.form</field>
+        <field name="model">mrp.bom</field>
+        <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
+        <field name="arch" type="xml">
+            <!-- Remove "Catalog" button from component add-line controls -->
+            <xpath expr="//field[@name='bom_line_ids']//control/button[@name='action_add_from_catalog']" position="replace"/>
+            <!-- Hide Product Attachment button and count from component lines -->
+            <xpath expr="//field[@name='bom_line_ids']//button[@name='action_see_attachments']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='bom_line_ids']//field[@name='attachments_count']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <!-- Hide the operation dependencies toggle — always on by default, no user action needed -->
+            <xpath expr="//page[@name='miscellaneous']//field[@name='allow_operation_dependencies']"
+                   position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- BOM Operations list: replace the Archive button with a Delete button that shows a confirm dialog.
+         Odoo sets delete="0" and puts an Archive button — we swap that for a proper delete with warning. -->
+    <record id="mrp_routing_workcenter_bom_reema" model="ir.ui.view">
+        <field name="name">mrp.routing.workcenter.bom.reema</field>
+        <field name="model">mrp.routing.workcenter</field>
+        <field name="inherit_id" ref="mrp.mrp_routing_workcenter_bom_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_archive']" position="replace">
+                <button name="action_delete_operation"
+                        type="object"
+                        icon="fa-trash"
+                        title="Delete this operation"
+                        confirm="Are you sure you want to permanently delete this operation? This cannot be undone."
+                        invisible="context.get('parent_production_id')"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Extend WorkCenter Form: SFG product and hall location -->
     <record id="mrp_workcenter_reema_form" model="ir.ui.view">
         <field name="name">mrp.workcenter.reema.form</field>
         <field name="model">mrp.workcenter</field>
@@ -36,7 +101,69 @@
         <field name="arch" type="xml">
             <xpath expr="//group[@name='capacity']" position="inside">
                 <field name="is_qc_point"/>
-                <field name="sfg_product_id" options="{'no_create': True, 'no_edit': True}"/>
+                <field name="sfg_product_id"
+                       domain="[('product_group', '=', 'sfg')]"
+                       options="{'no_create': True, 'no_edit': True}"/>
+                <field name="location_id"
+                       domain="[('usage', '=', 'internal')]"
+                       options="{'no_create': True, 'no_edit': True}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Product Form: add Product Group after Product Type; move Category to follow it -->
+    <record id="product_template_reema_form" model="ir.ui.view">
+        <field name="name">product.template.reema.form</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='type']" position="after">
+                <field name="product_group"/>
+                <field name="categ_id" string="Category"/>
+            </xpath>
+            <xpath expr="//group[@name='group_standard_price']//field[@name='categ_id']" position="replace"/>
+        </field>
+    </record>
+
+    <!-- Product List: add Product Group column and filter -->
+    <record id="product_template_reema_list" model="ir.ui.view">
+        <field name="name">product.template.reema.list</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='categ_id']" position="after">
+                <field name="product_group" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Default product views to list instead of kanban -->
+    <record id="product.product_template_action_all" model="ir.actions.act_window">
+        <field name="view_mode">list,kanban,form,activity</field>
+    </record>
+    <record id="stock.product_template_action_product" model="ir.actions.act_window">
+        <field name="view_mode">list,kanban,form,activity</field>
+    </record>
+    <record id="mrp.product_template_action" model="ir.actions.act_window">
+        <field name="view_mode">list,kanban,form</field>
+    </record>
+
+    <!-- Product Search: add Product Group filter and groupby -->
+    <record id="product_template_reema_search" model="ir.ui.view">
+        <field name="name">product.template.reema.search</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='inactive']" position="before">
+                <filter string="Raw Materials"  name="group_raw"      domain="[('product_group','=','raw_material')]"/>
+                <filter string="Packaging"      name="group_pkg"      domain="[('product_group','=','packaging')]"/>
+                <filter string="Semi-Finished"  name="group_sfg"      domain="[('product_group','=','sfg')]"/>
+                <filter string="Finished Goods" name="group_fg"       domain="[('product_group','=','finished_good')]"/>
+                <separator/>
+            </xpath>
+            <xpath expr="//filter[@name='inactive']" position="before">
+                <filter string="Product Group" name="groupby_product_group"
+                        context="{'group_by': 'product_group'}"/>
             </xpath>
         </field>
     </record>

@@ -326,3 +326,249 @@ Hall 3-12	Raw Material + Cumulative Piece Rates + Consumables	WIP (Semi-Finished
 Hall 13-16	WIP + QC Labor + Factory Overheads	Finished Goods Asset
 Hall 17	Finished Goods + Packing Material + Shipping	Cost of Goods Sold (COGS)
 
+
+
+
+________________________________________________________________________________
+ERP SYSTEM ARCHITECTURE & IMPLEMENTATION DECISIONS
+________________________________________________________________________________
+(Decided through discussion — May 2026)
+
+
+1. MODULE STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+reema_sampling   — Sampling blueprints. Manages samples from creation through
+                   client approval. Depends on mrp.
+reema_invoice    — Pro Forma Invoices. Export staff workflow. Depends on
+                   reema_sampling and account.
+reema_mrp        — Manufacturing Orders, Work Orders, Piece Rate Matrix.
+                   Extends Odoo's standard mrp module. Already installed.
+                   Authored by Gemini CLI — has known bugs to fix.
+mrp (Odoo)       — Standard Manufacturing module. Already installed and active.
+
+
+2. AGREED PRODUCTION FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Sampling team creates blueprint
+        ↓
+Client approves physical sample
+        ↓
+Sampling team marks blueprint → "Sample Approved"
+        ↓
+  ┌─────────────────────────────┐    ┌──────────────────────────────────────┐
+  │ Sameer creates invoice from │    │ Waleed gets notified → opens         │
+  │ "Sample Approved" blueprint │    │ blueprint BOM button → defines       │
+  │ and sends to client.        │    │ quantities at bulk scale, wastage    │
+  │ No delay waiting for BOM.   │    │ factors, hall routing → marks        │
+  └─────────────────────────────┘    │ blueprint "Production Ready"         │
+                                     └──────────────────────────────────────┘
+        ↓
+Client accepts invoice
+        ↓
+Sameer clicks "Create Production Order" on accepted invoice
+        ↓
+System auto-creates:
+  — One Production Order record (custom, linked to invoice)
+  — One MO per invoice line (product + qty + BOM pre-filled from blueprint)
+  — If BOM not ready: MO created with "BOM Pending" flag on Waleed's dashboard
+        ↓
+Waleed reviews Production Order on dashboard, adjusts quantities (e.g. +10%
+QC buffer), confirms → Ali Shan sees Work Orders on his screen
+        ↓
+Ali Shan completes Work Orders hall by hall → SFG stock moves automatically
+        ↓
+Irfan reviews contractor payable entries → approves → payment processed
+
+
+3. RESPONSIBILITY MODEL
+────────────────────────────────────────────────────────────────────────────────
+Person          Role                    System Access
+──────────────────────────────────────────────────────────────────────────────
+Sampling Team   Create blueprints,      Full access to reema_sampling.
+                define materials at     Mark "Sample Approved".
+                sample scale, mark
+                Sample Approved.
+
+Waleed          Complete BOM (bulk      Read-only on sampling blueprints.
+(Production     quantities, wastage,    Smart button on blueprint → opens BOM.
+Manager)        routing), mark          Full access to MOs and Work Centers.
+                Production Ready,       Sees Production Order dashboard.
+                manage MOs.
+
+Sameer          Create invoices from    Full access to reema_invoice.
+(Sales/Export)  approved blueprints,    No BOM access whatsoever.
+                click Create
+                Production Order.
+
+Ali Shan        Complete Work Orders    Work order completion only.
+(Production     hall by hall on the     Sees his queue per hall.
+Assistant)      floor.
+
+Irfan           Approve contractor      Accounting module — vendor bills,
+(Accountant)    payable entries.        payables, costing reports.
+
+Gatekeeper      Issue/receive HS        Gate security — stock moves for
+                material to/from ILO    ILO issue and receive (Phase 2).
+                contractors.
+
+
+4. BOM ARCHITECTURE
+────────────────────────────────────────────────────────────────────────────────
+DECISION: Single MO per ball type + sfg_product_id per Work Center.
+
+The BOM is a TEMPLATE — defined once per ball design, reused on every MO.
+The BOM lives in Odoo standard mrp.bom, linked to the product (product_tmpl_id).
+The sampling blueprint has product_tmpl_id → BOM is naturally linked via product.
+A smart button on the blueprint opens the BOM directly for Waleed to complete.
+
+Sampling team fills (at sample scale):
+  — Material list (which products go into the ball)
+
+Waleed fills (at bulk production scale):
+  — Exact quantities per ball with wastage buffer
+  — Which component is consumed at which specific work order step
+    (e.g. Bladder consumed at Hall 9, Foam consumed at Hall 7)
+  — Hall routing (operations sequence based on construction type)
+  — Contractor per operation
+  — Piece rate auto-looked up from reema.piece.rate matrix
+
+Construction type determines routing:
+  MS:  Hall 2→3→4→6→8→9→10→13→14→15→16→17
+  HYB: Hall 2→3→4→6→7→8→9→10→13→14→15→16→17
+  THB: Hall 2→3→4→11→12→13→14→15→16→17
+  HS:  Hall 2→3→4→[ILO external]→13→14→15→16→17 (Phase 2)
+
+
+5. SFG TRACKING ARCHITECTURE — sfg_product_id per Work Center
+────────────────────────────────────────────────────────────────────────────────
+DECISION: All 4 SFG criteria (count in WIP, detect waste, track location,
+management visibility) apply at every major hall. Solution: use the
+sfg_product_id field already defined on MrpWorkcenter in reema_mrp.
+
+ONE MO per ball type. ONE set of Work Orders flowing through all halls.
+When Ali Shan completes a work order (button_finish), the system:
+  1. Deducts the input SFG from WIP stock (previous hall's output)
+  2. Adds this hall's sfg_product_id to WIP stock (quantity = qty_produced)
+  3. The difference = waste/scrap at that stage
+
+Work Center to SFG Product mapping:
+  Hall 2  (Lamination)      → Laminated Sheet
+  Hall 3  (Cutting)         → Cut Panel Set
+  Hall 4  (Printing)        → Printed Panel Set
+  Hall 6  (Stitching MS/HYB)→ Stitched Shell
+  Hall 7  (Foam Attach HYB) → Foam-Applied Shell
+  Hall 8  (Turning)         → Turned Shell
+  Hall 9  (Bladder)         → Shell with Bladder
+  Hall 10 (Closing)         → Closed Ball
+  Hall 11 (THB Binding)     → Bound Carcass
+  Hall 12 (THB Molding)     → Molded Ball
+  Hall 14 (Shaping)         → Shaped Ball
+  Hall 15 (Cleaning)        → Cleaned Ball
+  Hall 15b(Seam Sealing)    → Sealed Ball
+  Hall 17 (Packing)         → Packed Carton (Finished Good)
+
+This gives full WIP counting and waste detection at every stage with only
+ONE MO per ball type (not 13 cascading MOs).
+
+The button_finish override in reema_mrp/models/mrp_workorder.py has the
+hook but no implementation — this stock movement logic must be written.
+
+SFG products are extensible: add or remove SFG products at any stage at
+any time by updating the Work Center's sfg_product_id field. Existing
+in-progress MOs are not affected.
+
+
+6. BLUEPRINT STATUSES — NEW STATUSES TO ADD
+────────────────────────────────────────────────────────────────────────────────
+Current:  draft → in_progress → completed → shipped → cancelled
+New:      draft → in_progress → sample_approved → production_ready
+                                    → completed → shipped
+
+sample_approved:  Sampling team marks this when client physically approves
+                  the sample. Triggers notification to Waleed. Sameer can
+                  now add this blueprint to an invoice.
+
+production_ready: Waleed marks this after completing the BOM (quantities,
+                  routing, wastage). Blueprint is fully ready for bulk
+                  production MO creation.
+
+
+7. PIECE RATE MATRIX
+────────────────────────────────────────────────────────────────────────────────
+Model already built in reema_mrp (reema.piece.rate).
+Links: hall (mrp.workcenter) + construction_type + ball_size + complexity → rate.
+Status: DEFERRED to Phase 2.
+Reason: Cannot be properly filled until the 17 Work Centers are set up in Odoo.
+        Once work centers exist and Phase 1 is stable, Waleed reviews and
+        populates the matrix. Piece-rate auto-calculation on work order
+        completion then activates automatically.
+
+
+8. HS BALL / ILO CONTRACTOR TRACKING
+────────────────────────────────────────────────────────────────────────────────
+Status: DEFERRED to Phase 3.
+Reason: Requires subcontracting flow (Printed Panel Sets issued to external
+        ILO contractors, Stitched Shells received back). Complex enough to
+        be its own phase. MS, HYB, THB are prioritised first.
+
+
+9. EXISTING reema_mrp STATUS & KNOWN BUGS
+────────────────────────────────────────────────────────────────────────────────
+Module is installed and active. Contains:
+  — reema.piece.rate model (Piece Rate Matrix)
+  — mrp.production extension: construction_type, ball_size, complexity_level
+  — mrp.workorder extension: contractor_id, piece_rate_id, labor_cost
+  — mrp.workcenter extension: is_qc_point, sfg_product_id
+  — button_finish hook (stock movement logic NOT yet implemented)
+
+Known bugs to fix before Phase 1:
+  1. Duplicate line in mrp_workorder.py line 14 — piece rate search broken
+  2. wizard/ directory is empty but imported in __init__.py — import error risk
+  3. ir_sequence_data.xml not listed in manifest — sequence never loaded
+  4. Security too open — base.group_user has full CRUD on piece rates
+     (should be restricted to Waleed / admin only)
+
+
+10. IMPLEMENTATION PHASES
+────────────────────────────────────────────────────────────────────────────────
+PHASE 1 — Foundation (build first):
+  Goal: Invoice accepted → MOs appear on Waleed's dashboard with BOM pre-filled.
+        Waleed confirms → Ali Shan sees Work Orders per hall.
+
+  Tasks:
+  — Fix reema_mrp bugs (duplicate line, wizard import, sequence, security)
+  — Add sample_approved and production_ready statuses to blueprint
+  — Add smart button on blueprint → opens BOM for that product (Waleed's entry point)
+  — Notify Waleed (Odoo activity) when blueprint is marked Sample Approved
+  — Set up 17 Work Centers in Odoo (data setup — one per hall)
+  — Set up SFG products for all stages (data setup)
+  — Assign sfg_product_id on each Work Center
+  — Implement button_finish stock movement logic in reema_mrp
+  — "Create Production Order" button on accepted invoice
+  — Production Order model (groups all MOs under one invoice, Waleed's dashboard)
+  — Access control: Waleed group (read-only blueprints, full MOs)
+  — Restrict invoice lines to Sample Approved or Production Ready blueprints
+
+PHASE 2 — Production Floor & Costing:
+  Goal: Live WIP tracking, material consumption, piece-rate payables.
+
+  Tasks:
+  — Ali Shan work order interface (mobile-friendly, simple per-hall view)
+  — Material consumption at correct work order step (Consumed in Operation)
+  — SFG stock movements at each hall completion (Phase 1 lays groundwork)
+  — Piece rate matrix filled in (after work centers are set up in Phase 1)
+  — Contractor payable auto-entry when work order confirmed
+  — Irfan payable approval flow
+  — QC pass / rework / reject buttons (Hall 13 and Hall 16)
+
+PHASE 3 — Quality, HS & Advanced Costing:
+  Goal: Full production control, HS ball tracking, accurate COGS.
+
+  Tasks:
+  — HS ball ILO tracking (subcontracting — issue panel sets, receive shells)
+  — QC rejection cost redistribution across remaining good balls
+  — Yield gap variance reporting (input vs output per hall)
+  — Wastage factor analysis per order
+  — Full COGS calculation per order
+  — Overhead absorption at Final QC stage

@@ -23,13 +23,19 @@ class ReemaSamplingBlueprint(models.Model):
     customer_id = fields.Many2one('res.partner', string='Customer', tracking=True)
     sampling_date = fields.Date(string='Date', default=fields.Date.context_today, tracking=True)
 
-    # Fields for status tracking of the sample production lifecycle.
+    # Full lifecycle status for a sampling blueprint.
+    # sample_approved: client has physically signed off the sample →
+    #   Sameer can invoice, Waleed gets notified to define the BOM.
+    # production_ready: Waleed has completed the BOM (quantities, routing,
+    #   wastage) → the blueprint is safe to include in invoices for bulk orders.
     state = fields.Selection([
-        ('draft', 'Draft'),
-        ('in_progress', 'In Progress'),
-        ('completed', 'Completed'),
-        ('shipped', 'Shipped'),
-        ('cancelled', 'Cancelled')
+        ('draft',             'Draft'),
+        ('in_progress',       'In Progress'),
+        ('sample_approved',   'Sample Approved'),
+        ('production_ready',  'Production Ready'),
+        ('completed',         'Completed'),
+        ('shipped',           'Shipped'),
+        ('cancelled',         'Cancelled'),
     ], string='Status', default='draft', required=True, tracking=True)
     
     completion_date = fields.Date(string='Ready Till Date')
@@ -48,15 +54,15 @@ class ReemaSamplingBlueprint(models.Model):
     # Force the product type to 'consu' (Consumable) so it doesn't track inventory by default.
     # This addresses the requirement that samples should not show in stock.
     # We use related='product_tmpl_id.type' to ensure it points to the underlying template field.
-    type = fields.Selection(related='product_tmpl_id.type', default='consu', readonly=True)
+    type = fields.Selection(related='product_tmpl_id.type', readonly=True)
 
     # 'Selection' fields provide predefined choices, enforcing data integrity 
     # instead of allowing users to type arbitrary, inconsistent text.
     construction_type = fields.Selection([
-        ('machine_stitched', 'Machine Stitched'),
-        ('hybrid', 'Hybrid'),
-        ('thermo_bonded', 'Thermo Bonded'),
-        ('hand_stitched', 'Hand Stitched')
+        ('ms',  'Machine Stitched'),
+        ('hyb', 'Hybrid'),
+        ('thb', 'Thermo Bonded'),
+        ('hs',  'Hand Stitched'),
     ], string='Construction Type')
     
     ball_type = fields.Selection([
@@ -78,7 +84,9 @@ class ReemaSamplingBlueprint(models.Model):
     color = fields.Char(string='Primary Color', tracking=True)
     
     hs_code = fields.Char(string='HS Code', tracking=True)
-    
+
+    bom_count = fields.Integer(string='BOM Count', compute='_compute_bom_count')
+
     notes = fields.Text(string='Notes')
     
     # One2many relationships allow us to manage child records (Sizes and Materials)
@@ -112,6 +120,67 @@ class ReemaSamplingBlueprint(models.Model):
         if name:
             domain = ['|', ('name', operator, name), ('reference', operator, name)] + domain
         return self._search(domain, limit=limit, order=order)
+
+    def _compute_bom_count(self):
+        BOM = self.env['mrp.bom']
+        for rec in self:
+            rec.bom_count = BOM.search_count([('product_tmpl_id', '=', rec.product_tmpl_id.id)])
+
+    def action_view_bom(self):
+        self.ensure_one()
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': 'Bill of Materials',
+            'res_model': 'mrp.bom',
+            'domain': [('product_tmpl_id', '=', self.product_tmpl_id.id)],
+            'context': {
+                'default_product_tmpl_id': self.product_tmpl_id.id,
+                'default_type': 'normal',
+                'default_bom_line_ids': [
+                    (0, 0, {'product_id': line.product_id.id, 'product_qty': 1.0})
+                    for line in self.material_line_ids
+                ],
+            },
+        }
+        if self.bom_count == 1:
+            bom = self.env['mrp.bom'].search(
+                [('product_tmpl_id', '=', self.product_tmpl_id.id)], limit=1
+            )
+            action['view_mode'] = 'form'
+            action['res_id'] = bom.id
+        elif self.bom_count == 0:
+            action['view_mode'] = 'form'
+        else:
+            action['view_mode'] = 'list,form'
+        return action
+
+    def action_start(self):
+        self.write({'state': 'in_progress'})
+
+    def action_sample_approved(self):
+        self.write({'state': 'sample_approved'})
+        # Notify Waleed to define the BOM for this blueprint
+        self.activity_schedule(
+            'mail.mail_activity_data_todo',
+            summary='Define BOM for approved sample',
+            note=f'Sample <b>{self.reference} – {self.name}</b> has been approved. '
+                 f'Please define the Bill of Materials so this design can be used in bulk production orders.',
+        )
+
+    def action_production_ready(self):
+        self.write({'state': 'production_ready'})
+
+    def action_completed(self):
+        self.write({'state': 'completed'})
+
+    def action_shipped(self):
+        self.write({'state': 'shipped'})
+
+    def action_cancel(self):
+        self.write({'state': 'cancelled'})
+
+    def action_reset_draft(self):
+        self.write({'state': 'draft'})
 
     def action_print_sampling(self):
         # Looks up the registered report action by its full XML name and triggers PDF generation.
