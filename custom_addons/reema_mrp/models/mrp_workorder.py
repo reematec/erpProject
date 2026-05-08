@@ -19,6 +19,8 @@ class MrpWorkorder(models.Model):
     batch_entry_ids = fields.One2many('reema.wo.batch.entry', 'workorder_id', string='Batch Entries')
     qty_batch_completed = fields.Float(string='Completed So Far', compute='_compute_qty_batch_completed', store=True)
     batch_released = fields.Boolean(string='Released to Next Hall', default=False)
+    hall_qty = fields.Float(string='Target', compute='_compute_hall_qty', store=True)
+    qty_balls_completed = fields.Float(string='Balls Done', compute='_compute_qty_balls_completed', store=True)
 
     @api.depends('production_id.construction_type', 'production_id.ball_size', 'workcenter_id', 'production_id.complexity_level')
     def _compute_piece_rate(self):
@@ -46,6 +48,17 @@ class MrpWorkorder(models.Model):
     def _compute_qty_batch_completed(self):
         for wo in self:
             wo.qty_batch_completed = sum(wo.batch_entry_ids.mapped('qty'))
+
+    @api.depends('qty_production', 'operation_id.balls_per_unit')
+    def _compute_hall_qty(self):
+        for wo in self:
+            bpu = wo.operation_id.balls_per_unit or 1.0
+            wo.hall_qty = wo.qty_production / bpu
+
+    @api.depends('batch_entry_ids.qty_balls')
+    def _compute_qty_balls_completed(self):
+        for wo in self:
+            wo.qty_balls_completed = sum(wo.batch_entry_ids.mapped('qty_balls'))
 
     # Extend state computation: a work order blocked by a predecessor is also unblocked
     # when the predecessor sets batch_released=True (partial completion released to next hall).

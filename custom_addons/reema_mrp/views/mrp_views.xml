@@ -18,6 +18,20 @@
             <xpath expr="//field[@name='user_id'][@widget='many2one_avatar']" position="attributes">
                 <attribute name="readonly">state != 'draft'</attribute>
             </xpath>
+            <!-- qty_producing is tracked through work order batch entries — make it readonly -->
+            <xpath expr="//field[@name='qty_producing']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <!-- Produce/Produce All, Plan, Start are redundant — tracked via work order batch entries -->
+            <xpath expr="//button[@name='button_mark_done']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//button[@name='button_plan']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_start']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <!-- Move Cancel to the very end and rename to "Cancel MO" so it's not confused with browser back -->
             <xpath expr="//header/button[@name='action_cancel']" position="replace"/>
             <xpath expr="//header/button[@name='button_unbuild']" position="after">
@@ -35,17 +49,26 @@
     <record id="mrp_workorder_reema_list" model="ir.ui.view">
         <field name="name">mrp.workorder.reema.list</field>
         <field name="model">mrp.workorder</field>
-        <field name="inherit_id" ref="mrp.mrp_production_workorder_tree_editable_view"/>
+        <field name="inherit_id" ref="mrp.mrp_production_workorder_tree_editable_view_mo_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='workcenter_id']" position="after">
+            <!-- Insert custom columns after product_id so product stays right after work center -->
+            <xpath expr="//field[@name='product_id']" position="after">
                 <field name="contractor_ids" widget="many2many_tags" options="{'no_create': True, 'no_edit': True}"/>
-                <field name="piece_rate_id" readonly="1"/>
-                <field name="labor_cost" sum="Total Labor"/>
+                <field name="piece_rate_id" readonly="1" optional="show"/>
+                <field name="labor_cost" sum="Total Labor" optional="show"/>
+                <field name="hall_qty" string="Target" readonly="1"/>
                 <field name="qty_batch_completed" string="Completed" readonly="1"/>
+                <field name="qty_balls_completed" string="Balls Done" readonly="1" optional="show"/>
                 <button name="action_log_batch" type="object"
                         icon="fa-plus-circle"
                         title="Log batch progress"
                         invisible="state in ('done', 'cancel')"/>
+            </xpath>
+            <!-- Hide the "Open Work Order" external-link icon added by the MO form view -->
+            <xpath expr="//button[@name='action_open_wizard']" position="replace"/>
+            <!-- Hide Pause — redundant in batch logging flow -->
+            <xpath expr="//button[@name='button_pending']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
             </xpath>
             <!-- Operation name is set from the BOM — floor operators must not rename it -->
             <xpath expr="//field[@name='name']" position="attributes">
@@ -58,6 +81,13 @@
             <!-- Disable delete — work orders are managed at BOM level, not removed mid-production -->
             <xpath expr="//list" position="attributes">
                 <attribute name="delete">0</attribute>
+            </xpath>
+            <!-- Hide qty columns — hall_qty (Target) is the only qty operators need -->
+            <xpath expr="//field[@name='qty_remaining']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='qty_produced']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
             </xpath>
             <!-- Hide expected and real duration — not relevant for floor operators -->
             <xpath expr="//field[@name='duration_expected']" position="attributes">
@@ -93,12 +123,16 @@
     </record>
 
     <!-- BOM Operations list: replace the Archive button with a Delete button that shows a confirm dialog.
-         Odoo sets delete="0" and puts an Archive button — we swap that for a proper delete with warning. -->
+         Odoo sets delete="0" and puts an Archive button — we swap that for a proper delete with warning.
+         Also make the list inline-editable so balls_per_unit can be set without opening a popup. -->
     <record id="mrp_routing_workcenter_bom_reema" model="ir.ui.view">
         <field name="name">mrp.routing.workcenter.bom.reema</field>
         <field name="model">mrp.routing.workcenter</field>
         <field name="inherit_id" ref="mrp.mrp_routing_workcenter_bom_tree_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="editable">bottom</attribute>
+            </xpath>
             <xpath expr="//button[@name='action_archive']" position="replace">
                 <button name="action_delete_operation"
                         type="object"
@@ -106,6 +140,33 @@
                         title="Delete this operation"
                         confirm="Are you sure you want to permanently delete this operation? This cannot be undone."
                         invisible="context.get('parent_production_id')"/>
+            </xpath>
+            <xpath expr="//field[@name='workcenter_id']" position="after">
+                <field name="balls_per_unit"/>
+            </xpath>
+            <!-- Hide Duration Computation and Duration columns — not relevant for floor ops -->
+            <xpath expr="//field[@name='time_mode']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='time_cycle']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <!-- Show Blocked By column by default (remove optional hide + always visible) -->
+            <xpath expr="//field[@name='blocked_by_operation_ids']" position="attributes">
+                <attribute name="optional">show</attribute>
+                <attribute name="column_invisible">0</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- BOM Operations popup form: add balls_per_unit so it's editable when opening a row -->
+    <record id="mrp_routing_workcenter_form_reema" model="ir.ui.view">
+        <field name="name">mrp.routing.workcenter.form.reema</field>
+        <field name="model">mrp.routing.workcenter</field>
+        <field name="inherit_id" ref="mrp.mrp_routing_workcenter_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='workcenter_id']" position="after">
+                <field name="balls_per_unit"/>
             </xpath>
         </field>
     </record>

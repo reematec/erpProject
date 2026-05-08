@@ -12,7 +12,7 @@
                         <field name="workcenter_name" readonly="1"/>
                     </group>
                     <group string="Progress">
-                        <field name="qty_production" readonly="1"/>
+                        <field name="hall_qty" string="Target" readonly="1"/>
                         <field name="qty_batch_completed" readonly="1"/>
                     </group>
                 </group>

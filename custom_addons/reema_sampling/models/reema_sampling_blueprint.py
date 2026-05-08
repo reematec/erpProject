@@ -74,7 +74,8 @@ class ReemaSamplingBlueprint(models.Model):
         ('training', 'Training Ball')
     ], string='Type')
     
-    number_of_panels = fields.Integer(string='Number of Panels')
+    knife_line_ids = fields.One2many('reema.sampling.knife.line', 'blueprint_id', string='Cutting Knives')
+    total_panels = fields.Integer(string='Number of Panels', compute='_compute_total_panels', store=True)
     weight_range = fields.Char(string='Weight Range (g)')
     circumference = fields.Char(string='Circumference (cm)')
     bounce_requirement = fields.Char(string='Bounce Requirement')
@@ -120,6 +121,11 @@ class ReemaSamplingBlueprint(models.Model):
         if name:
             domain = ['|', ('name', operator, name), ('reference', operator, name)] + domain
         return self._search(domain, limit=limit, order=order)
+
+    @api.depends('knife_line_ids.panel_count')
+    def _compute_total_panels(self):
+        for rec in self:
+            rec.total_panels = sum(rec.knife_line_ids.mapped('panel_count'))
 
     def _compute_bom_count(self):
         BOM = self.env['mrp.bom']
@@ -185,6 +191,17 @@ class ReemaSamplingBlueprint(models.Model):
     def action_print_sampling(self):
         # Looks up the registered report action by its full XML name and triggers PDF generation.
         return self.env.ref('reema_sampling.action_report_reema_sampling').report_action(self)
+
+class ReemaSamplingKnifeLine(models.Model):
+    _name = 'reema.sampling.knife.line'
+    _description = 'Cutting Knife Shape'
+    _order = 'sequence, id'
+
+    blueprint_id = fields.Many2one('reema.sampling.blueprint', ondelete='cascade', required=True)
+    sequence     = fields.Integer(default=10)
+    shape_name   = fields.Char(string='Shape', required=True)
+    panel_count  = fields.Integer(string='Panels', required=True)
+
 
 # This model allows defining multiple sizes for a single sample layout.
 # It makes the system flexible for multi-size production orders.

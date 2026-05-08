@@ -245,5 +245,13 @@ class MrpBomReemaExt(models.Model):
 class MrpRoutingWorkcenterReema(models.Model):
     _inherit = 'mrp.routing.workcenter'
 
+    balls_per_unit = fields.Float(
+        string='Balls per Unit', default=1.0, required=True,
+        digits=(16, 4),
+        help='How many finished balls 1 unit of this hall\'s work represents. '
+             'E.g. ~6 for Lamination (1 sheet ≈ 6 balls), 0.0417 for Cutting (1 panel = 1/24 ball), '
+             '1 for Stitching.'
+    )
+
     def action_delete_operation(self):
         self.unlink()

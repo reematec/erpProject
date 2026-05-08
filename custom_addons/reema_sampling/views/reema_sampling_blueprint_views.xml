@@ -84,7 +84,7 @@
                         <group string="Design Specification">
                             <field name="ball_type"/>
                             <field name="construction_type"/>
-                            <field name="number_of_panels"/>
+                            <field name="total_panels" readonly="1"/>
                             <field name="color"/>
                         </group>
                         <group string="Technical Requirements">
@@ -108,20 +108,17 @@
                         </group>
                     </group>
 
-                    <!-- Inline Size Details Section -->
-                    <group string="Size &amp; Production Quantities">
-                        <field name="size_line_ids" nolabel="1">
-                            <list editable="bottom">
-                                <!-- 'sequence' with 'handle' widget allows drag-and-drop indexing -->
-                                <field name="sequence" widget="handle"/>
-                                <field name="ball_size"/>
-                                <field name="cutting_knife_no"/>
-                                <field name="qty_to_produce" string="Quantity"/>
-                            </list>
-                        </field>
-                    </group>
-
                     <notebook>
+                        <page string="Size &amp; Production Quantities" name="sizes">
+                            <field name="size_line_ids" nolabel="1">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="ball_size"/>
+                                    <field name="cutting_knife_no"/>
+                                    <field name="qty_to_produce" string="Quantity"/>
+                                </list>
+                            </field>
+                        </page>
                         <page string="Material Information" name="materials">
                             <!-- 
                                 Material Lines: 'options' are used here to disable 'create' and 'edit',
@@ -138,6 +135,19 @@
                                     <field name="notes" string="Notes"/>
                                 </list>
                             </field>
+                        </page>
+                        <!-- Cutting Knives Tab -->
+                        <page string="Cutting Knives" name="cutting_knives">
+                            <field name="knife_line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="shape_name"/>
+                                    <field name="panel_count"/>
+                                </list>
+                            </field>
+                            <group>
+                                <field name="total_panels" readonly="1"/>
+                            </group>
                         </page>
                         <!-- General Notes Tab -->
                         <page string="General Notes" name="general_notes">

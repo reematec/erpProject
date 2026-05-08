@@ -18,6 +18,13 @@ class ReemaWoBatchEntry(models.Model):
     sfg_move_id = fields.Many2one('stock.move', string='Stock Move', readonly=True)
     logged_by = fields.Many2one('res.users', string='Logged By',
                                 default=lambda self: self.env.uid, readonly=True)
+    qty_balls = fields.Float(string='Balls Equivalent', compute='_compute_qty_balls', store=True)
+
+    @api.depends('qty', 'workorder_id.operation_id.balls_per_unit')
+    def _compute_qty_balls(self):
+        for entry in self:
+            bpu = entry.workorder_id.operation_id.balls_per_unit or 1.0
+            entry.qty_balls = entry.qty * bpu
 
     @api.depends('qty', 'workorder_id.piece_rate_id')
     def _compute_labor_cost(self):
@@ -68,8 +75,8 @@ class ReemaBatchEntryWizard(models.TransientModel):
                                    required=True, readonly=True)
     workcenter_name = fields.Char(related='workorder_id.workcenter_id.name',
                                   string='Hall', readonly=True)
-    qty_production = fields.Float(related='workorder_id.qty_production',
-                                  string='Total Qty', readonly=True)
+    hall_qty = fields.Float(related='workorder_id.hall_qty',
+                            string='Target', readonly=True)
     qty_batch_completed = fields.Float(related='workorder_id.qty_batch_completed',
                                        string='Completed So Far', readonly=True)
     # Restrict contractor dropdown to only those assigned to this work order
@@ -86,18 +93,22 @@ class ReemaBatchEntryWizard(models.TransientModel):
         if self.qty <= 0:
             raise UserError('Quantity must be greater than zero.')
         # Cap: cannot log more than what has physically arrived from the previous hall.
-        # If predecessor is fully done, no cap applies — all their output is available.
+        # Comparison is normalized to balls so different hall units (sheets vs panels) work correctly.
         for pred in wo.blocked_by_workorder_ids:
             if pred.state in ('done', 'cancel'):
                 continue
-            available = pred.qty_batch_completed - wo.qty_batch_completed
-            if self.qty > available:
+            bpu = wo.operation_id.balls_per_unit or 1.0
+            self_balls = self.qty * bpu
+            available_balls = pred.qty_balls_completed - wo.qty_balls_completed
+            available_units = available_balls / bpu if bpu else available_balls
+            if self_balls > available_balls + 0.001:
+                uom_label = wo.piece_rate_id.uom_id.name or 'units'
                 raise UserError(
-                    f'Cannot log {self.qty:.0f} units.\n\n'
-                    f'{pred.workcenter_id.name} has completed {pred.qty_batch_completed:.0f} '
-                    f'and {wo.qty_batch_completed:.0f} have already been logged here.\n\n'
-                    f'Maximum available now: {available:.0f}.\n\n'
-                    f'Wait for {pred.workcenter_id.name} to complete more before logging additional progress.'
+                    f'Cannot log {self.qty:.1f} {uom_label}.\n\n'
+                    f'{pred.workcenter_id.name} has completed '
+                    f'{pred.qty_balls_completed:.1f} balls equivalent.\n\n'
+                    f'{wo.qty_balls_completed:.1f} balls equivalent already processed here.\n\n'
+                    f'Maximum you can log now: {available_units:.1f} {uom_label}.'
                 )
         self.env['reema.wo.batch.entry'].create({
             'workorder_id': wo.id,

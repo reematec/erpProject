@@ -111,7 +111,7 @@
                                 <table class="table table-sm table-borderless" style="font-size:13px;">
                                     <tr>
                                         <td style="width:50%;"><strong>No. of Panels</strong></td>
-                                        <td><span t-field="o.number_of_panels"/></td>
+                                        <td><span t-field="o.total_panels"/></td>
                                     </tr>
                                     <tr>
                                         <td><strong>Primary Color</strong></td>
