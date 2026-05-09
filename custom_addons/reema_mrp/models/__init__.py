@@ -5,3 +5,5 @@ from . import mrp_workorder
 from . import reema_piece_rate
 from . import reema_production_order
 from . import reema_wo_batch
+from . import reema_material_issuance
+from . import reema_consumable_issuance

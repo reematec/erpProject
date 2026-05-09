@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Authorization Form -->
+    <record id="reema_material_issuance_view_form" model="ir.ui.view">
+        <field name="name">reema.material.issuance.form</field>
+        <field name="model">reema.material.issuance</field>
+        <field name="arch" type="xml">
+            <form string="Material Issuance Authorization">
+                <header>
+                    <button name="action_issue_wizard"
+                            string="Issue Materials"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state not in ('authorized', 'partial')"/>
+                    <button name="action_return_wizard"
+                            string="Return Materials"
+                            type="object"
+                            invisible="state not in ('partial', 'fully_issued')"/>
+                    <button name="action_print"
+                            string="Print Slip"
+                            type="object"
+                            invisible="state == 'cancelled'"/>
+                    <button name="action_cancel"
+                            string="Withdraw Authorization"
+                            type="object"
+                            groups="mrp.group_mrp_manager"
+                            invisible="state in ('fully_issued', 'cancelled') or has_any_issue"
+                            confirm="Are you sure you want to withdraw this authorization? No further material can be issued against it."
+                            confirm-label="Yes, Withdraw It"
+                            cancel-label="Go Back"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="authorized,partial,fully_issued"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Authorized Material">
+                            <field name="production_id" readonly="1"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="product_id" readonly="1"
+                                   options="{'no_open': True}"/>
+                            <field name="product_uom_id" readonly="1"
+                                   options="{'no_open': True}"/>
+                            <field name="authorized_qty" readonly="1"/>
+                        </group>
+                        <group string="Issue Status">
+                            <field name="total_issued_qty" readonly="1"/>
+                            <field name="total_returned_qty" readonly="1"/>
+                            <field name="net_issued_qty" readonly="1"/>
+                            <field name="remaining_qty" readonly="1"/>
+                            <field name="authorized_by" readonly="1"
+                                   options="{'no_open': True}"/>
+                            <field name="date_authorized" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Issue History" name="issue_history">
+                            <field name="line_ids">
+                                <list create="0" delete="0" editable="bottom"
+                                      decoration-muted="is_reversal">
+                                    <field name="is_reversal" column_invisible="1"/>
+                                    <field name="date" readonly="1"/>
+                                    <field name="issued_qty" readonly="1"/>
+                                    <field name="product_uom_id" string="UOM" readonly="1"/>
+                                    <field name="destination_location_id" readonly="1"/>
+                                    <field name="contractor_id" readonly="1"/>
+                                    <field name="carried_by" readonly="1"/>
+                                    <field name="issued_by" readonly="1"/>
+                                    <field name="notes" optional="show" readonly="1"/>
+                                    <field name="move_id" optional="hide" readonly="1"/>
+                                    <button name="action_reverse_issue_line"
+                                            type="object"
+                                            icon="fa-undo"
+                                            title="Reverse this entry"
+                                            confirm="This will reverse the stock move and add a counter-entry. The action will be recorded in the chatter. Continue?"
+                                            invisible="is_reversal or not id"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Return History" name="return_history">
+                            <field name="return_line_ids">
+                                <list create="0" delete="0" editable="bottom"
+                                      decoration-muted="is_reversal">
+                                    <field name="is_reversal" column_invisible="1"/>
+                                    <field name="date" readonly="1"/>
+                                    <field name="returned_qty" readonly="1"/>
+                                    <field name="product_uom_id" string="UOM" readonly="1"/>
+                                    <field name="return_from_location_id" readonly="1"/>
+                                    <field name="fault_description" readonly="1"/>
+                                    <field name="returned_by" readonly="1"/>
+                                    <field name="notes" optional="show" readonly="1"/>
+                                    <field name="move_id" optional="hide" readonly="1"/>
+                                    <button name="action_reverse_return_line"
+                                            type="object"
+                                            icon="fa-undo"
+                                            title="Reverse this return entry"
+                                            confirm="This will reverse the stock move and add a counter-entry. The action will be recorded in the chatter. Continue?"
+                                            invisible="is_reversal or not id"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter>
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
+            </form>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="reema_material_issuance_view_list" model="ir.ui.view">
+        <field name="name">reema.material.issuance.list</field>
+        <field name="model">reema.material.issuance</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="production_id"/>
+                <field name="product_id"/>
+                <field name="authorized_qty"/>
+                <field name="product_uom_id" string="UOM"/>
+                <field name="total_issued_qty"/>
+                <field name="total_returned_qty" optional="show"/>
+                <field name="net_issued_qty" optional="show"/>
+                <field name="remaining_qty"/>
+                <field name="authorized_by" optional="show"/>
+                <field name="date_authorized"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'authorized'"
+                       decoration-warning="state == 'partial'"
+                       decoration-success="state == 'fully_issued'"
+                       decoration-danger="state == 'cancelled'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Issue Wizard Form -->
+    <record id="reema_material_issue_wizard_view_form" model="ir.ui.view">
+        <field name="name">reema.material.issue.wizard.form</field>
+        <field name="model">reema.material.issue.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Issue Materials">
+                <group string="Authorized Material (cannot be changed)">
+                    <field name="product_id" readonly="1"/>
+                    <field name="product_uom_id" readonly="1" string="UOM"/>
+                    <field name="authorized_qty" readonly="1"/>
+                    <field name="remaining_qty" readonly="1"/>
+                </group>
+                <group string="Issuance Details">
+                    <field name="issued_qty" autofocus="1"/>
+                    <field name="destination_location_id"
+                           options="{'no_create': True, 'no_edit': True}"/>
+                    <field name="available_contractor_ids" invisible="1"/>
+                    <field name="contractor_id"
+                           options="{'no_create': True, 'no_edit': True}"/>
+                    <field name="carried_by"
+                           placeholder="Defaults to contractor name — change if assistant is collecting"/>
+                    <field name="notes" placeholder="Optional: batch number, shift, remarks"/>
+                </group>
+                <footer>
+                    <button name="action_confirm" string="Issue" type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Return Wizard Form -->
+    <record id="reema_material_return_wizard_view_form" model="ir.ui.view">
+        <field name="name">reema.material.return.wizard.form</field>
+        <field name="model">reema.material.return.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Return Materials">
+                <group string="Material (cannot be changed)">
+                    <field name="product_id" readonly="1"/>
+                    <field name="product_uom_id" readonly="1" string="UOM"/>
+                    <field name="total_issued_qty" readonly="1"/>
+                    <field name="total_returned_qty" readonly="1"/>
+                    <field name="returnable_qty" readonly="1"/>
+                </group>
+                <group string="Return Details">
+                    <field name="returned_qty" autofocus="1"/>
+                    <field name="return_from_location_id"
+                           options="{'no_create': True, 'no_edit': True}"/>
+                    <field name="fault_description"
+                           placeholder="e.g. Color variation, Thickness inconsistency, Excess — not needed"/>
+                    <field name="notes" placeholder="Optional: roll number, shift, remarks"/>
+                </group>
+                <footer>
+                    <button name="action_confirm" string="Confirm Return" type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Window Action -->
+    <record id="reema_material_issuance_action" model="ir.actions.act_window">
+        <field name="name">Material Issuances</field>
+        <field name="res_model">reema.material.issuance</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Parent menu under Inventory -->
+    <menuitem id="reema_mrp_menu_issuances_root"
+              name="Store Issuances"
+              parent="stock.menu_stock_root"
+              groups="base.group_user"
+              sequence="25"/>
+
+    <!-- Raw Material Issuances (MO-linked) -->
+    <menuitem id="reema_mrp_menu_issuances_inventory"
+              name="Raw Material Issuances"
+              parent="reema_mrp_menu_issuances_root"
+              action="reema_material_issuance_action"
+              groups="base.group_user"
+              sequence="1"/>
+
+    <!-- Report action -->
+    <record id="action_report_material_issuance" model="ir.actions.report">
+        <field name="name">Material Issuance Slip</field>
+        <field name="model">reema.material.issuance</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">reema_mrp.report_material_issuance_slip</field>
+        <field name="report_file">reema_mrp.report_material_issuance_slip</field>
+        <field name="print_report_name">'Issuance Slip - %s' % (object.name)</field>
+        <field name="binding_model_id" ref="model_reema_material_issuance"/>
+        <field name="binding_type">report</field>
+    </record>
+</odoo>

@@ -6,6 +6,40 @@
         <field name="model">mrp.production</field>
         <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
         <field name="arch" type="xml">
+            <!-- Smart button: Material Issuances -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_issuances"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-archive">
+                    <field name="issuance_count" widget="statinfo" string="Issuances"/>
+                </button>
+            </xpath>
+            <!-- Authorize/View issuance buttons — separate columns with headers -->
+            <xpath expr="//field[@name='move_raw_ids']//list" position="inside">
+                <field name="has_issuance" column_invisible="1"/>
+                <button name="action_authorize_issuance"
+                        type="object"
+                        string="Authorize"
+                        icon="fa-arrow-circle-right"
+                        title="Click to authorize issuance for this component"
+                        invisible="has_issuance or state == 'cancel'"/>
+                <button name="action_authorize_issuance"
+                        type="object"
+                        string="View Auth"
+                        icon="fa-eye"
+                        title="Authorization already exists — click to view"
+                        invisible="not has_issuance or state == 'cancel'"/>
+            </xpath>
+            <!-- Make quantity (done) readonly and relabel to Consumed -->
+            <xpath expr="//field[@name='move_raw_ids']//field[@name='quantity']" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="string">Consumed</attribute>
+            </xpath>
+            <!-- Hide picked (Consumed checkbox) — consumption tracked via RMI, not MO form -->
+            <xpath expr="//field[@name='move_raw_ids']//field[@name='picked']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
             <xpath expr="//field[@name='bom_id']" position="after">
                 <field name="construction_type" options="{'no_create': True, 'no_edit': True}"
                        readonly="state != 'draft'"/>

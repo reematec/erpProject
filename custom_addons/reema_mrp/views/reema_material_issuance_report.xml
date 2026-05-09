@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_material_issuance_slip">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <!-- Title -->
+                        <div class="row mb-3">
+                            <div class="col-12 text-center">
+                                <h3 class="mb-0">Raw Material Issuance Slip</h3>
+                                <h4 class="text-muted"><t t-esc="doc.name"/></h4>
+                            </div>
+                        </div>
+
+                        <!-- Header info -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td class="fw-bold" style="width:45%">Manufacturing Order:</td>
+                                        <td><t t-esc="doc.production_id.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Requesting Hall:</td>
+                                        <td><t t-esc="doc.workcenter_id.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Date Requested:</td>
+                                        <td><t t-esc="doc.date_requested"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td class="fw-bold" style="width:45%">Status:</td>
+                                        <td><t t-esc="dict(doc.fields_get(['state'])['state']['selection']).get(doc.state, doc.state)"/></td>
+                                    </tr>
+                                    <t t-if="doc.approved_by">
+                                        <tr>
+                                            <td class="fw-bold">Approved By:</td>
+                                            <td><t t-esc="doc.approved_by.name"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Date Approved:</td>
+                                            <td><t t-esc="doc.date_approved"/></td>
+                                        </tr>
+                                    </t>
+                                    <t t-if="doc.issued_by">
+                                        <tr>
+                                            <td class="fw-bold">Issued By:</td>
+                                            <td><t t-esc="doc.issued_by.name"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Date Issued:</td>
+                                            <td><t t-esc="doc.date_issued"/></td>
+                                        </tr>
+                                    </t>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Materials Table -->
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th>UOM</th>
+                                    <th class="text-end">Requested Qty</th>
+                                    <th class="text-end">Issued Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="doc.line_ids" t-as="line">
+                                    <tr>
+                                        <td><t t-esc="line_index + 1"/></td>
+                                        <td><t t-esc="line.product_id.display_name"/></td>
+                                        <td><t t-esc="line.product_uom_id.name"/></td>
+                                        <td class="text-end"><t t-esc="line.requested_qty"/></td>
+                                        <td class="text-end">
+                                            <t t-if="line.issued_qty">
+                                                <t t-esc="line.issued_qty"/>
+                                            </t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Notes -->
+                        <t t-if="doc.notes">
+                            <div class="mt-3">
+                                <strong>Notes:</strong>
+                                <p><t t-esc="doc.notes"/></p>
+                            </div>
+                        </t>
+
+                        <!-- Signature section -->
+                        <div class="row mt-5">
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:4px;">
+                                    Requested By
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:4px;">
+                                    Approved By (Production Manager)
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:4px;">
+                                    Issued By (Store Keeper)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

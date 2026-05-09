@@ -29,13 +29,13 @@ class ReemaSamplingBlueprint(models.Model):
     # production_ready: Waleed has completed the BOM (quantities, routing,
     #   wastage) → the blueprint is safe to include in invoices for bulk orders.
     state = fields.Selection([
-        ('draft',             'Draft'),
-        ('in_progress',       'In Progress'),
-        ('sample_approved',   'Sample Approved'),
-        ('production_ready',  'Production Ready'),
-        ('completed',         'Completed'),
-        ('shipped',           'Shipped'),
-        ('cancelled',         'Cancelled'),
+        ('draft',            'Draft'),
+        ('in_progress',      'In Progress'),
+        ('completed',        'Completed'),
+        ('sample_approved',  'Sample Approved'),
+        ('production_ready', 'Production Ready'),
+        ('shipped',          'Shipped'),
+        ('cancelled',        'Cancelled'),
     ], string='Status', default='draft', required=True, tracking=True)
     
     completion_date = fields.Date(string='Ready Till Date')

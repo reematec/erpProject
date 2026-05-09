@@ -23,6 +23,64 @@
 [ ] The client field in sample, remove create & Edit
 [ ] the cancel button in MO and sample creates alot of confusion. I often think its the button to go back.
 
+[ ] Fix "Production Order" button on Proforma Invoice — clarity + deduplication
+    - Problem 1 — Ambiguous label: the button currently says "Production Order"
+      regardless of whether a PO has been generated or not. It should say
+      "Generate PO" when no PO exists, and "View PO" when one already exists.
+    - Problem 2 — Duplicate placement: the button appears in two places on the
+      invoice, causing confusion. Remove one and keep a single authoritative
+      location.
+    - Preferred location: in the form header area, either directly after the
+      invoice reference number (oe_title area) or immediately after/before the
+      "Print PI" button — whichever is more visible at first glance.
+    - Implementation:
+        * In reema_invoice views, find both button definitions and remove the
+          duplicate.
+        * Rename "Create Production Order" → "Generate PO" with
+          invisible="production_order_count > 0"
+        * Add "View PO" button with invisible="production_order_count == 0"
+          that opens the linked PO (same action as existing smart button).
+        * Keep the smart button in oe_button_box for count/navigation (that is
+          fine), but remove any second standalone button elsewhere.
+    - Files: reema_mrp/views/reema_production_order_views.xml and/or
+      reema_invoice views (wherever the duplicate lives).
+
+[ ] Change Manufacturing Order reference format from "WH/MO/00012" to "MO/2026/00012"
+    - The default Odoo MO sequence produces "WH/MO/00012" which looks like a
+      warehouse transfer or work order at first glance.
+    - Change to "MO/%(year)s/xxxxx" format so it reads clearly as a Manufacturing
+      Order with the year visible (e.g. MO/2026/00012).
+    - Fix: update the ir.sequence record with code 'mrp.production' — change
+      prefix from 'WH/MO/' to 'MO/%(year)s/' and set padding to 5.
+    - This can be done via Settings → Technical → Sequences, or via a data XML
+      record with noupdate="0" in reema_mrp to override the default sequence.
+    - Existing MO numbers will not be renamed (Odoo sequences don't retroactively
+      change already-assigned references) — only new MOs get the new format.
+
+[ ] MO number in Production Order lines should be a clickable link
+    - In the Production Order detail view (e.g. PO/2026/0036), the production
+      lines tab shows a list of reema.production.order.line records.
+    - The `mo_id` field (e.g. "WH/MO/00012") currently renders as plain readonly
+      text in the list — clicking it does nothing.
+    - Fix: make it a proper Many2one link so clicking the MO number opens the
+      mrp.production record directly.
+    - Change in reema_mrp/views/reema_production_order_views.xml — the mo_id
+      field in the lines list (currently readonly="1") needs
+      options="{'no_open': False}" or just remove no_open suppression so Odoo
+      renders it as a navigable link.
+
+[ ] BOM auto-reference number
+    - mrp.bom has no reference field — BOMs are currently identified only by
+      product name, which is ambiguous when a product has multiple BOMs (e.g.
+      different revisions or construction types).
+    - Add a `reema_reference` Char field on mrp.bom (inherited via MrpBomReemaExt
+      in reema_mrp/models/reema_production_order.py).
+    - Auto-assign on create using a new ir.sequence: prefix BOM/%(year)s/, padding 5.
+    - Field must be readonly after creation (assigned once, never changed).
+    - Show it in the BOM form view header (oe_title area) and BOM list view as
+      first column so it is immediately visible.
+    - Sequence record to add in reema_mrp/data/ir_sequence_data.xml.
+
 [x] Phase 1.1 — Fix reema_mrp bugs — Completed May 5 2026
     - Duplicate line was a reporting artifact — actual code was fine.
     - wizard/ had only __pycache__ (source .py files deleted). Created
@@ -60,16 +118,11 @@
       reema_sampling/views/reema_sampling_blueprint_views.xml,
       reema_mrp/views/mrp_views.xml
 
-[ ] Phase 1.4 — Set up 17 Work Centers and SFG products (data setup)
-    - Create mrp.workcenter records for all 17 halls in Odoo
-    - Create SFG product records for each hall output:
-      Laminated Sheet, Cut Panel Set, Printed Panel Set, Stitched Shell,
-      Foam-Applied Shell, Turned Shell, Shell with Bladder, Closed Ball,
-      Bound Carcass (THB), Molded Ball (THB), Shaped Ball, Cleaned Ball,
-      Sealed Ball, Packed Carton (FG)
-    - Assign sfg_product_id on each Work Center
-    - Mark QC work centers with is_qc_point = True (Hall 13 and Hall 16)
-    - This is configuration/data, not custom code
+[x] Phase 1.4 — Set up 17 Work Centers and SFG products — Completed May 9 2026
+    - All 17 Work Centers configured in Manufacturing → Configuration → Work Centers.
+    - SFG products created and assigned via sfg_product_id on each Work Center.
+    - QC halls (13 and 16) marked with is_qc_point = True.
+    - Data setup only — no custom code required.
 
 [x] Phase 1.5 — SFG stock movement on work order completion — Completed May 7 2026
     - Added location_id field to mrp.workcenter (hall's own stock location).
@@ -168,27 +221,9 @@
     - Files: reema_mrp/models/reema_production_order.py,
       reema_mrp/views/reema_production_order_views.xml
 
-[ ] Phase 1.4 — Set up 17 Work Centers (data setup — no code needed)
-    - In Manufacturing → Configuration → Work Centers, create:
-        Hall 1:  Lamination
-        Hall 2:  Cutting
-        Hall 3:  Printing
-        Hall 4:  Embossing
-        Hall 5:  Skiving
-        Hall 6:  Stitching (MS/HYB)
-        Hall 7:  Foam Attachment (HYB only)
-        Hall 8:  Bladder Preparation
-        Hall 9:  Bladder Attachment / Turning
-        Hall 10: Shell Closing
-        Hall 11: THB Bonding (THB only)
-        Hall 12: Shaping & Inflation
-        Hall 13: Initial QC  ← mark is_qc_point = True
-        Hall 14: Seam Sealing & Cleaning
-        Hall 15: Packing
-        Hall 16: Final QC    ← mark is_qc_point = True
-        Hall 17: Storage / Dispatch
-    - Each Work Center will later get sfg_product_id assigned (Phase 1.5)
-    - This is UI configuration, not code
+[x] Phase 1.4 — Set up 17 Work Centers (data setup) — Completed May 9 2026
+    - All 17 halls created in Manufacturing → Configuration → Work Centers.
+    - Data setup only — no code required.
 
 [ ] Phase 1.8 — Role-based access control (all users)
     ─────────────────────────────────────────────────────

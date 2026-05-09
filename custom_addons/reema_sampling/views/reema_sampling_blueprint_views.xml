@@ -15,36 +15,40 @@
                             string="Start"
                             type="object"
                             invisible="state != 'draft'"/>
+                    <button name="action_completed"
+                            string="Mark Completed"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state != 'in_progress'"/>
                     <button name="action_sample_approved"
                             string="Mark Sample Approved"
                             type="object"
                             class="oe_highlight"
-                            invisible="state != 'in_progress'"/>
+                            invisible="state != 'completed'"/>
                     <button name="action_production_ready"
                             string="Mark Production Ready"
                             type="object"
                             class="oe_highlight"
                             invisible="state != 'sample_approved'"/>
-                    <button name="action_completed"
-                            string="Complete"
-                            type="object"
-                            invisible="state != 'production_ready'"/>
                     <button name="action_shipped"
                             string="Ship"
                             type="object"
-                            class="oe_highlight"
-                            invisible="state != 'completed'"/>
+                            invisible="state not in ('sample_approved', 'production_ready')"/>
                     <button name="action_cancel"
-                            string="Cancel"
+                            string="Cancel Sample"
                             type="object"
-                            invisible="state in ('cancelled', 'shipped')"/>
+                            groups="base.group_system"
+                            invisible="state in ('cancelled', 'shipped')"
+                            confirm="This will cancel the sample. Are you sure?"
+                            confirm-label="Yes, Cancel It"
+                            cancel-label="Go Back"/>
                     <button name="action_reset_draft"
                             string="Reset to Draft"
                             type="object"
                             invisible="state != 'cancelled'"/>
                     <button name="action_print_sampling" string="Print" type="object"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="draft,in_progress,sample_approved,production_ready,completed,shipped"/>
+                           statusbar_visible="draft,in_progress,completed,sample_approved,production_ready"/>
                 </header>
                 <sheet>
                     <!-- Smart Buttons -->
@@ -52,7 +56,8 @@
                         <button name="action_view_bom"
                                 type="object"
                                 class="oe_stat_button"
-                                icon="fa-list">
+                                icon="fa-list"
+                                invisible="state not in ('sample_approved', 'production_ready', 'shipped')">
                             <field name="bom_count" widget="statinfo" string="BoM"/>
                         </button>
                     </div>
@@ -70,7 +75,8 @@
                     <group>
                         <group string="Basic Details">
                             <field name="model_alias"/>
-                            <field name="customer_id"/>
+                            <field name="customer_id"
+                                   options="{'no_create': True, 'no_edit': True}"/>
                             <field name="sampling_date"/>
                         </group>
                         <group string="Status &amp; Tracking">
