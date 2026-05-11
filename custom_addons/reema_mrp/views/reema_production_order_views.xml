@@ -20,10 +20,22 @@
                             string="Mark Done"
                             type="object"
                             invisible="state != 'confirmed'"/>
-                    <button name="action_cancel"
-                            string="Cancel"
+                    <button name="action_delete_draft"
+                            string="Delete PO"
                             type="object"
-                            invisible="state in ('done', 'cancelled')"/>
+                            groups="base.group_system"
+                            invisible="state != 'draft'"
+                            confirm="This will permanently delete this Production Order and the invoice will revert to no PO generated. Are you sure?"
+                            confirm-label="Yes, Delete It"
+                            cancel-label="Go Back"/>
+                    <button name="action_cancel"
+                            string="Cancel Order"
+                            type="object"
+                            groups="base.group_system"
+                            invisible="state in ('draft', 'done', 'cancelled')"
+                            confirm="This will cancel the Production Order. Are you sure?"
+                            confirm-label="Yes, Cancel It"
+                            cancel-label="Go Back"/>
                     <button name="action_reset_draft"
                             string="Reset to Draft"
                             type="object"
@@ -47,8 +59,8 @@
                     </div>
                     <group>
                         <group string="Order Details">
-                            <field name="invoice_id" options="{'no_create': True, 'no_edit': True}"/>
-                            <field name="partner_id" readonly="1"/>
+                            <field name="invoice_id" readonly="1" options="{'no_open': True}"/>
+                            <field name="partner_id" readonly="1" options="{'no_open': True}"/>
                         </group>
                         <group string="Planning">
                             <field name="date_planned"/>
@@ -57,22 +69,40 @@
                     <notebook>
                         <page string="Production Lines" name="lines">
                             <field name="line_ids">
-                                <list editable="bottom">
+                                <list editable="bottom" delete="0">
                                     <field name="sample_id"
+                                           readonly="1"
                                            options="{'no_create': True, 'no_edit': True}"/>
                                     <field name="product_tmpl_id" column_invisible="True"/>
-                                    <field name="size"/>
-                                    <field name="qty"/>
+                                    <field name="size" readonly="1"/>
+                                    <field name="qty" readonly="mo_id"/>
                                     <field name="bom_id"
+                                           readonly="1"
+                                           column_invisible="True"
                                            domain="[('product_tmpl_id', '=', product_tmpl_id)]"
                                            options="{'no_create': True}"/>
-                                    <field name="mo_id" readonly="1"/>
+                                    <field name="bom_reference" readonly="1"/>
+                                    <field name="mo_id" readonly="1" options="{'no_open': False}"/>
+                                    <field name="mo_state" widget="badge"
+                                           decoration-success="mo_state == 'done'"
+                                           decoration-warning="mo_state in ('progress', 'to_close')"
+                                           decoration-danger="mo_state == 'cancel'"
+                                           decoration-info="mo_state == 'confirmed'"
+                                           optional="show"/>
                                     <button name="action_reset_mo"
                                             type="object"
                                             icon="fa-undo"
                                             title="Cancel and delete this MO so it can be recreated with the updated BOM"
-                                            invisible="not mo_id"
+                                            invisible="not mo_id or mo_state not in ('draft', 'cancel')"
                                             confirm="This will cancel and delete the linked Manufacturing Order. You can then click 'Create MOs' to recreate it with the updated BOM. Continue?"/>
+                                    <button name="action_delete_line"
+                                            type="object"
+                                            icon="fa-trash"
+                                            title="Delete this line"
+                                            invisible="mo_id"
+                                            confirm="Delete this production line?"
+                                            confirm-label="Yes, Delete"
+                                            cancel-label="Go Back"/>
                                 </list>
                             </field>
                         </page>
@@ -121,31 +151,22 @@
               groups="base.group_user"
               sequence="5"/>
 
-    <!-- Inherit Invoice Form: inject smart button + Create PO button -->
+    <!-- Inherit Invoice Form: header-only PO button (Generate PO / View PO toggle) -->
     <record id="reema_invoice_production_order_form" model="ir.ui.view">
         <field name="name">reema.invoice.production.order.form</field>
         <field name="model">reema.invoice</field>
         <field name="inherit_id" ref="reema_invoice.view_reema_invoice_form"/>
         <field name="arch" type="xml">
-            <!-- Add Production Order smart button -->
-            <xpath expr="//sheet" position="before">
-                <div class="oe_button_box" name="button_box">
-                    <button name="action_view_production_orders"
-                            type="object"
-                            class="oe_stat_button"
-                            icon="fa-industry">
-                        <field name="production_order_count" widget="statinfo"
-                               string="Production Orders"/>
-                    </button>
-                </div>
-            </xpath>
-            <!-- Add Create Production Order button in header -->
             <xpath expr="//header/button[@name='action_print_invoice']" position="before">
                 <button name="action_create_production_order"
-                        string="Create Production Order"
+                        string="Generate PO"
                         type="object"
                         class="oe_highlight"
                         invisible="state != 'accepted' or production_order_count > 0"/>
+                <button name="action_view_production_orders"
+                        string="View PO"
+                        type="object"
+                        invisible="production_order_count == 0"/>
             </xpath>
         </field>
     </record>

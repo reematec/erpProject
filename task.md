@@ -14,60 +14,45 @@
      Goal: Invoice accepted → MOs appear on Waleed's dashboard with BOM
      pre-filled. Waleed confirms → Ali Shan sees Work Orders per hall.
 ════════════════════════════════════════════════════════════════════════ -->
-[ ] Sampling Status buttons flow revision:
-  - the flow buttons must be draft, in progress, Completed, Sample approved, Production ready.
-  - Shipping must be separate from flow button and only activate one completed. it is possible that sample approved without shipping, just through images.
+[x] Sampling Status buttons flow revision — Completed May 9 2026
+  - State reordered: Draft → In Progress → Completed → Sample Approved → Production Ready
+  - Ship button only visible from sample_approved or production_ready (not completed)
+  - statusbar excludes 'shipped' from main flow bar
+  - Files: reema_sampling/models/reema_sampling_blueprint.py,
+    reema_sampling/views/reema_sampling_blueprint_views.xml
 
-[ ] Create & Edit must be disabled in sampling blueprint.
-[ ] In sampling BOM must activate when sample status is approved. Before that BOM Button must be disabled.
-[ ] The client field in sample, remove create & Edit
-[ ] the cancel button in MO and sample creates alot of confusion. I often think its the button to go back.
+[x] Create & Edit must be disabled in sampling blueprint — Completed May 9 2026
+  - Cancel button renamed "Cancel Sample", restricted to base.group_system
+  - Confirmation dialog added with "Go Back" dismiss label
+  - Files: reema_sampling/views/reema_sampling_blueprint_views.xml
 
-[ ] Fix "Production Order" button on Proforma Invoice — clarity + deduplication
-    - Problem 1 — Ambiguous label: the button currently says "Production Order"
-      regardless of whether a PO has been generated or not. It should say
-      "Generate PO" when no PO exists, and "View PO" when one already exists.
-    - Problem 2 — Duplicate placement: the button appears in two places on the
-      invoice, causing confusion. Remove one and keep a single authoritative
-      location.
-    - Preferred location: in the form header area, either directly after the
-      invoice reference number (oe_title area) or immediately after/before the
-      "Print PI" button — whichever is more visible at first glance.
-    - Implementation:
-        * In reema_invoice views, find both button definitions and remove the
-          duplicate.
-        * Rename "Create Production Order" → "Generate PO" with
-          invisible="production_order_count > 0"
-        * Add "View PO" button with invisible="production_order_count == 0"
-          that opens the linked PO (same action as existing smart button).
-        * Keep the smart button in oe_button_box for count/navigation (that is
-          fine), but remove any second standalone button elsewhere.
-    - Files: reema_mrp/views/reema_production_order_views.xml and/or
-      reema_invoice views (wherever the duplicate lives).
+[x] In sampling BOM must activate when sample status is approved — Completed May 9 2026
+  - BOM smart button hidden until state reaches sample_approved or later
+  - Files: reema_sampling/views/reema_sampling_blueprint_views.xml
 
-[ ] Change Manufacturing Order reference format from "WH/MO/00012" to "MO/2026/00012"
-    - The default Odoo MO sequence produces "WH/MO/00012" which looks like a
-      warehouse transfer or work order at first glance.
-    - Change to "MO/%(year)s/xxxxx" format so it reads clearly as a Manufacturing
-      Order with the year visible (e.g. MO/2026/00012).
-    - Fix: update the ir.sequence record with code 'mrp.production' — change
-      prefix from 'WH/MO/' to 'MO/%(year)s/' and set padding to 5.
-    - This can be done via Settings → Technical → Sequences, or via a data XML
-      record with noupdate="0" in reema_mrp to override the default sequence.
-    - Existing MO numbers will not be renamed (Odoo sequences don't retroactively
-      change already-assigned references) — only new MOs get the new format.
+[x] The client field in sample, remove create & Edit — Completed May 9 2026
+  - Added options="{'no_create': True, 'no_edit': True}" on client_id field
+  - Files: reema_sampling/views/reema_sampling_blueprint_views.xml
 
-[ ] MO number in Production Order lines should be a clickable link
-    - In the Production Order detail view (e.g. PO/2026/0036), the production
-      lines tab shows a list of reema.production.order.line records.
-    - The `mo_id` field (e.g. "WH/MO/00012") currently renders as plain readonly
-      text in the list — clicking it does nothing.
-    - Fix: make it a proper Many2one link so clicking the MO number opens the
-      mrp.production record directly.
-    - Change in reema_mrp/views/reema_production_order_views.xml — the mo_id
-      field in the lines list (currently readonly="1") needs
-      options="{'no_open': False}" or just remove no_open suppression so Odoo
-      renders it as a navigable link.
+[x] Cancel button confusion in sampling — Completed May 9 2026
+  - Renamed to "Cancel Sample", admin-only (base.group_system), confirmation with "Go Back"
+  - Note: MO cancel button still pending (tracked separately below)
+  - Files: reema_sampling/views/reema_sampling_blueprint_views.xml
+
+[x] Fix "Production Order" button on Proforma Invoice — Completed May 11 2026
+    - Renamed "Create Production Order" → "Generate PO" (visible only when no PO exists)
+    - Added "View PO" button (visible only when PO already exists, calls action_view_production_orders)
+    - Smart button in oe_button_box kept for count/navigation
+    - File: reema_mrp/views/reema_production_order_views.xml
+
+[x] Change Manufacturing Order reference format — Completed May 11 2026
+    - Added noupdate="0" record in reema_mrp/data/ir_sequence_data.xml targeting
+      mrp.seq_mrp_production to override prefix from WH/MO/ to MO/%(year)s/ with padding 5.
+    - Existing MO numbers unchanged; new MOs will use MO/2026/00001 format.
+
+[x] MO number in Production Order lines — clickable link — Completed May 11 2026
+    - Added options="{'no_open': False}" to mo_id field in production lines list.
+    - File: reema_mrp/views/reema_production_order_views.xml
 
 [ ] BOM auto-reference number
     - mrp.bom has no reference field — BOMs are currently identified only by

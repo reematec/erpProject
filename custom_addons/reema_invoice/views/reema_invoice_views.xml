@@ -42,7 +42,7 @@
                             class="oe_highlight" invisible="state != 'sent'"/>
                     <button name="action_reject"         string="Reject"       type="object"
                             invisible="state != 'sent'"/>
-                    <button name="action_close"          string="Close"        type="object"
+                    <button name="action_close"          string="Mark as Shipped" type="object"
                             invisible="state not in ('accepted', 'rejected')"/>
                     <button name="action_reset_to_pending" string="Reset to Pending" type="object"
                             invisible="state == 'pending'"/>
@@ -63,15 +63,15 @@
                     -->
                     <group string="Customer Details">
                         <group>
-                            <field name="partner_id"
+                            <field name="partner_id" readonly="state != 'pending'"
                                    options="{'no_create': True, 'no_edit': True}"/>
-                            <field name="client_address"/>
-                            <field name="date"/>
+                            <field name="client_address" readonly="state != 'pending'"/>
+                            <field name="date" readonly="state != 'pending'"/>
                         </group>
                         <group>
-                            <field name="client_order_number"/>
-                            <field name="client_order_date"/>
-                            <field name="payment_terms_id"/>
+                            <field name="client_order_number" readonly="state != 'pending'"/>
+                            <field name="client_order_date" readonly="state != 'pending'"/>
+                            <field name="payment_terms_id" readonly="state != 'pending'"/>
                         </group>
                     </group>
 
@@ -79,7 +79,7 @@
 
                         <!-- ── Products / Samples tab ───────────────────────────────── -->
                         <page string="Products / Samples" name="products">
-                            <field name="line_ids">
+                            <field name="line_ids" readonly="state != 'pending'">
                                 <!--
                                     sample_id is the Name selector — searches and displays by
                                     product name (same UX as the Client field).
@@ -127,7 +127,7 @@
                                             </td>
                                         </tr>
                                     </table>
-                                    <field name="charge_ids">
+                                    <field name="charge_ids" readonly="state != 'pending'">
                                         <list editable="bottom" no_open="True">
                                             <field name="name"   placeholder="e.g. Handling Charges"/>
                                             <field name="amount" widget="monetary"/>
@@ -153,20 +153,20 @@
                         <page string="Shipping &amp; Terms" name="shipping">
                             <group>
                                 <group string="Terms &amp; Logistics">
-                                    <field name="our_address"/>
-                                    <field name="country_of_origin"/>
-                                    <field name="transport_method"/>
-                                    <field name="shipping_date"/>
-                                    <field name="incoterm_id"/>
-                                    <field name="incoterm_location"/>
-                                    <field name="destination"/>
+                                    <field name="our_address" readonly="state != 'pending'"/>
+                                    <field name="country_of_origin" readonly="state != 'pending'"/>
+                                    <field name="transport_method" readonly="state != 'pending'"/>
+                                    <field name="shipping_date" readonly="state != 'pending'"/>
+                                    <field name="incoterm_id" readonly="state != 'pending'"/>
+                                    <field name="incoterm_location" readonly="state != 'pending'"/>
+                                    <field name="destination" readonly="state != 'pending'"/>
                                 </group>
                                 <group string="Carton &amp; Weight">
-                                    <field name="carton_qty"/>
-                                    <field name="carton_size"/>
-                                    <field name="total_cbm"/>
-                                    <field name="gross_weight"/>
-                                    <field name="net_weight"/>
+                                    <field name="carton_qty" readonly="state != 'pending'"/>
+                                    <field name="carton_size" readonly="state != 'pending'"/>
+                                    <field name="total_cbm" readonly="state != 'pending'"/>
+                                    <field name="gross_weight" readonly="state != 'pending'"/>
+                                    <field name="net_weight" readonly="state != 'pending'"/>
                                 </group>
                             </group>
 
@@ -180,7 +180,7 @@
                                 → click "Attach Files" to upload → close popup.
                             -->
                             <separator string="Shipping Documents"/>
-                            <field name="document_ids">
+                            <field name="document_ids" readonly="state != 'pending'">
                                 <list>
                                     <field name="name"       string="Document Name"/>
                                     <field name="file_count" string="Files" readonly="True"/>
@@ -190,26 +190,21 @@
 
                         <!-- ── Bank Details tab ─────────────────────────────────────── -->
                         <page string="Bank Details" name="bank_details">
-                            <!--
-                                Selecting bank_id fills all detail fields automatically.
-                                The detail fields remain editable for one-off adjustments
-                                without changing the master bank record.
-                            -->
                             <group>
-                                <field name="bank_id"
+                                <field name="bank_id" readonly="state != 'pending'"
                                        options="{'no_create': True}"
                                        placeholder="Select a bank to auto-fill details…"/>
                             </group>
                             <group>
                                 <group>
-                                    <field name="bank_name"/>
-                                    <field name="bank_title"/>
-                                    <field name="bank_address"/>
+                                    <field name="bank_name" readonly="state != 'pending'"/>
+                                    <field name="bank_title" readonly="state != 'pending'"/>
+                                    <field name="bank_address" readonly="state != 'pending'"/>
                                 </group>
                                 <group>
-                                    <field name="account_num"/>
-                                    <field name="iban"/>
-                                    <field name="swift"/>
+                                    <field name="account_num" readonly="state != 'pending'"/>
+                                    <field name="iban" readonly="state != 'pending'"/>
+                                    <field name="swift" readonly="state != 'pending'"/>
                                 </group>
                             </group>
                         </page>

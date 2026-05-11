@@ -133,12 +133,33 @@
         </field>
     </record>
 
-    <!-- BOM Form: hide Catalog shortcut and Product Attachment column -->
+    <!-- BOM Form: add reference number, hide Catalog shortcut and Product Attachment column -->
     <record id="mrp_bom_reema_form" model="ir.ui.view">
         <field name="name">mrp.bom.reema.form</field>
         <field name="model">mrp.bom</field>
         <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
         <field name="arch" type="xml">
+            <!-- Show BOM reference as a title above the fields -->
+            <xpath expr="//sheet/group[1]" position="before">
+                <div class="oe_title">
+                    <h1><field name="reema_reference" readonly="1"/></h1>
+                </div>
+                <!-- Lock warning: shown when a confirmed MO is using this BOM -->
+                <div class="alert alert-warning mb-3" role="alert"
+                     invisible="not has_active_mo">
+                    <field name="has_active_mo" invisible="1"/>
+                    <strong>BOM Locked.</strong>
+                    A Manufacturing Order exists for this BOM.
+                    Cancel the MO before making any changes.
+                </div>
+            </xpath>
+            <!-- Lock product and qty fields when BOM has active MOs -->
+            <xpath expr="//field[@name='product_tmpl_id']" position="attributes">
+                <attribute name="readonly">has_active_mo</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_qty']" position="attributes">
+                <attribute name="readonly">has_active_mo</attribute>
+            </xpath>
             <!-- Remove "Catalog" button from component add-line controls -->
             <xpath expr="//field[@name='bom_line_ids']//control/button[@name='action_add_from_catalog']" position="replace"/>
             <!-- Hide Product Attachment button and count from component lines -->
@@ -148,10 +169,26 @@
             <xpath expr="//field[@name='bom_line_ids']//field[@name='attachments_count']" position="attributes">
                 <attribute name="column_invisible">True</attribute>
             </xpath>
+            <!-- Hide Odoo's built-in free-text Reference (code) field — replaced by reema_reference -->
+            <xpath expr="//field[@name='code']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
             <!-- Hide the operation dependencies toggle — always on by default, no user action needed -->
             <xpath expr="//page[@name='miscellaneous']//field[@name='allow_operation_dependencies']"
                    position="attributes">
                 <attribute name="invisible">True</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- BOM List: show reema_reference as first column -->
+    <record id="mrp_bom_reema_list" model="ir.ui.view">
+        <field name="name">mrp.bom.reema.list</field>
+        <field name="model">mrp.bom</field>
+        <field name="inherit_id" ref="mrp.mrp_bom_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[1]" position="before">
+                <field name="reema_reference" string="BOM Ref"/>
             </xpath>
         </field>
     </record>

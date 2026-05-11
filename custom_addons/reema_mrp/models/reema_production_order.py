@@ -42,13 +42,59 @@ class ReemaProductionOrder(models.Model):
         self.write({'state': 'done'})
 
     def action_cancel(self):
+        for rec in self:
+            active_mos = rec.line_ids.mapped('mo_id').filtered(
+                lambda mo: mo.state != 'cancel'
+            )
+            if active_mos:
+                mo_names = ', '.join(active_mos.mapped('name'))
+                raise UserError(
+                    f"Cannot cancel this Production Order while Manufacturing Orders are still active.\n"
+                    f"Please cancel the following MOs first: {mo_names}"
+                )
         self.write({'state': 'cancelled'})
 
     def action_reset_draft(self):
         self.write({'state': 'draft'})
 
+    def action_delete_draft(self):
+        self.ensure_one()
+        if self.state != 'draft':
+            raise UserError("Only draft Production Orders can be deleted.")
+        if any(line.mo_id for line in self.line_ids):
+            raise UserError(
+                "Cannot delete this Production Order because Manufacturing Orders have already been generated. "
+                "Cancel all linked MOs first, then cancel this PO before deleting."
+            )
+        invoice_id = self.invoice_id.id
+        self.unlink()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'reema.invoice',
+            'res_id': invoice_id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
     def action_create_mos(self):
         self.ensure_one()
+        # Resync: restore any invoice lines that were removed from the PO
+        existing_inv_line_ids = self.line_ids.mapped('invoice_line_id').ids
+        for inv_line in self.invoice_id.line_ids:
+            if not inv_line.sample_id:
+                continue
+            if inv_line.id not in existing_inv_line_ids:
+                bom = self.env['mrp.bom'].search(
+                    [('product_tmpl_id', '=', inv_line.sample_id.product_tmpl_id.id)], limit=1
+                )
+                self.env['reema.production.order.line'].create({
+                    'order_id': self.id,
+                    'invoice_line_id': inv_line.id,
+                    'sample_id': inv_line.sample_id.id,
+                    'size': inv_line.size or '',
+                    'qty': inv_line.qty,
+                    'bom_id': bom.id if bom else False,
+                })
         pending = self.line_ids.filtered(lambda l: l.bom_id and not l.mo_id)
         if not pending:
             raise UserError(
@@ -90,10 +136,10 @@ class ReemaProductionOrder(models.Model):
             created_mos |= mo
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Manufacturing Orders',
-            'res_model': 'mrp.production',
-            'view_mode': 'list,form',
-            'domain': [('id', 'in', created_mos.ids)],
+            'res_model': 'reema.production.order',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
         }
 
     def action_view_mos(self):
@@ -121,7 +167,29 @@ class ReemaProductionOrderLine(models.Model):
     size = fields.Char(string='Size')
     qty = fields.Float(string='Quantity', default=1.0)
     bom_id = fields.Many2one('mrp.bom', string='Bill of Materials')
+    bom_reference = fields.Char(related='bom_id.reema_reference', string='BOM', readonly=True)
     mo_id = fields.Many2one('mrp.production', string='Manufacturing Order', readonly=True)
+    mo_state = fields.Selection(related='mo_id.state', string='MO Status', readonly=True)
+
+    def unlink(self):
+        for line in self:
+            if not line.mo_id:
+                continue
+            if line.mo_id.state in ('progress', 'done'):
+                raise UserError(
+                    f"Cannot delete line for '{line.sample_id.name}' — MO "
+                    f"{line.mo_id.name} has already started or is completed."
+                )
+            # Cancel and delete the linked MO so it doesn't become an orphan
+            mo = line.mo_id
+            if mo.state != 'cancel':
+                mo.action_cancel()
+            mo.unlink()
+        return super().unlink()
+
+    def action_delete_line(self):
+        self.ensure_one()
+        self.unlink()
 
     def action_reset_mo(self):
         self.ensure_one()
@@ -240,6 +308,54 @@ class MrpBomReemaExt(models.Model):
     # Every BOM created in this company must have operation dependencies enabled.
     # Overriding default so Waleed never has to remember to tick the checkbox.
     allow_operation_dependencies = fields.Boolean(default=True)
+    reema_reference = fields.Char(string='BOM Reference', readonly=True, copy=False,
+                                   default=lambda self: _('New'))
+    has_active_mo = fields.Boolean(compute='_compute_has_active_mo', string='Has Active MO')
+
+    # Fields that must not change once a confirmed MO exists for this BOM.
+    _BOM_PROTECTED_FIELDS = {
+        'product_tmpl_id', 'product_id', 'product_qty', 'product_uom_id',
+        'bom_line_ids', 'operation_ids', 'byproduct_ids',
+    }
+
+    def _compute_has_active_mo(self):
+        for bom in self:
+            bom.has_active_mo = bool(self.env['mrp.production'].search([
+                ('bom_id', '=', bom.id),
+                ('state', '!=', 'cancel'),
+            ], limit=1))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('reema_reference', _('New')) == _('New'):
+                vals['reema_reference'] = (
+                    self.env['ir.sequence'].next_by_code('reema.bom') or _('New')
+                )
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if self._BOM_PROTECTED_FIELDS & vals.keys():
+            for bom in self:
+                bom._compute_has_active_mo()
+                if bom.has_active_mo:
+                    raise UserError(
+                        f"BOM {bom.reema_reference} is locked — a Manufacturing Order exists for it. "
+                        f"Cancel the MO first, then make your changes."
+                    )
+        return super().write(vals)
+
+    def unlink(self):
+        for bom in self:
+            line = self.env['reema.production.order.line'].search(
+                [('bom_id', '=', bom.id)], limit=1
+            )
+            if line:
+                raise UserError(
+                    f"BOM {bom.reema_reference} cannot be deleted — it is referenced in "
+                    f"Production Order {line.order_id.name}. Remove the reference first."
+                )
+        return super().unlink()
 
 
 class MrpRoutingWorkcenterReema(models.Model):
@@ -255,3 +371,15 @@ class MrpRoutingWorkcenterReema(models.Model):
 
     def action_delete_operation(self):
         self.unlink()
+
+
+class StockPickingTypeReema(models.Model):
+    _inherit = 'stock.picking.type'
+
+    @api.model
+    def fix_mo_sequence_prefix(self):
+        """Change the default WH/MO/ prefix on Manufacturing picking types to MO/YEAR/ format."""
+        manuf_types = self.search([('code', '=', 'mrp_operation')])
+        for pt in manuf_types:
+            if pt.sequence_id and pt.sequence_id.prefix in ('WH/MO/', 'WH/MO/%(year)s/'):
+                pt.sequence_id.write({'prefix': 'MO/%(year)s/', 'padding': 5})

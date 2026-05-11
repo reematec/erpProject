@@ -1,4 +1,5 @@
 from odoo import models, fields, api, _
+from odoo.exceptions import UserError
 
 
 class ReemaInvoice(models.Model):
@@ -22,7 +23,7 @@ class ReemaInvoice(models.Model):
         ('sent',     'Sent'),
         ('accepted', 'Accepted'),
         ('rejected', 'Rejected'),
-        ('closed',   'Closed'),
+        ('closed',   'Shipped'),
     ], string='Status', default='pending', required=True, tracking=True)
 
     # ── Customer Details ──────────────────────────────────────────────────────
@@ -156,6 +157,27 @@ class ReemaInvoice(models.Model):
             rec.our_address = self.env.company.partner_id._display_address()
 
     # ── Create ────────────────────────────────────────────────────────────────
+
+    _LOCKED_FIELDS = {
+        'partner_id', 'client_address', 'date', 'client_order_number',
+        'client_order_date', 'payment_terms_id', 'country_of_origin',
+        'transport_method', 'shipping_date', 'incoterm_id', 'incoterm_location',
+        'destination', 'carton_qty', 'carton_size', 'total_cbm', 'gross_weight',
+        'net_weight', 'bank_id', 'bank_name', 'bank_title', 'bank_address',
+        'account_num', 'iban', 'swift', 'line_ids', 'charge_ids', 'document_ids',
+    }
+
+    def write(self, vals):
+        blocked = self._LOCKED_FIELDS & vals.keys()
+        if blocked:
+            for rec in self:
+                if rec.state != 'pending':
+                    raise UserError(
+                        f"Pro Forma Invoice {rec.name} is locked.\n\n"
+                        f"Only invoices in Pending status can be edited. "
+                        f"Use 'Reset to Pending' if a correction is needed."
+                    )
+        return super().write(vals)
 
     @api.model_create_multi
     def create(self, vals_list):
