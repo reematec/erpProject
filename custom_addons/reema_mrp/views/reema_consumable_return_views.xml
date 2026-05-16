@@ -9,6 +9,7 @@
         <field name="domain">[('transaction_type', '=', 'return')]</field>
         <field name="context">{'default_transaction_type': 'return'}</field>
         <field name="view_ids" eval="[
+            (6, 0, []),
             (0, 0, {'view_mode': 'list', 'view_id': ref('reema_mrp.reema_consumable_transaction_view_list')}),
             (0, 0, {'view_mode': 'form', 'view_id': ref('reema_mrp.reema_consumable_return_view_form')}),
         ]"/>

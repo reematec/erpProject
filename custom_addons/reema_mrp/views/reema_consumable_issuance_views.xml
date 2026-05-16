@@ -42,7 +42,7 @@
                     <button name="action_void"
                             string="Void Issuance"
                             type="object"
-                            groups="mrp.group_mrp_manager"
+                            groups="reema_mrp.group_reema_production_manager"
                             invisible="state != 'done'"
                             confirm="This will reverse the full stock move and void this record. Only proceed if no material has been physically returned. Continue?"
                             confirm-label="Yes, Void It"

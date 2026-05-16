@@ -23,7 +23,7 @@
                     <button name="action_cancel"
                             string="Withdraw Authorization"
                             type="object"
-                            groups="mrp.group_mrp_manager"
+                            groups="reema_mrp.group_reema_production_manager"
                             invisible="state in ('fully_issued', 'cancelled') or has_any_issue"
                             confirm="Are you sure you want to withdraw this authorization? No further material can be issued against it."
                             confirm-label="Yes, Withdraw It"

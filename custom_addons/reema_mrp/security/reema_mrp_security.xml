@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Categories ──────────────────────────────────────────────── -->
+    <record id="module_category_reema_production" model="ir.module.category">
+        <field name="name">Reema Production</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="module_category_reema_operations" model="ir.module.category">
+        <field name="name">Reema Operations</field>
+        <field name="sequence">21</field>
+    </record>
+
+    <!-- ── Production Hierarchy (leaf → root so refs resolve) ──────── -->
+
+    <!-- Level 3: Hall Incharge (Iftikhar, printing/cutting/stitching leads) -->
+    <record id="group_reema_hall_incharge" model="res.groups">
+        <field name="name">Hall Incharge</field>
+        <field name="category_id" ref="module_category_reema_production"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- Level 2: Production Supervisor (Ali Shan) -->
+    <record id="group_reema_supervisor" model="res.groups">
+        <field name="name">Production Supervisor</field>
+        <field name="category_id" ref="module_category_reema_production"/>
+        <field name="implied_ids" eval="[(4, ref('reema_mrp.group_reema_hall_incharge'))]"/>
+    </record>
+
+    <!-- Level 1: Production Manager (Waleed) -->
+    <record id="group_reema_production_manager" model="res.groups">
+        <field name="name">Production Manager</field>
+        <field name="category_id" ref="module_category_reema_production"/>
+        <field name="implied_ids" eval="[
+            (4, ref('reema_mrp.group_reema_supervisor')),
+            (4, ref('mrp.group_mrp_manager')),
+        ]"/>
+    </record>
+
+    <!-- ── Standalone: Store Keeper ────────────────────────────────── -->
+    <record id="group_reema_store" model="res.groups">
+        <field name="name">Store Keeper</field>
+        <field name="category_id" ref="module_category_reema_operations"/>
+        <field name="implied_ids" eval="[
+            (4, ref('base.group_user')),
+            (4, ref('stock.group_stock_user')),
+        ]"/>
+    </record>
+
+</odoo>

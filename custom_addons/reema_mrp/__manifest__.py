@@ -10,6 +10,7 @@
     'author': 'Gemini CLI',
     'depends': ['mrp', 'stock', 'account', 'analytic', 'reema_invoice'],
     'data': [
+        'security/reema_mrp_security.xml',
         'security/ir.model.access.csv',
         'data/ir_sequence_data.xml',
         'views/mrp_views.xml',

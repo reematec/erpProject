@@ -10,6 +10,7 @@
     'author': 'Gemini CLI',
     'depends': ['product', 'mrp', 'mail'],
     'data': [
+        'security/reema_sampling_security.xml',
         'security/ir.model.access.csv',
         'data/reema_sampling_data.xml',
         'views/reema_sampling_blueprint_views.xml',

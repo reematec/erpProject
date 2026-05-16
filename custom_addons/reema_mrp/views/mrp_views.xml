@@ -107,6 +107,7 @@
                 <button name="action_log_batch" type="object"
                         icon="fa-plus-circle"
                         title="Log batch progress"
+                        groups="reema_mrp.group_reema_supervisor"
                         invisible="state != 'progress'"/>
             </xpath>
             <!-- Hide the "Open Work Order" external-link icon added by the MO form view -->

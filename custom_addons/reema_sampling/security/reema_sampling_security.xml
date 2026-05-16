@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="module_category_reema_sampling" model="ir.module.category">
+        <field name="name">Reema Sampling</field>
+        <field name="sequence">22</field>
+    </record>
+
+    <!-- Design / Sampling Team -->
+    <record id="group_reema_sampling" model="res.groups">
+        <field name="name">Sampling Team</field>
+        <field name="category_id" ref="module_category_reema_sampling"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+</odoo>
