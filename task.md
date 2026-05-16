@@ -8,6 +8,8 @@
 7. After each task is finished, verify no errors exist and the application is working.
 
 ## Current Tasks
+[] In batch logs, include a column for PO,
+  - Also assign a reference number to Batch log
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      PHASE 1 — Foundation
@@ -210,6 +212,24 @@
     - All 17 halls created in Manufacturing → Configuration → Work Centers.
     - Data setup only — no code required.
 
+[ ] Single-click navigation for Blueprint / BOM / MO in PO lines
+    - In the Production Order form, the line_ids list uses editable="bottom".
+      This forces a 2-click sequence: first click activates the row for editing,
+      second click follows the Many2one navigation link. Inherent Odoo behaviour.
+    - Fix: add small fa-external-link icon buttons (type="object") next to each
+      navigable field. Buttons in editable lists bypass row-activation and fire
+      on the first click, so navigation becomes single-click.
+    - Add `no_open: True` to sample_id / bom_id / mo_id so the field text is plain
+      (no confusing partial-link), and use the dedicated button for navigation.
+    - Files to change:
+        reema_mrp/models/reema_production_order.py
+          → add action_open_sample(), action_open_bom(), action_open_mo()
+            to ReemaProductionOrderLine
+        reema_mrp/views/reema_production_order_views.xml
+          → add no_open:True + fa-external-link button after each of the 3 fields
+    - Inline qty editing is preserved (no changes to editable="bottom").
+    - Plan file: /home/wsl_amir/.claude/plans/cozy-moseying-crown.md
+
 [ ] Phase 1.8 — Role-based access control (all users)
     ─────────────────────────────────────────────────────
     ROLES TO DEFINE:
@@ -300,52 +320,22 @@
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      PHASE A — Accounting, Finance & Procurement Foundation
-     Goal: Full double-entry accounting, purchase cycle, and inventory
-     valuation live. Must complete before go-live date.
-     See DESIGN.md for full design decisions and rationale.
+     Goal: Full double-entry accounting wired into production, purchase
+     cycle, contractor billing, and bank reconciliation live.
+     Design decisions: /home/wsl_amir/.claude/plans/ok-harmonic-lerdorf.md
+
+     KEY DECISIONS (locked):
+       - COA: 4-level, individual GL account per vendor AND per customer
+       - Costing: AVCO (Average Cost), real-time perpetual valuation
+       - Currency: PKR only
+       - Fiscal Year: July 1 – June 30
+       - Opening Balances: fresh start from cutover date
+       - Sales: ~99% export (GST 0%), <1% domestic (GST 17%)
+       - Labor cost trigger: contractor BILL confirmation, NOT work order
+         completion (supervisors never reliably close WOs/MOs/POs)
+       - Purchase flow: 3-way match (PM creates PO with price, storekeeper
+         receives qty only, accounting posts vendor bill)
 ════════════════════════════════════════════════════════════════════════ -->
-
-[ ] Phase A.1 — Install Accounting + Purchase + Pakistan Localization
-    - In Odoo Apps: install "Accounting", "Purchase", "Pakistan - Accounting"
-    - Accounting replaces basic Invoicing — enables full double-entry
-    - Purchase enables PO → Receipt → Vendor Bill → Payment flow
-    - Pakistan localization (l10n_pk) provides standard Chart of Accounts + tax config
-    - Verify: Accounting menu appears, Purchase menu appears
-
-[ ] Phase A.2 — Fiscal Year & Currency
-    - Accounting → Configuration → Settings:
-      - Fiscal Year: July 1 – June 30
-      - Default Currency: PKR
-      - Lock: no multi-currency needed (all transactions in PKR)
-    - Create first fiscal year period if not auto-created
-
-[ ] Phase A.3 — Chart of Accounts review
-    - Pakistan localization installs a standard CoA automatically
-    - In-house accountant reviews and renames/adds accounts to match Reema's books
-    - Key accounts to confirm exist (see DESIGN.md → Chart of Accounts section)
-    - Add if missing: Supplier Advances, Customer Advances, Labor Cost, Contractor Cash
-
-[ ] Phase A.4 — Tax Configuration
-    - Sales tax: zero-rated (0%) for all export sales — set as default on customer records
-    - Purchase WHT: configure Section 153 tax (4.5% filer / 9% non-filer)
-    - Add boolean field on supplier (res.partner): withholding_allowed
-      (custom field — needed to flag suppliers who refuse WHT deduction)
-
-[ ] Phase A.5 — Bank Journals & Cash Journals
-    - Create one journal per bank account (2–3 accounts)
-    - Create "Petty Cash" cash journal
-    - Create "Contractor Cash" cash journal
-    - Link each journal to its corresponding CoA account
-
-[ ] Phase A.6 — Warehouse Sub-Locations
-    - Inventory → Configuration → Locations
-    - Under "Reema Warehouse / Input" (or equivalent):
-      - Raw Material Store
-      - Production Halls (parent, virtual)
-        - One child location per hall (17 halls)
-      - Finished Goods Store
-      - Packing Area
-    - Set correct usage type: Internal for all
 
 [x] Phase A.0 — Product Group field on all products — Completed May 7 2026
     - Added product_group Selection field to product.template (in reema_mrp/models/reema_product.py)
@@ -357,107 +347,132 @@
     - Files: reema_mrp/models/reema_product.py (new), reema_mrp/models/__init__.py,
       reema_mrp/views/mrp_views.xml
 
-[ ] Phase A.7 — Product Categories with AVCO
-    - Inventory → Configuration → Product Categories
-    - "Raw Materials": Costing Method = Average Cost (AVCO), Inventory Valuation = Automated
-    - "Finished Goods": Costing Method = Average Cost (AVCO), Inventory Valuation = Automated
-    - Assign all existing raw material products to Raw Materials category
-    - Assign finished goods products to Finished Goods category
+[x] Phase A.1 — reema_accounting module: COA + Taxes + Journals — Completed May 15 2026
+    - Created new module: custom_addons/reema_accounting/
+    - 44 GL accounts loaded via data/account_account_data.xml (full 4-level COA):
+        1000 Assets → Cash/Bank (1111,1112), Trade Receivables control (1120),
+          Advances & Receivables (1131-1134), Inventory (1141-1144), Fixed Assets
+        2000 Liabilities → Trade Payables control (2110), Contractors Payable control (2120),
+          Customer Advances control (2130), GST/WHT/EOBI payables
+        3000 Equity → Owner Capital (3100), Retained Earnings (3200)
+        4000 Revenue → Sales by product line (4100-4300), Other Income (4900)
+        5000 COGS → Raw Material Consumed (5100), Direct Labor by type (5200-5220),
+          Factory Overhead (5300-5330)
+        6000 Operating Expenses → Salaries, Utilities, Admin, Freight, Bank Charges
+    - Control accounts (1120, 2110, 2120, 2130) set reconcile=True
+    - Individual vendor/customer accounts assigned per partner via
+      property_account_payable_id / property_account_receivable_id
+    - 5 taxes loaded via data/account_tax_data.xml:
+        GST 17% Sale → Cr 2150 Output GST Payable
+        GST 0% Export → zero-rated, no GL impact
+        GST 17% Purchase (Input Tax) → Dr 1133 Input GST Receivable
+        WHT 4.5% Sale → Dr 1134 WHT Receivable (negative tax, deducted from receivable)
+        WHT 4% Purchase → Cr 2160 WHT Payable (negative tax, deducted from payment)
+    - 5 journals loaded via data/account_journal_data.xml:
+        Sales (SALE), Purchase (PURCH), Bank (BNK), Cash (CSH), General (MISC)
+    - Files: custom_addons/reema_accounting/__manifest__.py,
+      custom_addons/reema_accounting/__init__.py,
+      custom_addons/reema_accounting/data/account_account_data.xml,
+      custom_addons/reema_accounting/data/account_tax_data.xml,
+      custom_addons/reema_accounting/data/account_journal_data.xml
+    - TO INSTALL: Apps → Update Apps List → search "Reema Accounting" → Install
 
-[ ] Phase A.8 — User Roles & Access Rights
-    - See Phase 1.8 detail already in this file (combined with manufacturing roles)
-    - Add new roles for accounting/procurement staff: Accountant, Store Keeper, Gate
-    - Accounting group: full Accounting module, no stock operations
-    - Store Keeper group: Inventory receive/issue, Purchase receipt validation, no payments
-    - Gate group: delivery in/out confirmation only
+[ ] Phase A.2 — Fiscal Year, Currency & AVCO Configuration (Odoo Settings)
+    - Accounting → Configuration → Settings:
+        Default Currency: PKR
+        Fiscal Year: July 1 – June 30
+        Lock Date: set after opening entries are posted
+    - Inventory → Configuration → Product Categories → create/update:
+        "Raw Materials": Cost Method = Average Cost (AVCO),
+          Valuation = Automated (Real-time),
+          Stock Input Account = 1141, Stock Output Account = 5100,
+          Stock Valuation Account = 1141
+        "Consumables": Cost Method = AVCO, Valuation = Automated,
+          Stock Input = 1144, Stock Output = 5320, Valuation = 1144
+        "Finished Goods": Cost Method = AVCO, Valuation = Automated,
+          Stock Input = 1143, Stock Output = 5100, Valuation = 1143
+        "WIP": Stock Valuation Account = 1142
+    - Assign all existing products to their correct category
+    - Result: goods receipt auto-posts Dr Raw Materials / Cr GRNI;
+      material issuance auto-posts Dr WIP / Cr Raw Materials;
+      MO close auto-posts Dr Finished Goods / Cr WIP (no code needed)
 
+[ ] Phase A.3 — Contractor Bill Model + Workflow
+    - New model: reema.contractor.bill in reema_mrp/models/reema_contractor_bill.py
+    - Purpose: labor cost hits COGS only when contractor bill is confirmed,
+      NOT when work order is completed (supervisors don't close WOs reliably)
+    - Bill is fully independent of WO/MO/PO closure state
+    - Fields: contractor_id, work_type (stitching/cutting/sublimation),
+      date, line_ids, state, account_move_id, total_amount
+    - Bill lines: description, qty (from contractor tally), piece_rate_id,
+      rate (auto-filled from piece rate master, editable), subtotal
+    - Workflow states:
+        draft → [Supervisor Approves qty against physical count]
+        supervisor_approved → [Accounting Confirms]
+        confirmed → posts account.move:
+                      Dr 5200/5210/5220 Direct Labor (by work_type)
+                      Cr 2121/2122/2123 Contractor Payable (by contractor)
+        paid → [Register Payment] Dr Contractor Payable / Cr 1111 Bank
+    - Payment is often instant (same session as confirmation)
+    - Files to create: reema_mrp/models/reema_contractor_bill.py (new),
+      reema_mrp/views/reema_contractor_bill_views.xml (new)
+    - Files to modify: reema_mrp/models/__init__.py, reema_mrp/__manifest__.py
 
-<!-- ═══════════════════════════════════════════════════════════════════════
-     PHASE B — Procurement Cycle
-     Goal: All supplier material purchases flow through Odoo with full
-     3-way match: PO → Receipt → Bill → Payment.
-════════════════════════════════════════════════════════════════════════ -->
+[ ] Phase A.4 — Sales Invoice from Pro Forma Invoice
+    - reema.invoice (PI) is currently a standalone document with no accounting impact
+    - When PI is marked as Shipped (action_mark_shipped), auto-generate account.move
+    - New field on reema.invoice: account_invoice_id (Many2one account.move, readonly)
+    - Override action_mark_shipped(): create account.move (move_type='out_invoice')
+        Partner: partner_id → uses partner's property_account_receivable_id
+        Lines: from reema.invoice.line → product + qty + price_unit
+        Tax: GST 0% Export by default; GST 17% if is_domestic=True on invoice
+        Journal: Sales (SALE)
+        Link: account_invoice_id ← new move
+    - Add smart button on PI form: "Accounting Invoice" (links to account.move)
+    - Files: custom_addons/reema_invoice/models/reema_invoice.py
 
-[ ] Phase B.1 — Supplier Master Data
-    - Create supplier records in Contacts for all raw material suppliers
-    - Required fields per supplier: Name, NTN, Address, Bank Details
-    - Add withholding_allowed flag (True/False) per supplier
-    - Assign payment terms where applicable (credit vs cash)
+[ ] Phase A.5 — Purchase & Vendor Bills Setup (Native Odoo, config only)
+    - No custom code needed — use Odoo's standard purchase module
+    - 3-way match flow:
+        1. Production Manager creates PO (product + qty + agreed price)
+        2. Storekeeper validates receipt (qty only — price comes from PO automatically)
+           AVCO updates and journal entry posted (handled by Phase A.2 config)
+        3. Accounting creates vendor bill from PO (price + qty already filled)
+           Dr GRNI clearing / Cr vendor's individual account (2111, 2112...)
+           Input GST and WHT taxes applied
+    - Configuration required:
+        Each vendor partner: set property_account_payable_id → their individual account
+        Each customer partner: set property_account_receivable_id → their individual account
+        WHT and Input GST taxes set as default on vendor records
 
-[ ] Phase B.2 — Raw Material Products
-    - Create product records for all raw materials: PU sheets, fabric, latex, thread,
-      bladders, valves, panels, lining, etc.
-    - Set product category → Raw Materials (AVCO)
-    - Set correct Unit of Measure (kg, meters, pcs)
-    - Set reorder rules if applicable
+[ ] Phase A.6 — Payments & Advances
+    - Customer Advances:
+        account.payment inbound → post to customer's advance account (2131/2132...)
+        On invoice confirmation, reconcile advance against receivable
+    - Supplier Advances:
+        account.payment outbound → post to 1131 Advances to Suppliers
+        On vendor bill confirmation, reconcile advance against payable
+    - Contractor instant payment: built into Phase A.3 contractor bill flow
+    - Test: advance paid → invoice raised → reconcile → balance = 0
 
-[ ] Phase B.3 — Purchase Flow Walkthrough
-    - Test full cycle: Create PO → Receive goods (Store Keeper) → Create Bill
-      (Accountant) → Register Payment
-    - Verify AVCO cost updates on receipt
-    - Verify journal entries at each step (see DESIGN.md → Procurement Flow)
-    - Verify 3-way match: bill cannot be validated without matching PO and receipt
+[ ] Phase A.7 — Bank & Reconciliation
+    - Use native Odoo account.bank.statement
+    - Manual entry of bank statement lines weekly
+    - Reconcile against: customer payments, vendor payments, contractor payments
+    - Bank charges: Dr 6600 Bank Charges / Cr 1111 Bank (manual journal entry)
+    - Verify: bank GL account balance = physical bank statement balance
 
-[ ] Phase B.4 — Advance Payment to Suppliers
-    - Configure advance payment workflow:
-      - Payment registered against supplier before PO receipt
-      - Posted to "Supplier Advances" account (asset)
-      - Cleared when bill is matched and payment applied
-    - Test with a real supplier advance scenario
-
-
-<!-- ═══════════════════════════════════════════════════════════════════════
-     PHASE D — Sales & Export Accounting
-     Goal: Pro Forma Invoice → Delivery → Export Invoice → Payment
-     fully recorded in accounting.
-════════════════════════════════════════════════════════════════════════ -->
-
-[ ] Phase D.1 — Delivery Order linked to Pro Forma Invoice
-    - When production is complete and goods are ready for export:
-      create Delivery Order from Finished Goods Store
-    - Link delivery to the Pro Forma Invoice
-
-[ ] Phase D.2 — Export Invoice in Accounting
-    - After delivery, create accounting invoice (account.move) linked to Pro Forma
-    - Amount in PKR (rate applied externally)
-    - Tax: zero-rated
-    - Journal entry: Dr Accounts Receivable / Cr Sales Revenue
-
-[ ] Phase D.3 — Customer Advance Payments
-    - Configure advance from customer workflow:
-      - Customer pays deposit before production starts
-      - Posted to "Customer Advances" account (liability)
-      - Cleared when final invoice is raised and payment applied
-
-[ ] Phase D.4 — Customer Payment & Bank Reconciliation
-    - Register PKR payment receipt against export invoice
-    - Reconcile with bank statement
-
-
-<!-- ═══════════════════════════════════════════════════════════════════════
-     PHASE E — Controls & Go-Live
-     Goal: Enforce all controls, enter opening balances, lock history,
-     and train staff before going live.
-════════════════════════════════════════════════════════════════════════ -->
-
-[ ] Phase E.1 — Physical Inventory Workflow
-    - Configure periodic inventory count process
-    - Each hall location counted separately (WIP per hall)
-    - Discrepancies require reason before adjustment is posted
-
-[ ] Phase E.2 — Opening Balance Entry
-    - On agreed go-live date, enter:
-      1. Raw material stock quantities + AVCO unit cost
-      2. Cash and petty cash balances
-      3. Bank account balances
-      4. Outstanding supplier payables
-      5. Outstanding customer receivables
-    - All entries dated the go-live date
-
-[ ] Phase E.3 — Period Locking & User Training
-    - Lock all accounting periods before go-live date (no back-dating)
-    - Train each role on their specific screens and workflows
-    - Verify each user can only access their designated areas
+[ ] Phase A.8 — Opening Balance Entry (one-time, on go-live date)
+    - Post one journal entry via Misc (MISC) journal on the cutover date:
+        Dr 1111 Main Bank Account → actual bank balance
+        Dr 1121/1122... Trade Receivables → per customer outstanding
+        Dr 1141 Raw Materials → physical count × AVCO unit cost
+        Dr 1143 Finished Goods → physical count × AVCO unit cost
+        Cr 2111/2112... Trade Payables → per vendor outstanding
+        Cr 2131/2132... Customer Advances → per customer advance held
+        Cr/Dr 3100 Owner Capital → balancing figure
+    - Lock all dates before go-live: Accounting → Settings → Lock Date
+    - Train each staff role on their specific screens before go-live
 
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -480,7 +495,60 @@
         PU + Fabric → consumed at Hall 2 (Lamination)
     - System deducts stock at the exact hall where material is physically used
 
-[ ] Phase 2.3 — Piece rate matrix population and activation
+[x] Batch Log view + Piece Rate linkage on batch entries — Completed May 13 2026
+    - Added `piece_rate_id` (Many2one → reema.piece.rate) and `amount_earned`
+      (computed: rate × qty, stored) to `reema.wo.batch.entry`.
+    - Wizard: `workcenter_id` related field added so piece rate dropdown filters to
+      only rates configured for the current hall's work center.
+    - New standalone list/form/search view for all batch entries:
+        Columns: Date, Logged By, Contractor, Work Order, Qty, Balls, Piece Rate, Amount (PKR, summed)
+        Search: by Logged By, Contractor, Work Order, Piece Rate; filters: Today, This Month
+        Group by: Logged By, Contractor, Work Order, Date (month)
+    - Menu: Manufacturing → Batch Logs (sequence 25)
+    - Smart button on res.partner contact form: shows batch entry count for that user;
+      visible only when count > 0; filtered by logged_by.partner_id
+    - Files:
+        reema_mrp/models/reema_wo_batch.py
+        reema_mrp/models/res_partner.py (new)
+        reema_mrp/models/__init__.py
+        reema_mrp/views/reema_wo_batch_views.xml
+
+[ ] Piece Rate system — design decisions pending (discuss before building further)
+
+    WHAT IS BUILT:
+    - reema.piece.rate config table: Work Center + Type of Work + Rate (PKR) + UOM
+      Location: Manufacturing → Configuration → Piece Rates
+    - Supervisor optionally picks a piece rate when logging a batch (filtered to that hall)
+    - amount_earned = rate × qty is stored on the batch entry
+    - Batch Logs view shows PKR per entry with a column total
+
+    OPEN DECISIONS (resolve before Phase 2.3):
+
+    1. MO column in Batch Logs list
+       - Currently shows Work Order name (e.g. "Cutting") but NOT MO number (MO/2026/00012)
+       - Add production_id as a separate column for quick MO identification
+
+    2. Piece rate population
+       - Who enters rates — Waleed or Irfan?
+       - How many work types per hall? (e.g. Cutting Plain vs Cutting Printed)
+       - Same rate for all contractors, or negotiated individually per contractor?
+       - Current design: one rate per hall + work_type, same for everyone
+
+    3. Payables generation (Phase 2.3)
+       - amount_earned exists on batch entries but is NOT posted to accounting yet
+       - Irfan needs weekly payables report per contractor
+       - Decision: use account.move (vendor bill) or a custom payable model?
+
+    4. Approval workflow
+       - Should Irfan approve batch entries before amounts are finalized?
+       - Or is a saved batch entry final?
+
+    Files to modify when resolved:
+        reema_mrp/models/reema_wo_batch.py
+        reema_mrp/models/reema_piece_rate.py
+        reema_mrp/views/reema_wo_batch_views.xml
+
+[ ] Phase 2.3 — Piece rate payables to accounting
     - After Phase 1 work centers are set up, Waleed fills piece rate matrix:
         Hall + construction type + ball size + complexity → rate per unit
     - Contractor payable auto-entry when work order is confirmed by Ali Shan

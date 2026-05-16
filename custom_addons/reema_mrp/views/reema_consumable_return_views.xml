@@ -1,79 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Return Form -->
-    <record id="reema_consumable_return_view_form" model="ir.ui.view">
-        <field name="name">reema.consumable.return.form</field>
-        <field name="model">reema.consumable.return</field>
-        <field name="arch" type="xml">
-            <form string="Consumable Return">
-                <header>
-                    <button name="action_confirm"
-                            string="Confirm Return"
-                            type="object"
-                            class="btn-primary"
-                            invisible="state != 'draft'"/>
-                    <field name="state" widget="statusbar"
-                           statusbar_visible="draft,confirmed"/>
-                </header>
-                <sheet>
-                    <div class="oe_title">
-                        <h1>
-                            <field name="name" placeholder="New"/>
-                        </h1>
-                    </div>
-                    <group>
-                        <group string="Item">
-                            <field name="product_id"
-                                   options="{'no_open': True}"
-                                   readonly="state != 'draft'"/>
-                            <field name="product_uom_id" options="{'no_open': True}"/>
-                            <field name="qty" readonly="state != 'draft'"/>
-                        </group>
-                        <group string="Return Details">
-                            <field name="return_from_location_id"
-                                   options="{'no_open': True}"
-                                   readonly="state != 'draft'"/>
-                            <field name="reason" readonly="state != 'draft'"/>
-                            <field name="notes" readonly="state != 'draft'"/>
-                            <field name="returned_by" options="{'no_open': True}"/>
-                            <field name="date"/>
-                            <field name="move_id" optional="hide"/>
-                        </group>
-                    </group>
-                </sheet>
-                <chatter>
-                    <field name="message_follower_ids" groups="base.group_user"/>
-                    <field name="activity_ids"/>
-                    <field name="message_ids"/>
-                </chatter>
-            </form>
-        </field>
-    </record>
 
-    <!-- Return List -->
-    <record id="reema_consumable_return_view_list" model="ir.ui.view">
-        <field name="name">reema.consumable.return.list</field>
-        <field name="model">reema.consumable.return</field>
-        <field name="arch" type="xml">
-            <list>
-                <field name="name"/>
-                <field name="date"/>
-                <field name="product_id"/>
-                <field name="qty"/>
-                <field name="product_uom_id" string="UOM"/>
-                <field name="return_from_location_id" string="From Hall"/>
-                <field name="reason"/>
-                <field name="returned_by" optional="show"/>
-            </list>
-        </field>
-    </record>
-
-    <!-- Window Action — confirmed returns only -->
+    <!-- Window Action — returns only -->
     <record id="reema_consumable_return_action" model="ir.actions.act_window">
         <field name="name">Consumable Returns</field>
-        <field name="res_model">reema.consumable.return</field>
+        <field name="res_model">reema.consumable.transaction</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('state', '=', 'confirmed')]</field>
+        <field name="domain">[('transaction_type', '=', 'return')]</field>
+        <field name="context">{'default_transaction_type': 'return'}</field>
+        <field name="view_ids" eval="[
+            (0, 0, {'view_mode': 'list', 'view_id': ref('reema_mrp.reema_consumable_transaction_view_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('reema_mrp.reema_consumable_return_view_form')}),
+        ]"/>
     </record>
 
     <!-- Menu under Store Issuances -->
@@ -83,4 +21,5 @@
               action="reema_consumable_return_action"
               groups="base.group_user"
               sequence="3"/>
+
 </odoo>

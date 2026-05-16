@@ -10,3 +10,7 @@ class MrpWorkcenter(models.Model):
     location_id = fields.Many2one('stock.location', string='Hall Location',
                                   domain=[('usage', '=', 'internal')],
                                   help='Stock location for this hall. SFG products are moved here when a work order completes.')
+    workforce_type = fields.Selection([
+        ('contractor', 'Contractor'),
+        ('employee', 'Employee'),
+    ], string='Workforce Type', default='contractor', required=True)

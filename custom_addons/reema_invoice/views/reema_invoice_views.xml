@@ -44,6 +44,12 @@
                             invisible="state != 'sent'"/>
                     <button name="action_close"          string="Mark as Shipped" type="object"
                             invisible="state not in ('accepted', 'rejected')"/>
+                    <button name="action_undo_shipped"   string="Undo Shipped"    type="object"
+                            groups="base.group_system"
+                            invisible="state != 'closed'"
+                            confirm="This will revert the invoice status from Shipped back to Accepted. Are you sure?"
+                            confirm-label="Yes, Undo"
+                            cancel-label="Go Back"/>
                     <button name="action_reset_to_pending" string="Reset to Pending" type="object"
                             invisible="state == 'pending'"/>
                     <button name="action_print_invoice"  string="Print PI"     type="object"/>

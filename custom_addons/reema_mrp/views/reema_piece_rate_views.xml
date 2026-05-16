@@ -1,47 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="reema_piece_rate_view_tree" model="ir.ui.view">
-        <field name="name">reema.piece.rate.view.tree</field>
+
+    <!-- List / Overview -->
+    <record id="reema_piece_rate_view_list" model="ir.ui.view">
+        <field name="name">reema.piece.rate.list</field>
         <field name="model">reema.piece.rate</field>
         <field name="arch" type="xml">
-            <list string="Piece Rate Matrix" editable="bottom">
-                <field name="hall_id"/>
-                <field name="construction_type"/>
-                <field name="ball_size"/>
-                <field name="complexity_level"/>
-                <field name="uom_id"/>
-                <field name="rate"/>
-                <field name="date_start"/>
-                <field name="date_end"/>
-                <field name="active" widget="boolean_toggle"/>
+            <list string="Piece Rates">
+                <field name="workcenter_id" string="Work Center"/>
+                <field name="work_type"     string="Type of Work"/>
+                <field name="description"   string="Description / Notes"/>
+                <field name="rate"          string="Rate (PKR)"/>
+                <field name="uom_id"        string="UOM"/>
             </list>
         </field>
     </record>
 
+    <!-- Form — opens when user clicks New or an existing row -->
     <record id="reema_piece_rate_view_form" model="ir.ui.view">
-        <field name="name">reema.piece.rate.view.form</field>
+        <field name="name">reema.piece.rate.form</field>
         <field name="model">reema.piece.rate</field>
         <field name="arch" type="xml">
             <form string="Piece Rate">
                 <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="work_type" placeholder="Type of Work…"/>
+                        </h1>
+                    </div>
                     <group>
-                        <group string="Process Context">
-                            <field name="hall_id"/>
-                            <field name="construction_type"/>
-                            <field name="uom_id"/>
+                        <group string="Work Details">
+                            <field name="workcenter_id"
+                                   options="{'no_create': True, 'no_edit': True}"/>
+                            <field name="description"/>
                         </group>
-                        <group string="Product Attributes">
-                            <field name="ball_size"/>
-                            <field name="complexity_level"/>
-                            <field name="lamination_type"/>
-                        </group>
-                        <group string="Financials">
+                        <group string="Rate">
                             <field name="rate"/>
-                            <field name="active"/>
-                        </group>
-                        <group string="Validity">
-                            <field name="date_start"/>
-                            <field name="date_end"/>
+                            <field name="uom_id"
+                                   options="{'no_create': True, 'no_edit': True}"/>
                         </group>
                     </group>
                 </sheet>
@@ -49,16 +45,24 @@
         </field>
     </record>
 
+    <!-- Window action: list first, form on New/row click -->
     <record id="reema_piece_rate_action" model="ir.actions.act_window">
-        <field name="name">Piece Rate Matrix</field>
+        <field name="name">Piece Rates</field>
         <field name="res_model">reema.piece.rate</field>
         <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No piece rates defined yet. Click New to add one.
+            </p>
+        </field>
     </record>
 
+    <!-- Menu: Manufacturing → Configuration → Piece Rates -->
     <menuitem id="reema_mrp_menu_piece_rates"
-              name="Piece Rate Matrix"
+              name="Piece Rates"
               parent="mrp.menu_mrp_configuration"
               action="reema_piece_rate_action"
               groups="base.group_user"
               sequence="20"/>
+
 </odoo>

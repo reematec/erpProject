@@ -1,4 +1,6 @@
 from odoo import models, fields, api
+from odoo.exceptions import UserError
+
 
 class MrpProduction(models.Model):
     _inherit = 'mrp.production'
@@ -22,3 +24,13 @@ class MrpProduction(models.Model):
         ('high', 'High Complexity'),
         ('premium', 'Premium/Pro')
     ], string='Complexity', default='standard')
+
+    def action_confirm(self):
+        res = super().action_confirm()
+        # Material is issued physically via reema.material.issuance (RMI).
+        # Odoo must never lock stock via reservation — clear any auto-reservation
+        # that the base confirm or scheduler may have applied to raw material moves.
+        self.move_raw_ids.filtered(
+            lambda m: m.state not in ('done', 'cancel')
+        )._do_unreserve()
+        return res

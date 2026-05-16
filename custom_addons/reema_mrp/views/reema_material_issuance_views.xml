@@ -224,6 +224,127 @@
               groups="base.group_user"
               sequence="1"/>
 
+    <!-- ═══════════════════════════════════════════════════════════
+         MO Authorization Overview — store keeper entry point
+         Shows one row per MO with pending material authorizations.
+    ════════════════════════════════════════════════════════════ -->
+
+    <!-- List view: one row per MO -->
+    <record id="reema_mo_issuance_overview_list" model="ir.ui.view">
+        <field name="name">mrp.production.issuance.overview.list</field>
+        <field name="model">mrp.production</field>
+        <field name="arch" type="xml">
+            <list string="MO Authorizations" create="0" delete="0"
+                  decoration-warning="pending_issuance_count &gt; 0">
+                <field name="name" string="MO"/>
+                <field name="product_id" string="Product"/>
+                <field name="ball_size" string="Size"/>
+                <field name="construction_type" string="Type"/>
+                <field name="issuance_count" string="Total Auth"/>
+                <field name="pending_issuance_count" string="Pending"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'confirmed'"
+                       decoration-warning="state == 'progress'"
+                       decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form view: MO header + inline issuance list for store keeper -->
+    <record id="reema_mo_issuance_overview_form" model="ir.ui.view">
+        <field name="name">mrp.production.issuance.overview.form</field>
+        <field name="model">mrp.production</field>
+        <field name="arch" type="xml">
+            <form string="Material Authorizations" create="false" edit="false">
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="confirmed,progress,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Manufacturing Order">
+                            <field name="product_id" readonly="1"/>
+                            <field name="ball_size" readonly="1"/>
+                            <field name="construction_type" readonly="1"/>
+                        </group>
+                        <group string="Issuance Summary">
+                            <field name="issuance_count" readonly="1" string="Total Authorized"/>
+                            <field name="pending_issuance_count" readonly="1" string="Pending Issue"/>
+                        </group>
+                    </group>
+                    <field name="issuance_ids" readonly="1">
+                        <list string="Component Authorizations" create="0" delete="0"
+                              decoration-warning="state in ('authorized', 'partial')"
+                              decoration-success="state == 'fully_issued'"
+                              decoration-muted="state == 'cancelled'">
+                            <field name="name" string="Reference"/>
+                            <field name="product_id" string="Component"/>
+                            <field name="authorized_qty" string="Auth Qty"/>
+                            <field name="product_uom_id" string="UOM"/>
+                            <field name="total_issued_qty" string="Issued"/>
+                            <field name="remaining_qty" string="Remaining"/>
+                            <field name="state" widget="badge"
+                                   decoration-info="state == 'authorized'"
+                                   decoration-warning="state == 'partial'"
+                                   decoration-success="state == 'fully_issued'"
+                                   decoration-danger="state == 'cancelled'"
+                                   string="Status"/>
+                            <button name="action_open_issuance"
+                                    type="object"
+                                    icon="fa-arrow-right"
+                                    title="Open to Issue / Return Materials"
+                                    invisible="state == 'cancelled'"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search view for MO overview (with Pending default filter) -->
+    <record id="reema_mo_issuance_overview_search" model="ir.ui.view">
+        <field name="name">mrp.production.issuance.overview.search</field>
+        <field name="model">mrp.production</field>
+        <field name="arch" type="xml">
+            <search string="MO Authorizations">
+                <field name="name" string="MO"/>
+                <field name="product_id" string="Product"/>
+                <filter string="Pending Issue" name="pending"
+                        domain="[('pending_issuance_count', '&gt;', 0)]"/>
+                <filter string="All" name="all" domain="[]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="Product" name="group_product" context="{'group_by': 'product_id'}"/>
+                    <filter string="State" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Window action for MO overview -->
+    <record id="reema_mo_issuance_overview_action" model="ir.actions.act_window">
+        <field name="name">MO Authorizations</field>
+        <field name="res_model">mrp.production</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('issuance_count', '&gt;', 0), ('state', 'not in', ['draft', 'done', 'cancel'])]</field>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="search_view_id" ref="reema_mo_issuance_overview_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('reema_mo_issuance_overview_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('reema_mo_issuance_overview_form')})]"/>
+    </record>
+
+    <!-- Menu: MO Authorizations — first item under Store Issuances -->
+    <menuitem id="reema_mrp_menu_mo_authorizations"
+              name="MO Authorizations"
+              parent="reema_mrp_menu_issuances_root"
+              action="reema_mo_issuance_overview_action"
+              groups="base.group_user"
+              sequence="0"/>
+
     <!-- Report action -->
     <record id="action_report_material_issuance" model="ir.actions.report">
         <field name="name">Material Issuance Slip</field>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="mrp.MOViewListDropdown" t-inherit-mode="extension">
+        <!-- Remove the Block/Unblock option — not part of our batch-logging workflow -->
+        <xpath expr="//DropdownItem[.//span[contains(@t-attf-class, 'times-circle')]]" position="replace"/>
+    </t>
+</templates>

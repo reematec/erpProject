@@ -122,6 +122,16 @@ class ReemaMaterialIssuance(models.Model):
             'target': 'new',
         }
 
+    def action_open_issuance(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'reema.material.issuance',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
     def action_print(self):
         return self.env.ref('reema_mrp.action_report_material_issuance').report_action(self)
 
@@ -400,6 +410,18 @@ class ReemaMaterialIssueWizard(models.TransientModel):
                 f'Remaining authorized quantity: {issuance.remaining_qty:.3f}.'
             )
         source_location = issuance.production_id.location_src_id
+        quants = self.env['stock.quant'].search([
+            ('product_id', '=', issuance.product_id.id),
+            ('location_id', 'child_of', source_location.id),
+        ])
+        available_qty = sum(q.quantity - q.reserved_quantity for q in quants)
+        if self.issued_qty > available_qty + 0.001:
+            raise UserError(
+                f'Insufficient stock for {issuance.product_id.name}.\n\n'
+                f'Available at {source_location.complete_name}: '
+                f'{max(available_qty, 0):.3f} {issuance.product_uom_id.name}\n'
+                f'Requested: {self.issued_qty:.3f} {issuance.product_uom_id.name}'
+            )
         move = self.env['stock.move'].create({
             'name': f'RMI: {issuance.product_id.name}',
             'product_id': issuance.product_id.id,
@@ -448,35 +470,37 @@ class StockMoveReemaExt(models.Model):
             move.has_issuance = move.id in issued_move_ids
 
     def action_authorize_issuance(self):
-        """Button on MO component row — Waleed authorizes a component for store issuance."""
+        """Authorize button — create issuance silently and stay on the MO page."""
         self.ensure_one()
         if not self.raw_material_production_id:
             raise UserError('This move is not linked to a Manufacturing Order component.')
         existing = self.env['reema.material.issuance'].search(
-            [('raw_move_id', '=', self.id), ('state', '!=', 'cancelled')],
-            limit=1
+            [('raw_move_id', '=', self.id), ('state', '!=', 'cancelled')], limit=1
         )
         if existing:
-            return {
-                'type': 'ir.actions.act_window',
-                'name': 'Material Issuance',
-                'res_model': 'reema.material.issuance',
-                'res_id': existing.id,
-                'view_mode': 'form',
-                'target': 'current',
-            }
-        issuance = self.env['reema.material.issuance'].create({
+            return False
+        self.env['reema.material.issuance'].create({
             'production_id': self.raw_material_production_id.id,
             'raw_move_id': self.id,
             'authorized_qty': self.product_uom_qty,
             'authorized_by': self.env.uid,
             'state': 'authorized',
         })
+        return False
+
+    def action_view_issuance(self):
+        """View Auth button — open the existing issuance as a full page."""
+        self.ensure_one()
+        existing = self.env['reema.material.issuance'].search(
+            [('raw_move_id', '=', self.id), ('state', '!=', 'cancelled')], limit=1
+        )
+        if not existing:
+            raise UserError('No authorization found for this component.')
         return {
             'type': 'ir.actions.act_window',
             'name': 'Material Issuance',
             'res_model': 'reema.material.issuance',
-            'res_id': issuance.id,
+            'res_id': existing.id,
             'view_mode': 'form',
             'target': 'current',
         }
@@ -488,10 +512,21 @@ class MrpProductionIssuanceExt(models.Model):
     issuance_ids = fields.One2many('reema.material.issuance', 'production_id',
                                    string='Material Issuances')
     issuance_count = fields.Integer(compute='_compute_issuance_count', string='Issuances')
+    pending_issuance_count = fields.Integer(
+        compute='_compute_pending_issuance_count', store=True,
+        string='Pending Issuances'
+    )
 
     def _compute_issuance_count(self):
         for rec in self:
             rec.issuance_count = len(rec.issuance_ids)
+
+    @api.depends('issuance_ids.state')
+    def _compute_pending_issuance_count(self):
+        for rec in self:
+            rec.pending_issuance_count = len(
+                rec.issuance_ids.filtered(lambda i: i.state in ('authorized', 'partial'))
+            )
 
     def action_view_issuances(self):
         self.ensure_one()

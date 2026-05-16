@@ -97,6 +97,20 @@ class ReemaConsumableTransaction(models.Model):
             move_name = f'CDR: {self.product_id.name}'
             seq_code = 'reema.consumable.return'
 
+        if self.transaction_type == 'issuance':
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', self.product_id.id),
+                ('location_id', 'child_of', src.id),
+            ])
+            available_qty = sum(q.quantity - q.reserved_quantity for q in quants)
+            if self.qty > available_qty + 0.001:
+                raise UserError(
+                    f'Insufficient stock for {self.product_id.name}.\n\n'
+                    f'Available at {src.complete_name}: '
+                    f'{max(available_qty, 0):.3f} {uom_name}\n'
+                    f'Requested: {self.qty:.3f} {uom_name}'
+                )
+
         move = self.env['stock.move'].create({
             'name': move_name,
             'product_id': self.product_id.id,

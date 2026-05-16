@@ -200,7 +200,27 @@ class ReemaInvoice(models.Model):
     def action_close(self):
         self.write({'state': 'closed'})
 
+    def action_undo_shipped(self):
+        self.write({'state': 'accepted'})
+
     def action_reset_to_pending(self):
+        for rec in self:
+            for po in rec.production_order_ids:
+                active_mos = po.line_ids.mapped('mo_id').filtered(
+                    lambda mo: mo.state != 'cancel'
+                )
+                if active_mos:
+                    mo_names = ', '.join(active_mos.mapped('name'))
+                    raise UserError(
+                        f"Cannot reset {rec.name} to Pending.\n\n"
+                        f"Cancel the following Manufacturing Orders in {po.name} first:\n"
+                        f"{mo_names}"
+                    )
+                if po.state != 'cancelled':
+                    raise UserError(
+                        f"Cannot reset {rec.name} to Pending.\n\n"
+                        f"Production Order {po.name} must be cancelled first."
+                    )
         self.write({'state': 'pending'})
 
     def action_print_invoice(self):

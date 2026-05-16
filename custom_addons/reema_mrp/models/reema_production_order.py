@@ -217,10 +217,37 @@ class ReemaInvoiceProductionExt(models.Model):
                                             string='Production Orders')
     production_order_count = fields.Integer(string='Production Orders',
                                              compute='_compute_production_order_count')
+    has_active_production_order = fields.Boolean(
+        compute='_compute_has_active_production_order',
+    )
 
     def _compute_production_order_count(self):
         for rec in self:
             rec.production_order_count = len(rec.production_order_ids)
+
+    def _compute_has_active_production_order(self):
+        for rec in self:
+            active = rec.production_order_ids.filtered(lambda po: po.state != 'cancelled')
+            if not active:
+                active = rec.production_order_ids.mapped('line_ids').mapped('mo_id').filtered(
+                    lambda mo: mo.state != 'cancel'
+                )
+            rec.has_active_production_order = bool(active)
+
+    def action_close(self):
+        for rec in self:
+            active_pos = rec.production_order_ids.filtered(lambda po: po.state != 'cancelled')
+            if active_pos:
+                not_done = active_pos.filtered(lambda po: po.state != 'done')
+                if not_done:
+                    po_names = ', '.join(not_done.mapped('name'))
+                    raise UserError(
+                        f"Cannot mark {rec.name} as Shipped.\n\n"
+                        f"The following Production Orders are not yet completed:\n"
+                        f"{po_names}\n\n"
+                        f"Mark all Production Orders as Done before shipping."
+                    )
+        return super().action_close()
 
     def action_create_production_order(self):
         self.ensure_one()
@@ -253,6 +280,16 @@ class ReemaInvoiceProductionExt(models.Model):
 
     def action_view_production_orders(self):
         self.ensure_one()
+        pos = self.production_order_ids
+        if len(pos) == 1:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Production Order',
+                'res_model': 'reema.production.order',
+                'view_mode': 'form',
+                'res_id': pos.id,
+                'target': 'current',
+            }
         return {
             'type': 'ir.actions.act_window',
             'name': 'Production Orders',
@@ -268,23 +305,25 @@ class MrpWorkorderReema(models.Model):
 
     def button_start(self, raise_on_invalid_state=False):
         for wo in self:
-            # Block 1: at least one contractor must be assigned before work can start.
-            if not wo.contractor_ids:
+            # Block 1: contractor required only for contractor-type work centers.
+            if wo.workcenter_id.workforce_type != 'employee' and not wo.contractor_ids:
                 raise UserError(
                     f'Cannot start "{wo.workcenter_id.name}".\n\n'
                     f'No contractor assigned to this work order. '
                     f'Assign at least one contractor before starting production.'
                 )
-            # Block 2: Store Keeper must have issued at least some materials.
-            # Partial issue is fine — halls process what is available.
-            # But if nothing has been issued at all, the store entry was skipped.
+            # Block 2: Store Keeper must have physically issued at least some material.
+            # Checked via reema.material.issuance.line — NOT mo.move_raw_ids, which stay
+            # in 'confirmed' state in our flow (issuance creates its own separate stock.move).
             mo = wo.production_id
-            raw_moves = mo.move_raw_ids.filtered(lambda m: m.state != 'cancel')
-            if raw_moves and not any(m.state == 'done' for m in raw_moves):
+            has_issued = self.env['reema.material.issuance.line'].search_count(
+                [('issuance_id.production_id', '=', mo.id)]
+            ) > 0
+            if mo.move_raw_ids.filtered(lambda m: m.state != 'cancel') and not has_issued:
                 raise UserError(
                     f'Cannot start "{wo.workcenter_id.name}" on {mo.name}.\n\n'
                     f'No materials have been issued from the Raw Material Store yet.\n\n'
-                    f'The Store Keeper must validate the material transfer in Inventory '
+                    f'The Store Keeper must issue material via the Material Issuance form '
                     f'before production can begin.'
                 )
             # Block 3: subsequent halls need SFG output from the previous hall.
@@ -305,6 +344,9 @@ class MrpWorkorderReema(models.Model):
 
 class MrpBomReemaExt(models.Model):
     _inherit = 'mrp.bom'
+    # Use the reference number as display name so bom_id Many2one fields show
+    # "BOM/2026/0001" instead of the product template name everywhere.
+    _rec_name = 'reema_reference'
     # Every BOM created in this company must have operation dependencies enabled.
     # Overriding default so Waleed never has to remember to tick the checkbox.
     allow_operation_dependencies = fields.Boolean(default=True)
@@ -367,6 +409,11 @@ class MrpRoutingWorkcenterReema(models.Model):
         help='How many finished balls 1 unit of this hall\'s work represents. '
              'E.g. ~6 for Lamination (1 sheet ≈ 6 balls), 0.0417 for Cutting (1 panel = 1/24 ball), '
              '1 for Stitching.'
+    )
+    piece_rate_id = fields.Many2one(
+        'reema.piece.rate',
+        string='Piece Rate',
+        domain="[('workcenter_id', '=', workcenter_id)]",
     )
 
     def action_delete_operation(self):

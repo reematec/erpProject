@@ -1,3 +1,5 @@
+import math
+
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 
@@ -5,6 +7,9 @@ from odoo.exceptions import UserError
 class MrpWorkorder(models.Model):
     _inherit = 'mrp.workorder'
 
+    workforce_type = fields.Selection(
+        related='workcenter_id.workforce_type', store=True, readonly=True
+    )
     contractor_ids = fields.Many2many(
         'res.partner',
         'mrp_workorder_contractor_rel',
@@ -12,37 +17,12 @@ class MrpWorkorder(models.Model):
         string='Contractors',
         domain=[('supplier_rank', '>', 0)],
     )
-    piece_rate_id = fields.Many2one('reema.piece.rate', string='Applied Piece Rate', compute='_compute_piece_rate', store=True)
-    labor_cost = fields.Float(string='Labor Cost', compute='_compute_labor_cost', store=True)
-
     # Batch progress tracking
     batch_entry_ids = fields.One2many('reema.wo.batch.entry', 'workorder_id', string='Batch Entries')
     qty_batch_completed = fields.Float(string='Completed So Far', compute='_compute_qty_batch_completed', store=True)
     batch_released = fields.Boolean(string='Released to Next Hall', default=False)
     hall_qty = fields.Float(string='Target', compute='_compute_hall_qty', store=True)
     qty_balls_completed = fields.Float(string='Balls Done', compute='_compute_qty_balls_completed', store=True)
-
-    @api.depends('production_id.construction_type', 'production_id.ball_size', 'workcenter_id', 'production_id.complexity_level')
-    def _compute_piece_rate(self):
-        for wo in self:
-            rate = self.env['reema.piece.rate'].search([
-                ('hall_id', '=', wo.workcenter_id.id),
-                ('construction_type', '=', wo.production_id.construction_type),
-                ('ball_size', '=', wo.production_id.ball_size),
-                ('complexity_level', '=', wo.production_id.complexity_level),
-                ('active', '=', True)
-            ], limit=1)
-            wo.piece_rate_id = rate.id if rate else False
-
-    @api.depends('batch_entry_ids.labor_cost', 'qty_produced', 'piece_rate_id')
-    def _compute_labor_cost(self):
-        for wo in self:
-            if wo.batch_entry_ids:
-                # Batch flow: labor cost summed from each contractor's entries
-                wo.labor_cost = sum(wo.batch_entry_ids.mapped('labor_cost'))
-            else:
-                # Standard single-finish flow: qty_produced × hall rate
-                wo.labor_cost = wo.qty_produced * (wo.piece_rate_id.rate if wo.piece_rate_id else 0.0)
 
     @api.depends('batch_entry_ids.qty')
     def _compute_qty_batch_completed(self):
@@ -82,8 +62,13 @@ class MrpWorkorder(models.Model):
 
     def action_log_batch(self):
         self.ensure_one()
-        if self.state in ('done', 'cancel'):
-            raise UserError('Cannot log progress on a finished or cancelled work order.')
+        if self.state != 'progress':
+            raise UserError(
+                'The work order must be started before logging batch progress.\n\n'
+                'Click the Start button on this work order first. '
+                'Starting requires: material issued by the store, '
+                'and output received from the previous hall (if applicable).'
+            )
         return {
             'type': 'ir.actions.act_window',
             'name': 'Log Batch Progress',
@@ -93,7 +78,33 @@ class MrpWorkorder(models.Model):
             'context': {'default_workorder_id': self.id},
         }
 
+    def button_pending(self):
+        for wo in self:
+            if wo.state in ('done', 'cancel'):
+                raise UserError(f'Work order "{wo.name}" is already {wo.state} and cannot be paused.')
+        return super().button_pending()
+
     def button_finish(self):
+        for wo in self:
+            if wo.state in ('done', 'cancel'):
+                continue
+            if wo.state != 'progress':
+                raise UserError(
+                    f'Work order "{wo.name}" must be started before it can be marked done.\n\n'
+                    'Click the Start button first. Starting requires a contractor assigned, '
+                    'material issued by the store, and output received from the previous hall (if applicable).'
+                )
+            if not wo.batch_entry_ids:
+                raise UserError(
+                    f'Work order "{wo.name}": log at least one batch before marking it as done.'
+                )
+            min_required = math.floor(wo.hall_qty)
+            if min_required > 0 and wo.qty_batch_completed < min_required:
+                raise UserError(
+                    f'Work order "{wo.name}": not enough quantity logged.\n\n'
+                    f'Target: {wo.hall_qty:.2f} — minimum required: {min_required} — '
+                    f'logged so far: {wo.qty_batch_completed:.2f}.'
+                )
         res = super().button_finish()
         for wo in self:
             wc = wo.workcenter_id
@@ -106,7 +117,9 @@ class MrpWorkorder(models.Model):
             if not qty:
                 continue
             # Move SFG product from virtual production location into this hall's stock location.
-            production_loc = self.env.ref('stock.location_production')
+            production_loc = self.env['stock.location'].search([('usage', '=', 'production')], limit=1)
+            if not production_loc:
+                continue
             move = self.env['stock.move'].create({
                 'name': f'SFG: {wc.sfg_product_id.name}',
                 'product_id': wc.sfg_product_id.id,

@@ -5,7 +5,7 @@
     'summary': 'Integrated MRP flow for Football Production (Reema Group Logic)',
     'description': """
         Integrates the 17-Hall production flow into Odoo's standard Manufacturing Orders.
-        Includes piece-rate labor tracking, contractor assignment, and SFG inventory movement.
+        Includes contractor assignment, batch progress tracking, and SFG inventory movement.
     """,
     'author': 'Gemini CLI',
     'depends': ['mrp', 'stock', 'account', 'analytic', 'reema_invoice'],
@@ -19,7 +19,13 @@
         'views/reema_material_issuance_views.xml',
         'views/reema_material_issuance_report.xml',
         'views/reema_consumable_issuance_views.xml',
+        'views/reema_consumable_return_views.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'reema_mrp/static/src/components/wo_list_dropdown_patch.xml',
+        ],
+    },
     'installable': True,
     'application': True,
     'license': 'LGPL-3',
