@@ -4,6 +4,22 @@
     <delete model="ir.ui.menu" search="[('name', '=', 'Piece Rate Matrix')]"/>
     <delete model="ir.actions.act_window" search="[('name', '=', 'Piece Rate Matrix')]"/>
 
+    <!-- Contractors: action + menu under Manufacturing > Configuration -->
+    <record id="action_reema_contractors" model="ir.actions.act_window">
+        <field name="name">Contractors</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('supplier_rank', '>', 0)]</field>
+        <field name="context">{'default_supplier_rank': 1, 'default_is_contractor': True}</field>
+    </record>
+    <menuitem
+        id="reema_mrp_menu_contractors"
+        name="Contractors"
+        parent="mrp.menu_mrp_configuration"
+        action="action_reema_contractors"
+        sequence="25"
+        groups="reema_mrp.group_reema_production_manager,base.group_erp_manager"/>
+
     <!-- Extend Manufacturing Order Form -->
     <record id="mrp_production_reema_form" model="ir.ui.view">
         <field name="name">mrp.production.reema.form</field>
@@ -266,6 +282,9 @@
         <field name="arch" type="xml">
             <xpath expr="//group[@name='capacity']" position="inside">
                 <field name="workforce_type"/>
+                <field name="expense_account_id"
+                       options="{'no_create': True, 'no_edit': True}"
+                       invisible="workforce_type == 'employee'"/>
                 <field name="is_qc_point"/>
                 <field name="sfg_product_id"
                        domain="[('product_group', '=', 'sfg')]"

@@ -325,7 +325,7 @@
          MENUS
     ════════════════════════════════════════════════════════════════════════ -->
     <menuitem id="menu_reema_invoice_root"
-              name="Pro Forma Invoices"
+              name="Sales"
               sequence="25"/>
 
     <menuitem id="menu_reema_invoice_all"
@@ -334,7 +334,7 @@
               action="action_reema_invoice"
               sequence="10"/>
 
-    <!-- Configuration submenu — admin defines banks here once; staff select on invoices -->
+    <!-- Configuration submenu -->
     <menuitem id="menu_reema_invoice_config"
               name="Configuration"
               parent="menu_reema_invoice_root"
@@ -345,6 +345,21 @@
               parent="menu_reema_invoice_config"
               action="action_reema_bank_accounts"
               sequence="10"/>
+
+    <record id="action_reema_customers" model="ir.actions.act_window">
+        <field name="name">Customers</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('customer_rank', '>', 0)]</field>
+        <field name="context">{'default_customer_rank': 1, 'default_is_company': True}</field>
+    </record>
+
+    <menuitem id="menu_reema_customers"
+              name="Customers"
+              parent="menu_reema_invoice_config"
+              action="action_reema_customers"
+              sequence="20"
+              groups="reema_invoice.group_reema_invoice_user,base.group_erp_manager"/>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          PACKING STAFF VIEWS

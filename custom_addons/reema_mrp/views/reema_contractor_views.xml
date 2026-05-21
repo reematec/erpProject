@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Contractor form: standalone primary view — only used by the contractor action -->
+    <record id="view_contractor_form" model="ir.ui.view">
+        <field name="name">reema.contractor.form</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='sales_purchases']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Action: contractors only (supplier_rank > 0), uses the dedicated form above -->
+    <record id="action_reema_contractors" model="ir.actions.act_window">
+        <field name="name">Contractors</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('supplier_rank', '>', 0)]</field>
+        <field name="context">{'default_supplier_rank': 1}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': False}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_contractor_form')})]"/>
+    </record>
+
+    <!-- Menu: Manufacturing > Configuration > Contractors -->
+    <menuitem
+        id="reema_mrp_menu_contractors"
+        name="Contractors"
+        parent="mrp.menu_mrp_configuration"
+        action="action_reema_contractors"
+        sequence="25"
+        groups="reema_mrp.group_reema_production_manager,base.group_erp_manager"/>
+
+</odoo>

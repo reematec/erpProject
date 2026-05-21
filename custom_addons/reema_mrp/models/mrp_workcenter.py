@@ -14,3 +14,9 @@ class MrpWorkcenter(models.Model):
         ('contractor', 'Contractor'),
         ('employee', 'Employee'),
     ], string='Workforce Type', default='contractor', required=True)
+    expense_account_id = fields.Many2one(
+        'account.account',
+        string='Labor Expense Account',
+        domain=[('code', '=like', '52%')],
+        help='Account debited when a contractor bill is posted for this work center.',
+    )

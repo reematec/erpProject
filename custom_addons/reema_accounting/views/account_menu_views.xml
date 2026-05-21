@@ -1,6 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <!-- ── Partner form: Create GL Account buttons + Is Contractor field ── -->
+    <record id="view_partner_gl_buttons" model="ir.ui.view">
+        <field name="name">reema.partner.gl.buttons</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_create_supplier_gl_account"
+                        type="object"
+                        string="Create GL Account"
+                        class="oe_stat_button"
+                        icon="fa-university"
+                        confirm="This will create or correct the GL account for this partner in the Chart of Accounts. Continue?"
+                        invisible="not supplier_rank"/>
+                <button name="action_create_customer_gl_account"
+                        type="object"
+                        string="Create GL Account"
+                        class="oe_stat_button"
+                        icon="fa-university"
+                        confirm="This will permanently create a new GL account in the Chart of Accounts and assign it to this partner. Continue?"
+                        invisible="not customer_rank"/>
+            </xpath>
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="is_contractor"
+                       string="Is Contractor"
+                       invisible="not supplier_rank"
+                       widget="boolean_toggle"/>
+            </xpath>
+
+            <!-- ── Sales &amp; Purchase tab: hide irrelevant fields ── -->
+            <xpath expr="//group[@name='sale']/field[@name='user_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_inbound_payment_method_line_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_outbound_payment_method_line_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//group[@name='fiscal_information']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//group[@name='misc']/field[@name='company_registry']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='industry_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ── Partner form (account extension): hide irrelevant Invoicing tab groups ── -->
+    <record id="view_partner_invoicing_cleanup" model="ir.ui.view">
+        <field name="name">reema.partner.invoicing.cleanup</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="account.view_partner_property_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@id='invoice_send_settings']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//group[@name='credit_limits']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//group[@name='accounting_automation']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+        </field>
+    </record>
+
     <!-- Rename top-level "Invoicing" to "Accounting" -->
     <record id="account.menu_finance" model="ir.ui.menu">
         <field name="name">Accounting</field>
@@ -34,6 +104,374 @@
         <field name="sequence">40</field>
     </record>
 
+    <!-- ── COA list: disable inline editing so New always opens the form dialog ── -->
+    <record id="view_account_list_ext" model="ir.ui.view">
+        <field name="name">reema.account.account.list</field>
+        <field name="model">account.account</field>
+        <field name="inherit_id" ref="account.view_account_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="editable"></attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── COA form: guided group selection + auto-code for new accounts ── -->
+    <record id="view_account_form_ext" model="ir.ui.view">
+        <field name="name">reema.account.account.form</field>
+        <field name="model">account.account</field>
+        <field name="inherit_id" ref="account.view_account_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//label[@for='code']" position="before">
+                <label for="target_group_id" string="Account Group" invisible="id"/>
+                <div invisible="id" class="mb-2">
+                    <field name="target_group_id"
+                           placeholder="Select a Level 3 group (e.g. 115 Inventory)…"
+                           options="{'no_create': True, 'no_open': True}"
+                           required="not id"/>
+                    <small class="text-muted">Select a group — the account code will be auto-assigned</small>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='code']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='tax_ids']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='tag_ids']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='allowed_journal_ids']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='deprecated']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='group_id']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='centralized']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='group_id']" position="after">
+                <field name="partner_id"
+                       string="Partner"
+                       readonly="True"
+                       options="{'no_open': False}"
+                       invisible="not partner_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── COA Searchpanel: show account.group names instead of bare code prefixes ── -->
+    <record id="view_account_search_group_panel" model="ir.ui.view">
+        <field name="name">reema.account.account.search.group</field>
+        <field name="model">account.account</field>
+        <field name="inherit_id" ref="account.view_account_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//searchpanel" position="replace">
+                <searchpanel class="account_root w-auto">
+                    <field name="group_id" icon="fa-list" limit="0" enable_counters="0"/>
+                </searchpanel>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── Account Groups list: tree expand + parent column ─────────── -->
+    <record id="view_account_group_tree_ext" model="ir.ui.view">
+        <field name="name">reema.account.group.list</field>
+        <field name="model">account.group</field>
+        <field name="inherit_id" ref="account.view_account_group_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="expand">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='code_prefix_end']" position="replace"/>
+        </field>
+    </record>
+
+    <!-- ── Account Groups form: explain code prefix convention ───────── -->
+    <record id="view_account_group_form_ext" model="ir.ui.view">
+        <field name="name">reema.account.group.form</field>
+        <field name="model">account.group</field>
+        <field name="inherit_id" ref="account.view_account_group_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[field[@name='code_prefix_start']]" position="after">
+                <p class="text-muted mb-0">
+                    1-character prefix (e.g. "6") → Level 1 Section.<br/>
+                    2-character prefix (e.g. "61") → Level 2 Category, auto-parented under "6".<br/>
+                    3-character prefix (e.g. "614") → Level 3 Group, auto-parented under "61".<br/>
+                    Parent is assigned automatically — do not set it manually.
+                </p>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── Account Groups search: default group-by parent ────────────── -->
+    <record id="view_account_group_search_ext" model="ir.ui.view">
+        <field name="name">reema.account.group.search</field>
+        <field name="model">account.group</field>
+        <field name="inherit_id" ref="account.view_account_group_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <group expand="1" string="Group By">
+                    <filter name="group_by_parent" string="Parent Group" context="{'group_by': 'parent_id'}"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── Account Groups window action ─────────────────────────────── -->
+    <record id="action_account_group" model="ir.actions.act_window">
+        <field name="name">Account Groups</field>
+        <field name="res_model">account.group</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ── Account Groups menu item under Configuration → Accounting ── -->
+    <menuitem
+        id="menu_action_account_group"
+        name="Account Groups"
+        parent="account.account_account_menu"
+        action="action_account_group"
+        sequence="2"
+        groups="account.group_account_manager"/>
+
+    <!-- ── Contractor Bill form: stripped-down primary view ─────────── -->
+    <record id="view_contractor_bill_form" model="ir.ui.view">
+        <field name="name">reema.contractor.bill.form</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+
+            <!-- Disable built-in Delete and Duplicate from the cog menu.
+                 Delete would bypass action_delete_contractor_bill and leave
+                 batch entries permanently billed. -->
+            <xpath expr="//form" position="attributes">
+                <attribute name="delete">0</attribute>
+                <attribute name="duplicate">0</attribute>
+            </xpath>
+
+            <!-- Banner: appears only when all lines have been removed -->
+            <xpath expr="//sheet/div[@name='button_box']" position="before">
+                <div class="alert alert-warning mb-2"
+                     invisible="invoice_line_ids or state != 'draft'"
+                     role="alert">
+                    <i class="fa fa-exclamation-triangle me-1"/>
+                    Draft bill — to delete this bill and release all entries back to unbilled, click <strong>Delete Bill</strong>.
+                </div>
+            </xpath>
+
+            <!-- Remove Bill Reference label + both ref fields in header -->
+            <xpath expr="//group[@id='header_left_group']/label[@for='ref']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//group[@id='header_left_group']/field[@name='ref'][1]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//group[@id='header_left_group']/field[@name='ref'][2]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Remove Auto-Complete (account version) -->
+            <label name="invoice_vendor_bill_id_label" position="replace"/>
+            <field name="invoice_vendor_bill_id" position="replace"/>
+
+            <!-- Remove Auto-Complete (purchase version) -->
+            <label for="purchase_vendor_bill_id" position="replace"/>
+            <field name="purchase_vendor_bill_id" position="replace"/>
+
+            <!-- Remove Payment Reference from header -->
+            <xpath expr="//group[@id='header_right_group']/field[@name='payment_reference']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Remove Recipient Bank from header -->
+            <xpath expr="//group[@id='header_right_group']/field[@name='partner_bank_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Remove Other Info tab -->
+            <page id="other_tab" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </page>
+
+            <!-- Remove Add a line / Add a section / Add a note / Catalog from invoice lines -->
+            <create name="add_line_control" position="replace"/>
+            <create name="add_section_control" position="replace"/>
+            <create name="add_note_control" position="replace"/>
+            <button name="action_add_from_catalog" position="replace"/>
+
+            <!-- Remove Purchase Matching stat button -->
+            <button name="action_purchase_matching" position="replace"/>
+
+            <!-- Add Notes tab after Invoice Lines -->
+            <page id="invoice_tab" position="after">
+                <page string="Notes" name="notes_tab">
+                    <field name="narration" nolabel="1" placeholder="Internal notes..."/>
+                </page>
+            </page>
+
+            <!-- ── Production buttons: Approve + Void ───────────────────── -->
+            <xpath expr="//header/button[@name='action_post'][1]" position="before">
+                <button name="action_reema_confirm" string="Approve" class="oe_highlight"
+                        type="object"
+                        groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor"
+                        invisible="reema_bill_state == 'confirmed' or state != 'draft' or not invoice_line_ids"
+                        confirm="Approve this bill as correct and ready for posting by accounting?"
+                        confirm-label="Yes, Approve"
+                        cancel-label="Go Back"/>
+                <button name="action_reema_reset_to_pending" string="Void"
+                        type="object"
+                        groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor"
+                        invisible="reema_bill_state != 'confirmed' or state != 'draft'"
+                        confirm="Void this approval? The bill will return to pending and cannot be posted until re-approved."
+                        confirm-label="Yes, Void Approval"
+                        cancel-label="Go Back"/>
+            </xpath>
+
+            <!-- ── Accountant Post button: only when production has approved ── -->
+            <!-- action_post[1] = "Post" for journal entries — already invisible for vendor bills -->
+            <!-- action_post[2] = "Confirm" for invoices — restrict to confirmed bills only -->
+            <xpath expr="//header/button[@name='action_post'][2]" position="attributes">
+                <attribute name="string">Post</attribute>
+                <attribute name="invisible">hide_post_button or move_type == 'entry' or display_inactive_currency_warning or reema_bill_state != 'confirmed' or state != 'draft'</attribute>
+            </xpath>
+
+            <!-- ── Hide native Cancel (accounting-level cancel, not exposed) ── -->
+            <!-- button_cancel[1] = "Cancel Entry" for journal entries (already hidden by Odoo logic) -->
+            <!-- button_cancel[2] = "Cancel" for invoices — explicitly hide -->
+            <button name="button_cancel" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </button>
+            <xpath expr="//header/button[@name='button_cancel'][2]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- ── Delete Bill at the very end, before the status bar ─────── -->
+            <xpath expr="//header/field[@name='state'][1]" position="before">
+                <button name="action_delete_contractor_bill"
+                        string="Delete Bill"
+                        type="object"
+                        class="btn-danger"
+                        invisible="state != 'draft'"
+                        confirm="Delete this bill? All batch entries will be released back to unbilled."
+                        confirm-label="Yes, Delete Bill"
+                        cancel-label="Go Back"/>
+            </xpath>
+            <xpath expr="//header/button[@name='button_draft']" position="attributes">
+                <attribute name="groups">account.group_account_manager</attribute>
+                <attribute name="invisible">state != 'posted'</attribute>
+                <attribute name="confirm">Reset this posted bill back to draft? This will unlock the accounting entry and allow corrections.</attribute>
+                <attribute name="confirm-label">Yes, Reset to Draft</attribute>
+                <attribute name="cancel-label">Go Back</attribute>
+            </xpath>
+            <button name="action_reverse" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </button>
+            <button name="button_set_checked" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </button>
+
+            <!-- Read-only header fields -->
+            <xpath expr="//group[@id='header_left_group']//field[@name='partner_id']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+            <xpath expr="//group[@id='header_right_group']/field[@name='invoice_date']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+
+            <!-- Invoice lines: no add, deletion allowed (releases batch entry back to unbilled) -->
+            <xpath expr="//field[@name='invoice_line_ids']/list" position="attributes">
+                <attribute name="create">0</attribute>
+                <attribute name="editable"></attribute>
+            </xpath>
+
+            <!-- Hide native product column (replaced by reema_product_id below) -->
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='product_id']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+
+            <!-- Hide columns not relevant for contractor billing -->
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='analytic_distribution']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='product_uom_id'][1]" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='discount']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='tax_ids']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+
+            <!-- Add Product / PO / MO columns before the description -->
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='name']" position="before">
+                <field name="reema_product_id" string="Product" readonly="1"/>
+                <field name="reema_po_id" string="PO" readonly="1"/>
+                <field name="reema_mo_id" string="MO" readonly="1"/>
+            </xpath>
+
+            <!-- Lock remaining editable columns -->
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='name']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='account_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='quantity']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='price_unit']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ── Approval state visible to accountants in standard bill form ─ -->
+    <record id="view_move_form_reema_approval" model="ir.ui.view">
+        <field name="name">account.move.reema.approval</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/field[@name='state'][1]" position="after">
+                <field name="reema_bill_state" widget="statusbar" statusbar_visible="pending,confirmed"
+                       invisible="not batch_entry_ids"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── Contractor Bills: filtered vendor bills view ─────────────── -->
+    <record id="action_contractor_bills" model="ir.actions.act_window">
+        <field name="name">Contractor Bills</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('move_type', '=', 'in_invoice'), ('batch_entry_ids', '!=', False)]</field>
+        <field name="context">{'default_move_type': 'in_invoice'}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': False}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_contractor_bill_form')})]"/>
+    </record>
+    <menuitem
+        id="menu_contractor_bills"
+        name="Contractor Bills"
+        parent="account.menu_finance_payables"
+        action="action_contractor_bills"
+        sequence="5"
+        groups="account.group_account_invoice,account.group_account_manager"/>
+
+    <!-- Same view accessible from Manufacturing for production staff -->
+    <menuitem
+        id="menu_contractor_bills_mfg"
+        name="Contractor Bills"
+        parent="mrp.menu_mrp_manufacturing"
+        action="action_contractor_bills"
+        sequence="30"
+        groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor,account.group_account_invoice,account.group_account_manager"/>
+
     <!-- Hide the now-empty OCA grouping menu -->
     <record id="account_financial_report.menu_oca_reports" model="ir.ui.menu">
         <field name="active" eval="False"/>
@@ -66,6 +504,27 @@
     </record>
     <record id="account.menu_action_account_journal_group_list" model="ir.ui.menu">
         <field name="groups_id" eval="[(4, ref('account.group_account_manager'))]"/>
+    </record>
+
+    <!-- Remove redundant cog-menu actions from contractor bill form.
+         These are irrelevant to the contractor billing workflow and confuse staff. -->
+    <record id="account.action_move_switch_move_type" model="ir.actions.server">
+        <field name="binding_model_id" eval="False"/>
+    </record>
+    <record id="account.action_move_force_register_payment" model="ir.actions.server">
+        <field name="binding_model_id" eval="False"/>
+    </record>
+    <record id="account.action_move_block_payment" model="ir.actions.server">
+        <field name="binding_model_id" eval="False"/>
+    </record>
+    <record id="account.model_account_move_action_share" model="ir.actions.server">
+        <field name="binding_model_id" eval="False"/>
+    </record>
+    <record id="account_payment.action_invoice_order_generate_link" model="ir.actions.act_window">
+        <field name="binding_model_id" eval="False"/>
+    </record>
+    <record id="account_edi_ubl_cii.action_group_ungroup_lines_by_tax" model="ir.actions.server">
+        <field name="binding_model_id" eval="False"/>
     </record>
 
 </odoo>
