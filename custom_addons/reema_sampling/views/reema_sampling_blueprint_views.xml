@@ -11,41 +11,81 @@
             <form>
                 <!-- Header: Contains buttons and the status bar -->
                 <header>
+                    <!-- Draft → In Progress -->
                     <button name="action_start"
-                            string="Start"
+                            string="Start Production"
                             type="object"
-                            invisible="state != 'draft'"/>
+                            class="oe_highlight"
+                            invisible="state != 'draft'"
+                            confirm="Start production of this sample?"
+                            confirm-label="Yes, Start"
+                            cancel-label="Go Back"/>
+                    <!-- In Progress → Completed -->
                     <button name="action_completed"
                             string="Mark Completed"
                             type="object"
                             class="oe_highlight"
-                            invisible="state != 'in_progress'"/>
+                            invisible="state != 'in_progress'"
+                            confirm="Mark this sample as completed? This means the physical sample is ready for review."
+                            confirm-label="Yes, Mark Completed"
+                            cancel-label="Go Back"/>
+                    <!-- Completed → Sample Approved -->
                     <button name="action_sample_approved"
-                            string="Mark Sample Approved"
+                            string="Sample Approved"
                             type="object"
                             class="oe_highlight"
-                            invisible="state != 'completed'"/>
+                            invisible="state != 'completed'"
+                            confirm="Mark this sample as approved by the customer? Waleed will be notified to define the BOM."
+                            confirm-label="Yes, Approve"
+                            cancel-label="Go Back"/>
+                    <!-- Completed → Sample Rejected -->
+                    <button name="action_sample_rejected"
+                            string="Sample Rejected"
+                            type="object"
+                            invisible="state != 'completed'"
+                            confirm="Mark this sample as rejected by the customer?"
+                            confirm-label="Yes, Mark Rejected"
+                            cancel-label="Go Back"/>
+                    <!-- Completed / Sample Approved / Production Ready → Shipped (opens wizard) -->
+                    <button name="action_shipped"
+                            string="Ship"
+                            type="object"
+                            invisible="state not in ('completed', 'sample_approved', 'production_ready')"/>
+                    <!-- Sample Approved → Production Ready -->
                     <button name="action_production_ready"
                             string="Mark Production Ready"
                             type="object"
                             class="oe_highlight"
-                            invisible="state != 'sample_approved'"/>
-                    <button name="action_shipped"
-                            string="Ship"
-                            type="object"
-                            invisible="state not in ('sample_approved', 'production_ready')"/>
-                    <button name="action_cancel"
-                            string="Cancel Sample"
+                            invisible="state != 'sample_approved'"
+                            confirm="Mark this sample as production ready? This confirms the BOM is complete and bulk orders can proceed."
+                            confirm-label="Yes, Mark Ready"
+                            cancel-label="Go Back"/>
+                    <!-- Admin only: revert one step back to correct an accidental status change -->
+                    <button name="action_step_back"
+                            string="Revert Last Step"
                             type="object"
                             groups="base.group_system"
-                            invisible="state in ('cancelled', 'shipped')"
-                            confirm="This will cancel the sample. Are you sure?"
-                            confirm-label="Yes, Cancel It"
+                            invisible="state in ('draft', 'cancelled')"
+                            confirm="This will move the sample back to its previous status. The change will be logged in the chatter. Continue?"
+                            confirm-label="Yes, Revert"
                             cancel-label="Go Back"/>
+                    <!-- Void: only visible while In Progress -->
+                    <button name="action_cancel"
+                            string="Void Sample"
+                            type="object"
+                            groups="base.group_system"
+                            invisible="state != 'in_progress'"
+                            confirm="This will void the sample permanently. Are you sure?"
+                            confirm-label="Yes, Void It"
+                            cancel-label="Go Back"/>
+                    <!-- Reset to Draft: from voided or rejected -->
                     <button name="action_reset_draft"
                             string="Reset to Draft"
                             type="object"
-                            invisible="state != 'cancelled'"/>
+                            invisible="state not in ('cancelled', 'sample_rejected')"
+                            confirm="Reset this sample back to Draft?"
+                            confirm-label="Yes, Reset"
+                            cancel-label="Go Back"/>
                     <button name="action_print_sampling" string="Print" type="object"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,in_progress,completed,sample_approved,production_ready"/>
@@ -76,13 +116,14 @@
                         <group string="Basic Details">
                             <field name="model_alias"/>
                             <field name="customer_id"
-                                   options="{'no_create': True, 'no_edit': True}"/>
+                                   domain="[('customer_rank', '>', 0)]"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                             <field name="sampling_date"/>
                         </group>
                         <group string="Status &amp; Tracking">
                             <field name="completion_date"/>
                             <field name="shipping_date"/>
-                            <field name="reference_piece_kept"/>
+                            <field name="reference_piece_kept" readonly="1"/>
                         </group>
                     </group>
 
@@ -174,11 +215,32 @@
         </field>
     </record>
 
+    <!-- Ship Sample Wizard -->
+    <record id="view_reema_sampling_ship_wizard_form" model="ir.ui.view">
+        <field name="name">reema.sampling.ship.wizard.form</field>
+        <field name="model">reema.sampling.ship.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Ship Sample">
+                <group>
+                    <field name="blueprint_id" readonly="1"/>
+                    <field name="reference_piece_kept" widget="radio"/>
+                </group>
+                <footer>
+                    <button name="action_confirm"
+                            type="object"
+                            string="Confirm Shipment"
+                            class="btn-primary"/>
+                    <button string="Go Back" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
     <record id="view_reema_sampling_blueprint_tree" model="ir.ui.view">
         <field name="name">reema.sampling.blueprint.list</field>
         <field name="model">reema.sampling.blueprint</field>
         <field name="arch" type="xml">
-            <list>
+            <list delete="0">
                 <!-- Layout Preview added to the list view for easy identification -->
                 <field name="layout_file" widget="image" options="{'size': [40, 40]}" string="Layout"/>
                 <field name="reference"/>
@@ -244,13 +306,177 @@
         </field>
     </record>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         PENDING BOM OVERVIEW — for Waleed (Production Manager)
+         Shows approved samples with no BOM defined yet.
+         The form is fully read-only; only the BOM smart button is active.
+    ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- List view: read-only, no create/edit/delete -->
+    <record id="view_pending_bom_list" model="ir.ui.view">
+        <field name="name">reema.sampling.blueprint.pending.bom.list</field>
+        <field name="model">reema.sampling.blueprint</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" delete="0" string="Pending BOM">
+                <field name="layout_file" widget="image" options="{'size': [40, 40]}" string="Layout"/>
+                <field name="reference"/>
+                <field name="name" string="Sample Name"/>
+                <field name="customer_id"/>
+                <field name="sampling_date"/>
+                <field name="construction_type"/>
+                <field name="ball_type"/>
+                <field name="state" widget="badge" decoration-warning="state == 'sample_approved'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Read-only form view: all fields readonly, no action buttons, BOM smart button prominent -->
+    <record id="view_pending_bom_form" model="ir.ui.view">
+        <field name="name">reema.sampling.blueprint.pending.bom.form</field>
+        <field name="model">reema.sampling.blueprint</field>
+        <field name="arch" type="xml">
+            <form string="Sample — Pending BOM" readonly="1">
+                <header>
+                    <!-- No action buttons — Waleed can only view and define BOM -->
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,in_progress,completed,sample_approved,production_ready"/>
+                </header>
+                <sheet>
+                    <!-- BOM Smart Button — always visible here, this is Waleed's entry point -->
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_bom"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-list">
+                            <field name="bom_count" widget="statinfo" string="BoM"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="reference" readonly="1"/>
+                        </h1>
+                        <label for="name" string="Sample Name"/>
+                        <h2>
+                            <field name="name" readonly="1"/>
+                        </h2>
+                    </div>
+
+                    <group>
+                        <group string="Basic Details">
+                            <field name="model_alias" readonly="1"/>
+                            <field name="customer_id" readonly="1"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="sampling_date" readonly="1"/>
+                        </group>
+                        <group string="Status &amp; Tracking">
+                            <field name="completion_date" readonly="1"/>
+                            <field name="shipping_date" readonly="1"/>
+                            <field name="reference_piece_kept" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Design Specification">
+                            <field name="ball_type" readonly="1"/>
+                            <field name="construction_type" readonly="1"/>
+                            <field name="total_panels" readonly="1"/>
+                            <field name="color" readonly="1"/>
+                        </group>
+                        <group string="Technical Requirements">
+                            <field name="weight_range" readonly="1"/>
+                            <field name="circumference" readonly="1"/>
+                            <field name="bounce_requirement" readonly="1"/>
+                            <field name="hs_code" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Attachments &amp; Layouts">
+                        <group>
+                            <label for="layout_file" string="Layout Image/PDF"/>
+                            <div class="o_row">
+                                <field name="layout_file" filename="layout_filename" readonly="1"/>
+                                <field name="layout_filename" invisible="1"/>
+                            </div>
+                        </group>
+                        <group>
+                            <field name="final_sample_images" widget="many2many_binary"
+                                   string="Final Sample Images" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Size &amp; Production Quantities" name="sizes">
+                            <field name="size_line_ids" nolabel="1" readonly="1">
+                                <list>
+                                    <field name="ball_size"/>
+                                    <field name="cutting_knife_no"/>
+                                    <field name="qty_to_produce" string="Quantity"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Material Information" name="materials">
+                            <field name="material_line_ids" readonly="1">
+                                <list>
+                                    <field name="product_id" string="Material"/>
+                                    <field name="description"/>
+                                    <field name="notes" string="Notes"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Cutting Knives" name="cutting_knives">
+                            <field name="knife_line_ids" readonly="1">
+                                <list>
+                                    <field name="shape_name"/>
+                                    <field name="panel_count"/>
+                                </list>
+                            </field>
+                            <group>
+                                <field name="total_panels" readonly="1"/>
+                            </group>
+                        </page>
+                        <page string="General Notes" name="general_notes">
+                            <field name="notes" readonly="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter>
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action: filtered to approved samples with no BOM -->
+    <record id="action_pending_bom_samples" model="ir.actions.act_window">
+        <field name="name">Pending BOM</field>
+        <field name="res_model">reema.sampling.blueprint</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', '=', 'sample_approved'), ('bom_count', '=', 0)]</field>
+        <field name="view_id" ref="view_pending_bom_form"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No samples are waiting for a BOM right now.
+            </p>
+            <p>Approved samples that need a Bill of Materials defined will appear here.</p>
+        </field>
+    </record>
+
     <menuitem id="menu_reema_sampling_root"
               name="Sampling"
               sequence="10"/>
 
-    <menuitem id="menu_reema_sampling_blueprint" 
-              name="Samples" 
-              parent="menu_reema_sampling_root" 
-              action="action_reema_sampling_blueprint" 
+    <menuitem id="menu_reema_sampling_blueprint"
+              name="Samples"
+              parent="menu_reema_sampling_root"
+              action="action_reema_sampling_blueprint"
               sequence="10"/>
+
+    <menuitem id="menu_pending_bom"
+              name="Pending BOM"
+              parent="mrp.menu_mrp_manufacturing"
+              action="action_pending_bom_samples"
+              sequence="15"
+              groups="base.group_user"/>
 </odoo>

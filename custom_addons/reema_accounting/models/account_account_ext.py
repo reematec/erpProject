@@ -1,5 +1,9 @@
+import re
+
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
+
+REEMA_CODE_REGEX = re.compile(r'^[A-Za-z0-9.\-]+$')
 
 
 class AccountGroupExt(models.Model):
@@ -33,6 +37,14 @@ class AccountAccountExt(models.Model):
         help="The partner this individual GL account belongs to.",
     )
 
+    @api.constrains('code')
+    def _check_account_code(self):
+        for account in self:
+            if account.code and not re.match(REEMA_CODE_REGEX, account.code):
+                raise ValidationError(
+                    "Account code may only contain alphanumeric characters, dots, and hyphens."
+                )
+
     def _search_group_id(self, operator, value):
         if operator not in ('=', 'in'):
             return []
@@ -41,7 +53,7 @@ class AccountAccountExt(models.Model):
         domain = []
         for group in groups:
             if group.code_prefix_start:
-                domain += [('code', '=like', group.code_prefix_start + '%')]
+                domain += [('code', '=like', group.code_prefix_start + '-%')]
         return ['|'] * (len(domain) - 1) + domain if domain else [('id', '=', False)]
 
     @api.onchange('target_group_id')
@@ -50,22 +62,12 @@ class AccountAccountExt(models.Model):
             return
         prefix = self.target_group_id.code_prefix_start
         existing = self.env['account.account'].search(
-            [('code', '=like', prefix + '%')],
+            [('code', '=like', prefix + '-%')],
             order='code desc',
             limit=1,
         )
-        self.code = str(int(existing.code) + 1) if existing else prefix + '1'
-
-    @api.constrains('code')
-    def _check_code_has_group(self):
-        all_groups = self.env['account.group'].search([('code_prefix_start', '!=', False)])
-        prefixes = [g.code_prefix_start for g in all_groups if g.code_prefix_start]
-        for account in self:
-            if not account.code or account.code == '999999':
-                continue
-            if not any(account.code.startswith(p) for p in prefixes):
-                raise ValidationError(
-                    f"Code '{account.code}' does not match any account group. "
-                    f"The first 3 digits must match a configured group prefix "
-                    f"(e.g. 111x = Cash & Bank, 115x = Inventory, 521x = Labor — Cutting)."
-                )
+        if existing:
+            seq = int(existing.code.rsplit('-', 1)[1])
+            self.code = f'{prefix}-{seq + 1:02d}'
+        else:
+            self.code = f'{prefix}-01'

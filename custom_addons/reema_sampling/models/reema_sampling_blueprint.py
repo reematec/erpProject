@@ -1,4 +1,5 @@
 from odoo import models, fields, api, _
+from odoo.exceptions import UserError
 
 # The 'ReemaSamplingBlueprint' model acts as the core definition for a new ball design.
 # We use '_inherits' to link it with 'product.template', which allows us to reuse 
@@ -20,7 +21,12 @@ class ReemaSamplingBlueprint(models.Model):
 
     # These fields collect specific production details required for the sample.
     model_alias = fields.Char(string='Model Alias', tracking=True)
-    customer_id = fields.Many2one('res.partner', string='Customer', tracking=True)
+    customer_id = fields.Many2one(
+        'res.partner',
+        string='Customer',
+        domain=[('customer_rank', '>', 0)],
+        tracking=True,
+    )
     sampling_date = fields.Date(string='Date', default=fields.Date.context_today, tracking=True)
 
     # Full lifecycle status for a sampling blueprint.
@@ -33,14 +39,15 @@ class ReemaSamplingBlueprint(models.Model):
         ('in_progress',      'In Progress'),
         ('completed',        'Completed'),
         ('sample_approved',  'Sample Approved'),
+        ('sample_rejected',  'Sample Rejected'),
         ('production_ready', 'Production Ready'),
         ('shipped',          'Shipped'),
         ('cancelled',        'Cancelled'),
     ], string='Status', default='draft', required=True, tracking=True)
     
-    completion_date = fields.Date(string='Ready Till Date')
-    shipping_date = fields.Date(string='Shipping Date')
-    reference_piece_kept = fields.Boolean(string='Reference Piece Kept', default=False)
+    completion_date = fields.Date(string='Ready Till Date', tracking=True)
+    shipping_date = fields.Date(string='Shipping Date', tracking=True)
+    reference_piece_kept = fields.Boolean(string='Reference Piece Kept', default=False, tracking=True)
     
     # Fields for file uploads. Odoo uses 'Binary' for the file content 
     # and a 'Char' field to store the filename for correct downloading/display.
@@ -63,8 +70,8 @@ class ReemaSamplingBlueprint(models.Model):
         ('hyb', 'Hybrid'),
         ('thb', 'Thermo Bonded'),
         ('hs',  'Hand Stitched'),
-    ], string='Construction Type')
-    
+    ], string='Construction Type', tracking=True)
+
     ball_type = fields.Selection([
         ('football', 'Football'),
         ('futsal', 'Futsal'),
@@ -72,13 +79,13 @@ class ReemaSamplingBlueprint(models.Model):
         ('volleyball', 'Volleyball'),
         ('freestyle', 'Freestyle Ball'),
         ('training', 'Training Ball')
-    ], string='Type')
-    
+    ], string='Type', tracking=True)
+
     knife_line_ids = fields.One2many('reema.sampling.knife.line', 'blueprint_id', string='Cutting Knives')
     total_panels = fields.Integer(string='Number of Panels', compute='_compute_total_panels', store=True)
-    weight_range = fields.Char(string='Weight Range (g)')
-    circumference = fields.Char(string='Circumference (cm)')
-    bounce_requirement = fields.Char(string='Bounce Requirement')
+    weight_range = fields.Char(string='Weight Range (g)', tracking=True)
+    circumference = fields.Char(string='Circumference (cm)', tracking=True)
+    bounce_requirement = fields.Char(string='Bounce Requirement', tracking=True)
     
     # 'color' field captures the primary design color of the sample.
     # This will be used to auto-populate the Invoice later.
@@ -86,9 +93,9 @@ class ReemaSamplingBlueprint(models.Model):
     
     hs_code = fields.Char(string='HS Code', tracking=True)
 
-    bom_count = fields.Integer(string='BOM Count', compute='_compute_bom_count')
+    bom_count = fields.Integer(string='BOM Count', compute='_compute_bom_count', store=True)
 
-    notes = fields.Text(string='Notes')
+    notes = fields.Text(string='Notes', tracking=True)
     
     # One2many relationships allow us to manage child records (Sizes and Materials)
     # directly within the parent sample form.
@@ -127,6 +134,7 @@ class ReemaSamplingBlueprint(models.Model):
         for rec in self:
             rec.total_panels = sum(rec.knife_line_ids.mapped('panel_count'))
 
+    @api.depends('product_tmpl_id.bom_ids')
     def _compute_bom_count(self):
         BOM = self.env['mrp.bom']
         for rec in self:
@@ -163,6 +171,9 @@ class ReemaSamplingBlueprint(models.Model):
     def action_start(self):
         self.write({'state': 'in_progress'})
 
+    def action_sample_rejected(self):
+        self.write({'state': 'sample_rejected'})
+
     def action_sample_approved(self):
         self.write({'state': 'sample_approved'})
         # Notify Waleed to define the BOM for this blueprint
@@ -180,10 +191,45 @@ class ReemaSamplingBlueprint(models.Model):
         self.write({'state': 'completed'})
 
     def action_shipped(self):
-        self.write({'state': 'shipped'})
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Ship Sample',
+            'res_model': 'reema.sampling.ship.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_blueprint_id': self.id},
+        }
 
     def action_cancel(self):
         self.write({'state': 'cancelled'})
+
+    def action_step_back(self):
+        """Admin-only: revert the sample one step back in the workflow."""
+        PREVIOUS = {
+            'in_progress':      'draft',
+            'completed':        'in_progress',
+            'sample_approved':  'completed',
+            'sample_rejected':  'completed',
+            'production_ready': 'sample_approved',
+            'shipped':          'production_ready',
+        }
+        for rec in self:
+            prev = PREVIOUS.get(rec.state)
+            if prev:
+                rec.write({'state': prev})
+
+    def unlink(self):
+        protected = self.filtered(
+            lambda r: r.state not in ('draft', 'sample_rejected', 'cancelled')
+        )
+        if protected:
+            names = ', '.join(protected.mapped('reference'))
+            raise UserError(
+                f"Cannot delete sample(s) {names}. "
+                f"Only samples in Draft, Rejected, or Voided state can be deleted."
+            )
+        return super().unlink()
 
     def action_reset_draft(self):
         self.write({'state': 'draft'})
@@ -191,6 +237,29 @@ class ReemaSamplingBlueprint(models.Model):
     def action_print_sampling(self):
         # Looks up the registered report action by its full XML name and triggers PDF generation.
         return self.env.ref('reema_sampling.action_report_reema_sampling').report_action(self)
+
+
+class ReemaSamplingShipWizard(models.TransientModel):
+    _name = 'reema.sampling.ship.wizard'
+    _description = 'Ship Sample Confirmation'
+
+    blueprint_id = fields.Many2one(
+        'reema.sampling.blueprint', string='Sample', required=True, readonly=True
+    )
+    # Selection (not Boolean) with no default — forces the user to explicitly pick one.
+    # Odoo will block "Confirm Shipment" until a value is chosen.
+    reference_piece_kept = fields.Selection([
+        ('yes', 'Yes — a reference piece is being kept'),
+        ('no',  'No — no piece is being kept'),
+    ], string='Is a reference piece kept?', required=True)
+
+    def action_confirm(self):
+        self.ensure_one()
+        self.blueprint_id.write({
+            'state': 'shipped',
+            'reference_piece_kept': self.reference_piece_kept == 'yes',
+        })
+
 
 class ReemaSamplingKnifeLine(models.Model):
     _name = 'reema.sampling.knife.line'

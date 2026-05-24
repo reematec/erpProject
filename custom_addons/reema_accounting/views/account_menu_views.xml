@@ -7,6 +7,31 @@
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
+            <!-- Disable Create / Create & Edit on all editable Many2one fields in the partner form -->
+            <xpath expr="//field[@name='title']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='state_id']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='country_id']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='company_id']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+
+            <!-- Hide standard Odoo smart buttons not relevant to this business -->
+            <xpath expr="//button[@name='action_view_partner_invoices']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//button[.//field[@name='purchase_order_count']]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//button[.//field[@name='on_time_rate']]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_create_supplier_gl_account"
                         type="object"
@@ -28,6 +53,11 @@
                        string="Is Contractor"
                        invisible="not supplier_rank"
                        widget="boolean_toggle"/>
+                <field name="reema_advance_account_id"
+                       string="Advance Account"
+                       readonly="1"
+                       invisible="not is_contractor"
+                       options="{'no_open': True}"/>
             </xpath>
 
             <!-- ── Sales &amp; Purchase tab: hide irrelevant fields ── -->
@@ -53,7 +83,7 @@
         </field>
     </record>
 
-    <!-- ── Partner form (account extension): hide irrelevant Invoicing tab groups ── -->
+    <!-- ── Partner form (account extension): hide irrelevant Invoicing tab groups + lock account fields ── -->
     <record id="view_partner_invoicing_cleanup" model="ir.ui.view">
         <field name="name">reema.partner.invoicing.cleanup</field>
         <field name="model">res.partner</field>
@@ -67,6 +97,22 @@
             </xpath>
             <xpath expr="//group[@name='accounting_automation']" position="attributes">
                 <attribute name="invisible">True</attribute>
+            </xpath>
+            <!-- Disable Create / Edit on account Many2one fields in the Invoicing tab -->
+            <xpath expr="//field[@name='property_account_receivable_id']" position="attributes">
+                <attribute name="options">{'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_account_payable_id']" position="attributes">
+                <attribute name="options">{'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_payment_term_id']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_supplier_payment_term_id']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='property_account_position_id']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
             </xpath>
         </field>
     </record>
@@ -127,7 +173,7 @@
                 <div invisible="id" class="mb-2">
                     <field name="target_group_id"
                            placeholder="Select a Level 3 group (e.g. 115 Inventory)…"
-                           options="{'no_create': True, 'no_open': True}"
+                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"
                            required="not id"/>
                     <small class="text-muted">Select a group — the account code will be auto-assigned</small>
                 </div>
@@ -306,10 +352,26 @@
             <!-- Remove Purchase Matching stat button -->
             <button name="action_purchase_matching" position="replace"/>
 
-            <!-- Add Notes tab after Invoice Lines -->
+            <!-- Add Notes + Advance Deductions tabs after Invoice Lines -->
             <page id="invoice_tab" position="after">
                 <page string="Notes" name="notes_tab">
                     <field name="narration" nolabel="1" placeholder="Internal notes..."/>
+                </page>
+                <page string="Advance Deductions" name="deductions_tab">
+                    <field name="reema_deduction_ids"
+                           readonly="not reema_can_edit_deductions"
+                           context="{'default_deduction_account_id': reema_contractor_advance_account_id}">
+                        <list editable="bottom">
+                            <field name="description" string="Description"
+                                   placeholder="e.g. Advance recovery – June"/>
+                            <field name="deduction_account_id" string="Recovery Account"/>
+                            <field name="amount" string="Amount (PKR)"/>
+                        </list>
+                    </field>
+                    <group class="oe_subtotal_footer">
+                        <field name="reema_total_deductions" string="Total Deductions" readonly="1"/>
+                        <field name="reema_net_payable" string="Net Payable" readonly="1"/>
+                    </group>
                 </page>
             </page>
 
@@ -471,6 +533,25 @@
         action="action_contractor_bills"
         sequence="30"
         groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor,account.group_account_invoice,account.group_account_manager"/>
+
+    <!-- ── Bills to Post: accountant queue of approved-but-unposted bills ── -->
+    <record id="action_contractor_bills_to_post" model="ir.actions.act_window">
+        <field name="name">Bills to Post</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('move_type', '=', 'in_invoice'), ('batch_entry_ids', '!=', False), ('reema_bill_state', '=', 'confirmed'), ('state', '=', 'draft')]</field>
+        <field name="context">{'default_move_type': 'in_invoice'}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': False}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_contractor_bill_form')})]"/>
+    </record>
+    <menuitem
+        id="menu_contractor_bills_to_post"
+        name="Bills to Post"
+        parent="account.menu_finance_payables"
+        action="action_contractor_bills_to_post"
+        sequence="4"
+        groups="account.group_account_invoice,account.group_account_manager"/>
 
     <!-- Hide the now-empty OCA grouping menu -->
     <record id="account_financial_report.menu_oca_reports" model="ir.ui.menu">

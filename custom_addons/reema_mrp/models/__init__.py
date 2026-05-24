@@ -8,3 +8,4 @@ from . import reema_wo_batch
 from . import reema_material_issuance
 from . import reema_consumable_issuance
 from . import res_partner
+from . import res_users

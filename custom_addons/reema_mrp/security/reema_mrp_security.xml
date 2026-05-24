@@ -5,10 +5,14 @@
     <record id="module_category_reema_production" model="ir.module.category">
         <field name="name">Reema Production</field>
         <field name="sequence">20</field>
+        <field name="visible" eval="True"/>
+        <field name="description">Controls access to Manufacturing Orders, Work Orders, Batch Logs, Contractor Bills, and Piece Rates.</field>
     </record>
     <record id="module_category_reema_operations" model="ir.module.category">
         <field name="name">Reema Operations</field>
         <field name="sequence">21</field>
+        <field name="visible" eval="True"/>
+        <field name="description">Controls access to the Store — material issuance, returns, and consumables.</field>
     </record>
 
     <!-- ── Production Hierarchy (leaf → root so refs resolve) ──────── -->
@@ -17,6 +21,7 @@
     <record id="group_reema_hall_incharge" model="res.groups">
         <field name="name">Hall Incharge</field>
         <field name="category_id" ref="module_category_reema_production"/>
+        <field name="comment">Can log batch progress on their assigned work orders. Cannot approve bills or manage piece rates.</field>
         <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
     </record>
 
@@ -24,13 +29,19 @@
     <record id="group_reema_supervisor" model="res.groups">
         <field name="name">Production Supervisor</field>
         <field name="category_id" ref="module_category_reema_production"/>
-        <field name="implied_ids" eval="[(4, ref('reema_mrp.group_reema_hall_incharge'))]"/>
+        <field name="comment">Can log batch progress and view Contractor Bills. Can Approve bills before accounting posts them. Includes all Hall Incharge permissions.</field>
+        <field name="implied_ids" eval="[
+            (4, ref('reema_mrp.group_reema_hall_incharge')),
+            (4, ref('mrp.group_mrp_user')),
+            (4, ref('account.group_account_invoice')),
+        ]"/>
     </record>
 
     <!-- Level 1: Production Manager (Waleed) -->
     <record id="group_reema_production_manager" model="res.groups">
         <field name="name">Production Manager</field>
         <field name="category_id" ref="module_category_reema_production"/>
+        <field name="comment">Full production access — manages Work Centers, Piece Rates, Production Orders, and all Manufacturing functions. Includes all Supervisor permissions.</field>
         <field name="implied_ids" eval="[
             (4, ref('reema_mrp.group_reema_supervisor')),
             (4, ref('mrp.group_mrp_manager')),
@@ -41,6 +52,7 @@
     <record id="group_reema_store" model="res.groups">
         <field name="name">Store Keeper</field>
         <field name="category_id" ref="module_category_reema_operations"/>
+        <field name="comment">Can issue materials, record returns, and manage consumable transactions. No access to Manufacturing or Accounting.</field>
         <field name="implied_ids" eval="[
             (4, ref('base.group_user')),
             (4, ref('stock.group_stock_user')),

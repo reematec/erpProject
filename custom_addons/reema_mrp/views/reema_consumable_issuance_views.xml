@@ -59,24 +59,24 @@
                     <group>
                         <group string="Item">
                             <field name="product_id"
-                                   options="{'no_open': True}"
+                                   options="{'no_open': True, 'no_create': True, 'no_edit': True}"
                                    readonly="state != 'draft'"/>
-                            <field name="product_uom_id" options="{'no_open': True}"/>
+                            <field name="product_uom_id" options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
                             <field name="qty" readonly="state != 'draft'"/>
                         </group>
                         <group string="Issue Details">
                             <field name="location_id"
                                    string="Issued To (Hall)"
-                                   options="{'no_open': True}"
+                                   options="{'no_open': True, 'no_create': True, 'no_edit': True}"
                                    readonly="state != 'draft'"/>
                             <field name="contractor_id"
-                                   options="{'no_open': True}"
+                                   options="{'no_open': True, 'no_create': True, 'no_edit': True}"
                                    readonly="state != 'draft'"/>
                             <field name="carried_by" readonly="state != 'draft'"/>
                             <field name="notes"
                                    placeholder="Optional: shift, batch, remarks"
                                    readonly="state != 'draft'"/>
-                            <field name="processed_by" options="{'no_open': True}"/>
+                            <field name="processed_by" options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
                             <field name="date"/>
                             <field name="move_id" optional="hide"/>
                         </group>
@@ -115,15 +115,15 @@
                     <group>
                         <group string="Item">
                             <field name="product_id"
-                                   options="{'no_open': True}"
+                                   options="{'no_open': True, 'no_create': True, 'no_edit': True}"
                                    readonly="state != 'draft'"/>
-                            <field name="product_uom_id" options="{'no_open': True}"/>
+                            <field name="product_uom_id" options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
                             <field name="qty" readonly="state != 'draft'"/>
                         </group>
                         <group string="Return Details">
                             <field name="location_id"
                                    string="Returning From (Hall)"
-                                   options="{'no_open': True}"
+                                   options="{'no_open': True, 'no_create': True, 'no_edit': True}"
                                    readonly="state != 'draft'"/>
                             <field name="reason"
                                    placeholder="e.g. Excess, Wrong item, Unused"
@@ -131,7 +131,7 @@
                             <field name="notes"
                                    placeholder="Optional: shift, batch, remarks"
                                    readonly="state != 'draft'"/>
-                            <field name="processed_by" options="{'no_open': True}"/>
+                            <field name="processed_by" options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
                             <field name="date"/>
                             <field name="move_id" optional="hide"/>
                         </group>

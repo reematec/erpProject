@@ -80,7 +80,7 @@
                                            readonly="1"
                                            column_invisible="True"
                                            domain="[('product_tmpl_id', '=', product_tmpl_id)]"
-                                           options="{'no_create': True, 'no_open': False}"/>
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                                     <field name="bom_reference" readonly="1"/>
                                     <field name="mo_id" readonly="1" options="{'no_open': False}"/>
                                     <field name="mo_state" widget="badge"

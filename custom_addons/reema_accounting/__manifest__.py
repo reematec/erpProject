@@ -5,6 +5,7 @@
     'summary': 'Chart of Accounts, Taxes, and Journals for Reema Tec',
     'depends': ['account', 'stock_account', 'purchase_stock', 'account_financial_report', 'reema_mrp', 'reema_invoice', 'account_payment', 'account_edi_ubl_cii'],
     'data': [
+        'security/ir.model.access.csv',
         'views/account_menu_views.xml',
         'data/account_group_data.xml',
         'data/account_account_data.xml',
@@ -15,4 +16,5 @@
     'installable': True,
     'application': True,
     'auto_install': False,
+    'post_init_hook': 'post_init_hook',
 }

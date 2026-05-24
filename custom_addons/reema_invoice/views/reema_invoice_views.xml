@@ -77,7 +77,8 @@
                         <group>
                             <field name="client_order_number" readonly="state != 'pending'"/>
                             <field name="client_order_date" readonly="state != 'pending'"/>
-                            <field name="payment_terms_id" readonly="state != 'pending'"/>
+                            <field name="payment_terms_id" readonly="state != 'pending'"
+                                   options="{'no_create': True, 'no_edit': True}"/>
                         </group>
                     </group>
 
@@ -96,7 +97,7 @@
                                 <list editable="bottom" no_open="True">
                                     <field name="sample_id"
                                            domain="[('customer_id', '=', parent.partner_id)]"
-                                           options="{'no_create': True}" string="Name"/>
+                                           options="{'no_create': True, 'no_edit': True}" string="Name"/>
                                     <field name="sample_code"  string="Sample Code"/>
                                     <field name="description"  string="Description"/>
                                     <field name="client_sku"   string="Client SKU"/>
@@ -163,7 +164,8 @@
                                     <field name="country_of_origin" readonly="state != 'pending'"/>
                                     <field name="transport_method" readonly="state != 'pending'"/>
                                     <field name="shipping_date" readonly="state != 'pending'"/>
-                                    <field name="incoterm_id" readonly="state != 'pending'"/>
+                                    <field name="incoterm_id" readonly="state != 'pending'"
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                                     <field name="incoterm_location" readonly="state != 'pending'"/>
                                     <field name="destination" readonly="state != 'pending'"/>
                                 </group>
@@ -198,7 +200,7 @@
                         <page string="Bank Details" name="bank_details">
                             <group>
                                 <field name="bank_id" readonly="state != 'pending'"
-                                       options="{'no_create': True}"
+                                       options="{'no_create': True, 'no_edit': True, 'no_open': True}"
                                        placeholder="Select a bank to auto-fill details…"/>
                             </group>
                             <group>

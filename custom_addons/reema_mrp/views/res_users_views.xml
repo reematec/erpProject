@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_users_reema_role_note" model="ir.ui.view">
+        <field name="name">res.users.reema.role.note</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='access_rights']" position="inside">
+                <div class="alert alert-info mb-0 mt-3"
+                     invisible="not reema_role_note"
+                     role="alert">
+                    <strong>Reema Access Role</strong>
+                    <field name="reema_role_note" readonly="1" nolabel="1"
+                           style="white-space: pre-line; margin-top: 4px;"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

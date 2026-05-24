@@ -309,21 +309,73 @@
         </field>
     </record>
 
-    <!-- Product Form: add Product Group after Product Type; move Category to follow it -->
+    <!-- Product Form: add Product Group; hide price/tax fields; hide Purchase + Inventory tabs; move Category -->
+    <!-- Inherits the PRIMARY view (product_template_only_form_view) so default_code/barcode injection by that view
+         is already baked in and stays anchored to the original categ_id in group_standard_price. -->
     <record id="product_template_reema_form" model="ir.ui.view">
         <field name="name">product.template.reema.form</field>
         <field name="model">product.template</field>
-        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='type']" position="after">
                 <field name="product_group"/>
-                <field name="categ_id" string="Category"/>
+                <field name="product_group_note"
+                       class="fst-italic text-muted" string="" readonly="1"/>
+                <field name="categ_id" string="Category"
+                       options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="categ_note"
+                       class="fst-italic text-muted" string="" readonly="1"/>
+                <field name="uom_id" string="Unit of Measure"
+                       options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
             </xpath>
             <xpath expr="//group[@name='group_standard_price']//field[@name='categ_id']" position="replace"/>
+
+            <!-- ── Reference: auto-generated, read-only ── -->
+            <xpath expr="//field[@name='default_code']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+
+            <!-- ── Hide Sales Price (label + value div) ── -->
+            <xpath expr="//label[@for='list_price']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//div[@name='list_price_uom']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- ── Hide Sales Taxes (label + field div — added by account module) ── -->
+            <xpath expr="//label[@for='taxes_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//div[@name='taxes_div']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- ── Hide Cost (label + value div) ── -->
+            <xpath expr="//label[@id='standard_price_label']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//div[@name='standard_price_uom']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- ── Hide Purchase Taxes (added by account module after standard_price_uom) ── -->
+            <xpath expr="//field[@name='supplier_taxes_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- ── Hide Purchase tab (added by purchase module) ── -->
+            <xpath expr="//page[@name='purchase']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <!-- ── Hide Inventory tab (added by stock module) ── -->
+            <xpath expr="//page[@name='inventory']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
         </field>
     </record>
 
-    <!-- Product List: add Product Group column and filter -->
+    <!-- Product List (standard): remove price columns entirely -->
     <record id="product_template_reema_list" model="ir.ui.view">
         <field name="name">product.template.reema.list</field>
         <field name="model">product.template</field>
@@ -332,18 +384,35 @@
             <xpath expr="//field[@name='categ_id']" position="after">
                 <field name="product_group" optional="show"/>
             </xpath>
+            <xpath expr="//field[@name='list_price']" position="replace"/>
+            <xpath expr="//field[@name='standard_price']" position="replace"/>
         </field>
     </record>
 
-    <!-- Default product views to list instead of kanban -->
+    <!-- Product List (account view): remove price and tax columns entirely -->
+    <record id="product_template_reema_account_list" model="ir.ui.view">
+        <field name="name">product.template.reema.account.list</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="account.product_template_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='list_price']" position="replace"/>
+            <xpath expr="//field[@name='taxes_id']" position="replace"/>
+            <xpath expr="//field[@name='supplier_taxes_id']" position="replace"/>
+        </field>
+    </record>
+
+    <!-- Default product views to list instead of kanban; default to Goods + Raw Materials -->
     <record id="product.product_template_action_all" model="ir.actions.act_window">
         <field name="view_mode">list,kanban,form,activity</field>
+        <field name="context">{"search_default_goods": 1, "search_default_group_raw": 1}</field>
     </record>
     <record id="stock.product_template_action_product" model="ir.actions.act_window">
         <field name="view_mode">list,kanban,form,activity</field>
+        <field name="context">{"search_default_goods": 1, "search_default_group_raw": 1, "default_is_storable": True}</field>
     </record>
     <record id="mrp.product_template_action" model="ir.actions.act_window">
         <field name="view_mode">list,kanban,form</field>
+        <field name="context">{"search_default_goods": 1, "search_default_group_raw": 1, "default_is_storable": True}</field>
     </record>
 
     <!-- Product Search: add Product Group filter and groupby -->

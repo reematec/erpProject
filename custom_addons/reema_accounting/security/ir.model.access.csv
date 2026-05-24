@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reema_bill_deduction_user,reema.bill.deduction user,model_reema_bill_deduction,base.group_user,1,0,0,0
+access_reema_bill_deduction_accountant,reema.bill.deduction accountant,model_reema_bill_deduction,account.group_account_manager,1,1,1,1
+access_reema_bill_deduction_admin,reema.bill.deduction admin,model_reema_bill_deduction,base.group_system,1,1,1,1
