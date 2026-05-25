@@ -50,6 +50,7 @@
         <field name="name">Piece Rates</field>
         <field name="res_model">reema.piece.rate</field>
         <field name="view_mode">list,form</field>
+        <field name="view_id" ref="reema_piece_rate_view_list"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No piece rates defined yet. Click New to add one.

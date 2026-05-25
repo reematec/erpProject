@@ -1,0 +1,17 @@
+[Unit]
+Description=Odoo Dev Session — PostgreSQL Backup at Boot
+Documentation=Backs up odoo18_sgo_football_dev on every system startup
+After=postgresql.service postgresql@16-main.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=amir
+WorkingDirectory=/home/amir/erpProject
+ExecStart=/home/amir/erpProject/scripts/pg-session-backup.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

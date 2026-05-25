@@ -38,3 +38,9 @@ venv/
 .git/
 .vscode/
 .idea/
+
+# Session backups (large binary files — restored via pg_restore)
+backups/
+
+# Deployment scripts not for version control
+scripts/*.dump

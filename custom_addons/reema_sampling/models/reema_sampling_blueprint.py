@@ -149,9 +149,14 @@ class ReemaSamplingBlueprint(models.Model):
             'domain': [('product_tmpl_id', '=', self.product_tmpl_id.id)],
             'context': {
                 'default_product_tmpl_id': self.product_tmpl_id.id,
+                'default_product_uom_id': self.product_tmpl_id.uom_id.id,
                 'default_type': 'normal',
                 'default_bom_line_ids': [
-                    (0, 0, {'product_id': line.product_id.id, 'product_qty': 1.0})
+                    (0, 0, {
+                        'product_id': line.product_id.id,
+                        'product_qty': 1.0,
+                        'product_uom_id': line.product_id.uom_id.id,
+                    })
                     for line in self.material_line_ids
                 ],
             },

@@ -325,6 +325,9 @@
                 <field name="sampling_date"/>
                 <field name="construction_type"/>
                 <field name="ball_type"/>
+                <field name="bom_count" string="BOM" widget="badge"
+                       decoration-success="bom_count > 0"
+                       decoration-warning="bom_count == 0"/>
                 <field name="state" widget="badge" decoration-warning="state == 'sample_approved'"/>
             </list>
         </field>
@@ -337,7 +340,15 @@
         <field name="arch" type="xml">
             <form string="Sample — Pending BOM" readonly="1">
                 <header>
-                    <!-- No action buttons — Waleed can only view and define BOM -->
+                    <field name="bom_count" invisible="1"/>
+                    <button name="action_production_ready"
+                            type="object"
+                            string="Mark Production Ready"
+                            class="btn-primary"
+                            invisible="bom_count == 0"
+                            confirm="Mark this sample as Production Ready? It will be removed from the Pending BOM queue."
+                            confirm-label="Yes, Mark Ready"
+                            cancel-label="Go Back"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,in_progress,completed,sample_approved,production_ready"/>
                 </header>
@@ -453,14 +464,28 @@
         <field name="name">Pending BOM</field>
         <field name="res_model">reema.sampling.blueprint</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('state', '=', 'sample_approved'), ('bom_count', '=', 0)]</field>
-        <field name="view_id" ref="view_pending_bom_form"/>
+        <field name="domain">[('state', '=', 'sample_approved')]</field>
+        <field name="view_id" ref="view_pending_bom_list"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No samples are waiting for a BOM right now.
             </p>
             <p>Approved samples that need a Bill of Materials defined will appear here.</p>
         </field>
+    </record>
+
+    <!-- Bind custom list + form views to the Pending BOM action -->
+    <record id="view_act_pending_bom_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_pending_bom_list"/>
+        <field name="act_window_id" ref="action_pending_bom_samples"/>
+    </record>
+    <record id="view_act_pending_bom_form" model="ir.actions.act_window.view">
+        <field name="sequence">2</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_pending_bom_form"/>
+        <field name="act_window_id" ref="action_pending_bom_samples"/>
     </record>
 
     <menuitem id="menu_reema_sampling_root"

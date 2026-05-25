@@ -181,6 +181,32 @@
                     Cancel the MO before making any changes.
                 </div>
             </xpath>
+            <!-- Remove shared "Quantity" label so each field auto-labels separately -->
+            <xpath expr="//label[@for='product_qty']" position="replace"/>
+            <!-- Split qty + uom from a single o_row into two separate labeled rows.
+                 - product_qty auto-labels as "Quantity"
+                 - product_uom_id gets a short "UOM" label  -->
+            <xpath expr="//div[@class='o_row'][.//field[@name='product_uom_id']][not(ancestor::list)]" position="replace">
+                <field name="product_qty"/>
+                <field name="product_uom_id" string="UOM"
+                       options="{'no_open':True,'no_create':True,'no_edit':True}"
+                       groups="uom.group_uom"/>
+            </xpath>
+            <!-- Rename UOM column header in the Components lines list -->
+            <xpath expr="//field[@name='bom_line_ids']//field[@name='product_uom_id']" position="attributes">
+                <attribute name="string">UOM</attribute>
+            </xpath>
+            <!-- Quantity hint: guide users on what to enter in the Quantity column -->
+            <xpath expr="//page[@name='components']/field[@name='bom_line_ids']" position="before">
+                <div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-2" role="alert">
+                    <i class="fa fa-info-circle fa-lg flex-shrink-0"/>
+                    <span>
+                        <strong>Quantity</strong> = material consumed to make <strong>1 ball</strong>.
+                        Enter the per-ball amount directly — e.g. <strong>0.05</strong> PU leather.
+                        Each layer or material must be listed and entered separately.
+                    </span>
+                </div>
+            </xpath>
             <!-- Lock product and qty fields when BOM has active MOs -->
             <xpath expr="//field[@name='product_tmpl_id']" position="attributes">
                 <attribute name="readonly">has_active_mo</attribute>
@@ -205,6 +231,22 @@
             <xpath expr="//page[@name='miscellaneous']//field[@name='allow_operation_dependencies']"
                    position="attributes">
                 <attribute name="invisible">True</attribute>
+            </xpath>
+            <!-- Operations tab: info banner explaining Balls per Unit and Blocked by -->
+            <xpath expr="//page[@name='operations']/field[@name='operation_ids']" position="before">
+                <div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-2" role="alert">
+                    <i class="fa fa-info-circle fa-lg flex-shrink-0"/>
+                    <span>
+                        <strong>Balls per Unit</strong> — how many balls 1 hall unit equals.
+                        E.g. Cutting: 1 panel = 1/32 ball → enter <strong>0.0313</strong>;
+                        Stitching: 1 piece = 1 ball → enter <strong>1</strong>.
+                        Ball totals are computed automatically from the hall units supervisors log.
+                        <br/>
+                        <strong>Blocked by</strong> — the upstream operation(s) that must finish before this
+                        step can start. Select the Hall that feeds work into this one.
+                        Leave blank if this operation runs independently.
+                    </span>
+                </div>
             </xpath>
         </field>
     </record>
@@ -252,10 +294,11 @@
             <xpath expr="//field[@name='time_cycle']" position="attributes">
                 <attribute name="column_invisible">True</attribute>
             </xpath>
-            <!-- Show Blocked By column by default (remove optional hide + always visible) -->
+            <!-- Show Blocked By column by default; disable create/edit so only existing ops can be selected -->
             <xpath expr="//field[@name='blocked_by_operation_ids']" position="attributes">
                 <attribute name="optional">show</attribute>
                 <attribute name="column_invisible">0</attribute>
+                <attribute name="options">{'no_create': True, 'no_edit': True}</attribute>
             </xpath>
         </field>
     </record>
@@ -271,6 +314,10 @@
                 <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
                        domain="[('workcenter_id', '=', workcenter_id)]"/>
             </xpath>
+            <!-- Blocked by: only allow selecting existing operations, no create/edit -->
+            <xpath expr="//field[@name='blocked_by_operation_ids']" position="attributes">
+                <attribute name="options">{'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
         </field>
     </record>
 
@@ -284,14 +331,27 @@
                 <field name="workforce_type"/>
                 <field name="expense_account_id"
                        options="{'no_create': True, 'no_edit': True}"
+                       groups="base.group_erp_manager"
                        invisible="workforce_type == 'employee'"/>
                 <field name="is_qc_point"/>
                 <field name="sfg_product_id"
                        domain="[('product_group', '=', 'sfg')]"
                        options="{'no_create': True, 'no_edit': True}"/>
+                <div class="text-muted small ms-1 mb-2">
+                    To add SFG products: go to
+                    <strong>Manufacturing → Products → New</strong>,
+                    set <strong>Product Group = Semi-Finished Good</strong>
+                    and <strong>Type = Storable</strong>.
+                </div>
                 <field name="location_id"
                        domain="[('usage', '=', 'internal')]"
                        options="{'no_create': True, 'no_edit': True}"/>
+                <div class="text-muted small ms-1 mb-2">
+                    To add hall locations: go to
+                    <strong>Inventory → Configuration → Locations</strong>
+                    and create <strong>Internal</strong> type locations under a
+                    <strong>Production Halls</strong> parent (Type: View).
+                </div>
             </xpath>
             <xpath expr="//label[@for='time_efficiency']" position="replace"/>
             <xpath expr="//div[field[@name='time_efficiency']]" position="replace"/>
