@@ -34,6 +34,14 @@
                         icon="fa-archive">
                     <field name="issuance_count" widget="statinfo" string="Issuances"/>
                 </button>
+                <!-- Smart button: ILO Dispatches -->
+                <button name="action_view_ilo_dispatches"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-truck"
+                        invisible="ilo_dispatch_count == 0">
+                    <field name="ilo_dispatch_count" widget="statinfo" string="ILO"/>
+                </button>
             </xpath>
             <!-- Authorize/View issuance buttons — separate columns with headers -->
             <xpath expr="//field[@name='move_raw_ids']//list" position="inside">
@@ -77,6 +85,10 @@
                 <attribute name="readonly">1</attribute>
             </xpath>
             <!-- Reservation is handled via physical RMI issuance, not Odoo stock reservation -->
+            <!-- Draft reminder banner in Work Orders tab -->
+            <xpath expr="//page[@name='operations']/field[@name='workorder_ids']" position="before">
+                <widget name="mo_confirm_banner" invisible="state != 'draft'"/>
+            </xpath>
             <xpath expr="//button[@name='action_assign']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
@@ -123,7 +135,7 @@
                 <button name="action_log_batch" type="object"
                         icon="fa-plus-circle"
                         title="Log batch progress"
-                        groups="reema_mrp.group_reema_supervisor"
+                        groups="reema_mrp.group_reema_supervisor,base.group_system"
                         invisible="state != 'progress'"/>
             </xpath>
             <!-- Hide the "Open Work Order" external-link icon added by the MO form view -->
@@ -232,21 +244,9 @@
                    position="attributes">
                 <attribute name="invisible">True</attribute>
             </xpath>
-            <!-- Operations tab: info banner explaining Balls per Unit and Blocked by -->
+            <!-- Operations tab: collapsible info banner (OWL widget with localStorage) -->
             <xpath expr="//page[@name='operations']/field[@name='operation_ids']" position="before">
-                <div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-2" role="alert">
-                    <i class="fa fa-info-circle fa-lg flex-shrink-0"/>
-                    <span>
-                        <strong>Balls per Unit</strong> — how many balls 1 hall unit equals.
-                        E.g. Cutting: 1 panel = 1/32 ball → enter <strong>0.0313</strong>;
-                        Stitching: 1 piece = 1 ball → enter <strong>1</strong>.
-                        Ball totals are computed automatically from the hall units supervisors log.
-                        <br/>
-                        <strong>Blocked by</strong> — the upstream operation(s) that must finish before this
-                        step can start. Select the Hall that feeds work into this one.
-                        Leave blank if this operation runs independently.
-                    </span>
-                </div>
+                <widget name="bom_ops_info_banner"/>
             </xpath>
         </field>
     </record>
@@ -334,6 +334,8 @@
                        groups="base.group_erp_manager"
                        invisible="workforce_type == 'employee'"/>
                 <field name="is_qc_point"/>
+                <field name="is_ilo" string="ILO Work Center"
+                       help="Enable if this work center represents the ILO (hand stitching) external step. Completion will be gated on ILO receipt confirmation."/>
                 <field name="sfg_product_id"
                        domain="[('product_group', '=', 'sfg')]"
                        options="{'no_create': True, 'no_edit': True}"/>

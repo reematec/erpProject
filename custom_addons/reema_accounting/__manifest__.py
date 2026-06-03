@@ -6,6 +6,7 @@
     'depends': ['account', 'stock_account', 'purchase_stock', 'account_financial_report', 'reema_mrp', 'reema_invoice', 'account_payment', 'account_edi_ubl_cii'],
     'data': [
         'security/ir.model.access.csv',
+        'security/reema_apps_access.xml',
         'views/account_menu_views.xml',
         'data/account_group_data.xml',
         'data/account_account_data.xml',

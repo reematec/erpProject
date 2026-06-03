@@ -8,7 +8,8 @@
         <field name="name">reema.invoice.list</field>
         <field name="model">reema.invoice</field>
         <field name="arch" type="xml">
-            <list string="Pro Forma Invoices" decoration-info="state == 'pending'"
+            <list string="Pro Forma Invoices" decoration-muted="state == 'draft'"
+                  decoration-info="state == 'pending'"
                   decoration-success="state == 'accepted'" decoration-danger="state == 'rejected'">
                 <field name="name"/>
                 <field name="date"/>
@@ -36,6 +37,13 @@
             <form string="Pro Forma Invoice">
 
                 <header>
+                    <button name="action_confirm"        string="Confirm"      type="object"
+                            class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_discard"        string="Discard"      type="object"
+                            invisible="state != 'draft'"
+                            confirm="This will permanently delete this draft invoice. Are you sure?"
+                            confirm-label="Yes, Discard"
+                            cancel-label="Go Back"/>
                     <button name="action_sent"           string="Mark as Sent" type="object"
                             class="oe_highlight" invisible="state != 'pending'"/>
                     <button name="action_accept"         string="Accept"       type="object"
@@ -51,10 +59,11 @@
                             confirm-label="Yes, Undo"
                             cancel-label="Go Back"/>
                     <button name="action_reset_to_pending" string="Reset to Pending" type="object"
-                            invisible="state == 'pending'"/>
-                    <button name="action_print_invoice"  string="Print PI"     type="object"/>
+                            invisible="state in ('draft', 'pending')"/>
+                    <button name="action_print_invoice"  string="Print PI"     type="object"
+                            invisible="state == 'draft'"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="pending,sent,accepted,rejected"/>
+                           statusbar_visible="draft,pending,sent,accepted,rejected"/>
                 </header>
 
                 <sheet>
@@ -69,15 +78,16 @@
                     -->
                     <group string="Customer Details">
                         <group>
-                            <field name="partner_id" readonly="state != 'pending'"
+                            <field name="partner_id" readonly="state not in ('draft', 'pending')"
+                                   domain="[('customer_rank', '&gt;', 0), ('user_ids', '=', False)]"
                                    options="{'no_create': True, 'no_edit': True}"/>
-                            <field name="client_address" readonly="state != 'pending'"/>
-                            <field name="date" readonly="state != 'pending'"/>
+                            <field name="client_address" readonly="state not in ('draft', 'pending')"/>
+                            <field name="date" readonly="state not in ('draft', 'pending')"/>
                         </group>
                         <group>
-                            <field name="client_order_number" readonly="state != 'pending'"/>
-                            <field name="client_order_date" readonly="state != 'pending'"/>
-                            <field name="payment_terms_id" readonly="state != 'pending'"
+                            <field name="client_order_number" readonly="state not in ('draft', 'pending')"/>
+                            <field name="client_order_date" readonly="state not in ('draft', 'pending')"/>
+                            <field name="payment_terms_id" readonly="state not in ('draft', 'pending')"
                                    options="{'no_create': True, 'no_edit': True}"/>
                         </group>
                     </group>
@@ -86,7 +96,7 @@
 
                         <!-- ── Products / Samples tab ───────────────────────────────── -->
                         <page string="Products / Samples" name="products">
-                            <field name="line_ids" readonly="state != 'pending'">
+                            <field name="line_ids" readonly="state not in ('draft', 'pending')">
                                 <!--
                                     sample_id is the Name selector — searches and displays by
                                     product name (same UX as the Client field).
@@ -134,7 +144,7 @@
                                             </td>
                                         </tr>
                                     </table>
-                                    <field name="charge_ids" readonly="state != 'pending'">
+                                    <field name="charge_ids" readonly="state not in ('draft', 'pending')">
                                         <list editable="bottom" no_open="True">
                                             <field name="name"   placeholder="e.g. Handling Charges"/>
                                             <field name="amount" widget="monetary"/>
@@ -160,21 +170,21 @@
                         <page string="Shipping &amp; Terms" name="shipping">
                             <group>
                                 <group string="Terms &amp; Logistics">
-                                    <field name="our_address" readonly="state != 'pending'"/>
-                                    <field name="country_of_origin" readonly="state != 'pending'"/>
-                                    <field name="transport_method" readonly="state != 'pending'"/>
-                                    <field name="shipping_date" readonly="state != 'pending'"/>
-                                    <field name="incoterm_id" readonly="state != 'pending'"
+                                    <field name="our_address" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="country_of_origin" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="transport_method" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="shipping_date" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="incoterm_id" readonly="state not in ('draft', 'pending')"
                                            options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                                    <field name="incoterm_location" readonly="state != 'pending'"/>
-                                    <field name="destination" readonly="state != 'pending'"/>
+                                    <field name="incoterm_location" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="destination" readonly="state not in ('draft', 'pending')"/>
                                 </group>
                                 <group string="Carton &amp; Weight">
-                                    <field name="carton_qty" readonly="state != 'pending'"/>
-                                    <field name="carton_size" readonly="state != 'pending'"/>
-                                    <field name="total_cbm" readonly="state != 'pending'"/>
-                                    <field name="gross_weight" readonly="state != 'pending'"/>
-                                    <field name="net_weight" readonly="state != 'pending'"/>
+                                    <field name="carton_qty" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="carton_size" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="total_cbm" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="gross_weight" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="net_weight" readonly="state not in ('draft', 'pending')"/>
                                 </group>
                             </group>
 
@@ -188,7 +198,7 @@
                                 → click "Attach Files" to upload → close popup.
                             -->
                             <separator string="Shipping Documents"/>
-                            <field name="document_ids" readonly="state != 'pending'">
+                            <field name="document_ids" readonly="state not in ('draft', 'pending')">
                                 <list>
                                     <field name="name"       string="Document Name"/>
                                     <field name="file_count" string="Files" readonly="True"/>
@@ -199,20 +209,20 @@
                         <!-- ── Bank Details tab ─────────────────────────────────────── -->
                         <page string="Bank Details" name="bank_details">
                             <group>
-                                <field name="bank_id" readonly="state != 'pending'"
+                                <field name="bank_id" readonly="state not in ('draft', 'pending')"
                                        options="{'no_create': True, 'no_edit': True, 'no_open': True}"
                                        placeholder="Select a bank to auto-fill details…"/>
                             </group>
                             <group>
                                 <group>
-                                    <field name="bank_name" readonly="state != 'pending'"/>
-                                    <field name="bank_title" readonly="state != 'pending'"/>
-                                    <field name="bank_address" readonly="state != 'pending'"/>
+                                    <field name="bank_name" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="bank_title" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="bank_address" readonly="state not in ('draft', 'pending')"/>
                                 </group>
                                 <group>
-                                    <field name="account_num" readonly="state != 'pending'"/>
-                                    <field name="iban" readonly="state != 'pending'"/>
-                                    <field name="swift" readonly="state != 'pending'"/>
+                                    <field name="account_num" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="iban" readonly="state not in ('draft', 'pending')"/>
+                                    <field name="swift" readonly="state not in ('draft', 'pending')"/>
                                 </group>
                             </group>
                         </page>
@@ -316,6 +326,7 @@
         <field name="name">Pro Forma Invoices</field>
         <field name="res_model">reema.invoice</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[]</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Create your first Pro Forma Invoice!

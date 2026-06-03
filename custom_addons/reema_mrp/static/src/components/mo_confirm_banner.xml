@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="reema_mrp.MoConfirmBanner">
+        <div t-if="state.visible"
+             class="alert alert-warning d-flex align-items-start gap-2 py-2 mb-2"
+             role="alert"
+             style="font-size:0.8rem; line-height:1.5">
+            <i class="fa fa-exclamation-triangle flex-shrink-0 mt-1"/>
+            <span class="flex-grow-1">
+                <strong>MO is in Draft.</strong> Work orders cannot be started until the Manufacturing Order is confirmed.
+                <br/>
+                Click <strong>Confirm</strong> on the MO header to activate work orders and allow production to begin.
+            </span>
+            <i class="fa fa-times flex-shrink-0 mt-1"
+               t-on-click="hide"
+               style="cursor:pointer"
+               title="Dismiss"/>
+        </div>
+        <div t-else="" class="mb-2">
+            <button class="btn btn-sm btn-light border px-2 py-0"
+                    t-on-click="show"
+                    title="Show confirmation reminder">
+                <i class="fa fa-exclamation-triangle text-warning me-1"/>
+                <small class="text-muted">MO not confirmed</small>
+            </button>
+        </div>
+    </t>
+</templates>

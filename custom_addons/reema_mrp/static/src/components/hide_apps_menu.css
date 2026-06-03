@@ -1,0 +1,4 @@
+/* Hide apps grid (9-dots) switcher for non-admin users only */
+.o_hide_apps_menu .o_navbar_apps_menu {
+    display: none !important;
+}

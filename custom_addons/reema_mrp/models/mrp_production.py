@@ -25,6 +25,23 @@ class MrpProduction(models.Model):
         ('premium', 'Premium/Pro')
     ], string='Complexity', default='standard')
 
+    ilo_dispatch_count = fields.Integer(compute='_compute_ilo_dispatch_count', string='ILO Dispatches')
+
+    def _compute_ilo_dispatch_count(self):
+        for rec in self:
+            rec.ilo_dispatch_count = self.env['reema.ilo.dispatch'].search_count([('mo_id', '=', rec.id)])
+
+    def action_view_ilo_dispatches(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'ILO Dispatches',
+            'res_model': 'reema.ilo.dispatch',
+            'view_mode': 'list,form',
+            'domain': [('mo_id', '=', self.id)],
+            'context': {'default_mo_id': self.id},
+        }
+
     def action_confirm(self):
         res = super().action_confirm()
         # Material is issued physically via reema.material.issuance (RMI).

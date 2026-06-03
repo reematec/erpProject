@@ -19,12 +19,13 @@ class ReemaInvoice(models.Model):
         required=True, tracking=True,
     )
     state = fields.Selection([
+        ('draft',    'Draft'),
         ('pending',  'Pending'),
         ('sent',     'Sent'),
         ('accepted', 'Accepted'),
         ('rejected', 'Rejected'),
         ('closed',   'Shipped'),
-    ], string='Status', default='pending', required=True, tracking=True)
+    ], string='Status', default='draft', required=True, tracking=True)
 
     # ── Customer Details ──────────────────────────────────────────────────────
     # no_create / no_edit: client must already exist — export staff cannot add partners.
@@ -171,13 +172,24 @@ class ReemaInvoice(models.Model):
         blocked = self._LOCKED_FIELDS & vals.keys()
         if blocked:
             for rec in self:
-                if rec.state != 'pending':
+                if rec.state not in ('draft', 'pending'):
                     raise UserError(
                         f"Pro Forma Invoice {rec.name} is locked.\n\n"
-                        f"Only invoices in Pending status can be edited. "
+                        f"Only invoices in Draft or Pending status can be edited. "
                         f"Use 'Reset to Pending' if a correction is needed."
                     )
         return super().write(vals)
+
+    @api.model
+    def _cleanup_phantom_drafts(self):
+        cutoff = fields.Datetime.now() - __import__('datetime').timedelta(hours=24)
+        phantoms = self.search([
+            ('state', '=', 'draft'),
+            ('name', '=', _('New')),
+            ('create_date', '<', cutoff),
+        ])
+        if phantoms:
+            phantoms.sudo().unlink()
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -185,6 +197,26 @@ class ReemaInvoice(models.Model):
             if vals.get('name', _('New')) == _('New'):
                 vals['name'] = self.env['ir.sequence'].next_by_code('reema.invoice') or _('New')
         return super().create(vals_list)
+
+    def action_confirm(self):
+        self.write({'state': 'pending'})
+
+    def action_discard(self):
+        for rec in self:
+            if rec.state != 'draft':
+                raise UserError("Only draft invoices can be discarded.")
+        self.unlink()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'reema.invoice',
+            'view_mode': 'list',
+            'target': 'current',
+        }
+
+    def unlink(self):
+        if any(rec.state != 'draft' for rec in self):
+            raise UserError("Only draft invoices can be deleted.")
+        return super().unlink()
 
     # ── Status workflow buttons ───────────────────────────────────────────────
 

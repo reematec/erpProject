@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="reema_mrp.BomOpsInfoBanner">
+        <div t-if="state.visible"
+             class="alert alert-info d-flex align-items-start gap-2 py-2 mb-2"
+             role="alert"
+             style="font-size:0.8rem; line-height:1.5">
+            <i class="fa fa-info-circle flex-shrink-0 mt-1"/>
+            <span class="flex-grow-1">
+                <strong>Balls per Unit</strong> — how many balls 1 hall unit equals.
+                E.g. Cutting: 1 panel = 1/32 ball → enter <strong>0.0313</strong>;
+                Stitching: 1 piece = 1 ball → enter <strong>1</strong>.
+                Ball totals are computed automatically from the hall units supervisors log.
+                <br/>
+                <strong>Blocked by</strong> — the upstream operation(s) that must finish before this step can start.
+                Select the Hall that feeds work into this one. Leave blank if this operation runs independently.
+                <br/>
+                <strong>Note:</strong> Add all operations first and <strong>save the BOM</strong>, then set Blocked By —
+                newly added rows are not visible in the dropdown until saved.
+            </span>
+            <i class="fa fa-times flex-shrink-0 mt-1"
+               t-on-click="hide"
+               style="cursor:pointer"
+               title="Dismiss"/>
+        </div>
+        <div t-else="" class="mb-2">
+            <button class="btn btn-sm btn-light border px-2 py-0"
+                    t-on-click="show"
+                    title="Show operations guide">
+                <i class="fa fa-info-circle text-info me-1"/>
+                <small class="text-muted">Operations guide</small>
+            </button>
+        </div>
+    </t>
+</templates>

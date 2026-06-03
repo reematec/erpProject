@@ -94,6 +94,20 @@ class MrpWorkorder(models.Model):
                     'Click the Start button first. Starting requires a contractor assigned, '
                     'material issued by the store, and output received from the previous hall (if applicable).'
                 )
+            # ILO work centers: block completion until all dispatched balls have been received
+            if wo.workcenter_id.is_ilo:
+                dispatches = self.env['reema.ilo.dispatch'].search([
+                    ('mo_id', '=', wo.production_id.id),
+                    ('state', '=', 'dispatched'),
+                    ('qty_pending', '>', 0),
+                ])
+                if dispatches:
+                    pending_total = sum(dispatches.mapped('qty_pending'))
+                    raise UserError(
+                        f'Work order "{wo.name}" cannot be completed yet.\n\n'
+                        f'{pending_total} balls are still pending at ILO centers. '
+                        f'Record receipts for all dispatches before finishing this step.'
+                    )
             if not wo.batch_entry_ids:
                 raise UserError(
                     f'Work order "{wo.name}": log at least one batch before marking it as done.'

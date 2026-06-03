@@ -220,10 +220,26 @@ class ReemaInvoiceProductionExt(models.Model):
     has_active_production_order = fields.Boolean(
         compute='_compute_has_active_production_order',
     )
+    is_production_complete = fields.Boolean(
+        compute='_compute_is_production_complete',
+        help='True when at least one PO exists and all MOs are done.',
+    )
 
     def _compute_production_order_count(self):
         for rec in self:
             rec.production_order_count = len(rec.production_order_ids)
+
+    def _compute_is_production_complete(self):
+        for rec in self:
+            pos = rec.production_order_ids.filtered(lambda po: po.state != 'cancelled')
+            if not pos:
+                rec.is_production_complete = False
+                continue
+            mos = pos.mapped('line_ids').mapped('mo_id').filtered(lambda mo: mo.state != 'cancel')
+            if not mos:
+                rec.is_production_complete = False
+                continue
+            rec.is_production_complete = all(mo.state == 'done' for mo in mos)
 
     def _compute_has_active_production_order(self):
         for rec in self:

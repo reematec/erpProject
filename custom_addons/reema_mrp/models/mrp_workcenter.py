@@ -5,6 +5,8 @@ class MrpWorkcenter(models.Model):
     _inherit = 'mrp.workcenter'
 
     is_qc_point = fields.Boolean(string='Is QC Point', default=False)
+    is_ilo = fields.Boolean(string='ILO Work Center', default=False,
+                            help='If enabled, work order completion is gated on confirmed ILO receipt.')
     sfg_product_id = fields.Many2one('product.product', string='SFG Product Output',
                                      domain=[('product_group', '=', 'sfg')])
     location_id = fields.Many2one('stock.location', string='Hall Location',

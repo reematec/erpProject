@@ -21,12 +21,17 @@
         'views/reema_material_issuance_report.xml',
         'views/reema_consumable_issuance_views.xml',
         'views/reema_consumable_return_views.xml',
+        'views/reema_ilo_views.xml',
         'views/res_users_views.xml',
     ],
     'assets': {
         'web.assets_backend': [
             'reema_mrp/static/src/components/wo_list_dropdown_patch.xml',
             'reema_mrp/static/src/components/many2one_no_create_patch.js',
+            'reema_mrp/static/src/components/info_banner.js',
+            'reema_mrp/static/src/components/info_banner.xml',
+            'reema_mrp/static/src/components/mo_confirm_banner.js',
+            'reema_mrp/static/src/components/mo_confirm_banner.xml',
         ],
     },
     'installable': True,

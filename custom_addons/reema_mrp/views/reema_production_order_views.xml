@@ -148,7 +148,7 @@
               parent="mrp.menu_mrp_manufacturing"
               action="reema_production_order_action"
               groups="base.group_user"
-              sequence="5"/>
+              sequence="0"/>
 
     <!-- Inherit Invoice Form: header-only PO button (Generate PO / View PO toggle) -->
     <record id="reema_invoice_production_order_form" model="ir.ui.view">
@@ -169,6 +169,10 @@
             </xpath>
             <xpath expr="//header/button[@name='action_reset_to_pending']" position="attributes">
                 <attribute name="invisible">state == 'pending' or has_active_production_order</attribute>
+            </xpath>
+            <!-- Mark as Shipped: only visible when PO exists and all MOs are done -->
+            <xpath expr="//header/button[@name='action_close']" position="attributes">
+                <attribute name="invisible">state not in ('accepted', 'rejected') or not is_production_complete</attribute>
             </xpath>
         </field>
     </record>

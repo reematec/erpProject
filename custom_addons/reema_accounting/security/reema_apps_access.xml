@@ -1,0 +1,13 @@
+<odoo>
+    <data noupdate="0">
+        <record id="group_reema_apps_admin" model="res.groups">
+            <field name="name">Apps Store Access</field>
+            <field name="category_id" ref="base.module_category_hidden"/>
+            <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+        </record>
+
+        <record id="base.menu_management" model="ir.ui.menu">
+            <field name="groups_id" eval="[(6, 0, [ref('group_reema_apps_admin')])]"/>
+        </record>
+    </data>
+</odoo>

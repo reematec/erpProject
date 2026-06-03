@@ -12,6 +12,11 @@
         'views/reema_invoice_views.xml',
         'reports/reema_invoice_report.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'reema_invoice/static/src/components/invoice_form_patch.js',
+        ],
+    },
     'installable': True,
     'application': True,
     'license': 'LGPL-3',

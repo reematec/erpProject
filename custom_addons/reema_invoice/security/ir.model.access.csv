@@ -12,3 +12,5 @@ access_reema_invoice_charge_admin,reema.invoice.charge admin,model_reema_invoice
 access_reema_invoice_packing,reema.invoice packing,model_reema_invoice,reema_invoice.group_reema_packing_user,1,0,0,0
 access_reema_invoice_line_packing,reema.invoice.line packing,model_reema_invoice_line,reema_invoice.group_reema_packing_user,1,0,0,0
 access_reema_invoice_document_packing,reema.invoice.document packing,model_reema_invoice_document,reema_invoice.group_reema_packing_user,1,0,0,0
+access_reema_invoice_production_manager,reema.invoice production manager,model_reema_invoice,reema_mrp.group_reema_production_manager,1,0,0,0
+access_reema_invoice_line_production_manager,reema.invoice.line production manager,model_reema_invoice_line,reema_mrp.group_reema_production_manager,1,0,0,0

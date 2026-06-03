@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- Hide the apps grid icon for non-admin users -->
+    <t t-inherit="web.NavBar" t-inherit-mode="extension">
+        <xpath expr="//t[@t-call='web.NavBar.AppsMenu']" position="attributes">
+            <attribute name="t-if">isAdmin</attribute>
+        </xpath>
+    </t>
+</templates>

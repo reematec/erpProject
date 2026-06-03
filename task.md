@@ -11,6 +11,14 @@
 [] In batch logs, include a column for PO,
   - Also assign a reference number to Batch log
 
+[] BOM deletion — add stricter constraints
+  - Current Odoo built-in only blocks deletion if an MO is actively running (state not in done/cancel)
+  - No protection for: completed/cancelled MO history, reema.production.order references, invoices
+  - Add @api.ondelete on mrp.bom (inherited in reema_mrp) to block deletion if:
+      1. Any mrp.production (regardless of state) references the BOM — preserves full history
+      2. Any reema.production.order.line references the BOM via bom_id
+  - File to modify: reema_mrp/models/reema_production_order.py (MrpBomReemaExt class)
+
 <!-- ═══════════════════════════════════════════════════════════════════════
      PHASE 1 — Foundation
      Goal: Invoice accepted → MOs appear on Waleed's dashboard with BOM
