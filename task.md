@@ -8,6 +8,244 @@
 7. After each task is finished, verify no errors exist and the application is working.
 
 ## Current Tasks
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CLAUDE AI INTEGRATION — MCP Server for Odoo Development
+     Goal: Connect Claude Code to the live Odoo instance so Claude can
+     directly query models, inspect fields, read records, and tail logs
+     during development sessions — no manual data relay needed.
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] Set up Odoo MCP Server for Claude Code
+
+  WHAT IS AN MCP SERVER?
+  MCP (Model Context Protocol) is a standard that lets Claude Code talk to
+  external tools. We build a small Python server that wraps Odoo's XML-RPC API
+  and exposes it as "tools" Claude can call during any development session.
+  Once set up, you can say "search all mrp.production records in draft state"
+  and Claude will query your live database directly.
+
+  TOOLS THAT WILL BE AVAILABLE TO CLAUDE:
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ search_records(model, domain, fields, limit)  Query any model       │
+  │ get_model_fields(model)                       Inspect field defs    │
+  │ list_models(keyword)                          Browse all models     │
+  │ get_record(model, id, fields)                 Read one record       │
+  │ execute_method(model, method, ids, kwargs)    Call any method       │
+  │ get_odoo_log(lines)                           Tail the Odoo log     │
+  │ list_custom_modules()                         Custom addon states   │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  CHECKLIST (do in order):
+
+  [ ] Step 1 — Install mcp package into Odoo venv
+      Command:
+        /home/amir/erpProject/odoo-venv/bin/pip install mcp
+      Note: Installs mcp 1.27.2 + ~21 deps. Zero conflicts with Odoo packages (confirmed).
+
+  [ ] Step 2 — Create server file
+      Create directory: /home/amir/erpProject/mcp_odoo/
+      Create file:      /home/amir/erpProject/mcp_odoo/server.py
+      Full file content is below (see SERVER CODE section).
+
+  [ ] Step 3 — Add mcpServers block to .claude/settings.local.json
+      File: /home/amir/erpProject/.claude/settings.local.json
+      Add this block alongside the existing "permissions" key:
+
+        "mcpServers": {
+          "odoo": {
+            "command": "/home/amir/erpProject/odoo-venv/bin/python",
+            "args": ["/home/amir/erpProject/mcp_odoo/server.py"],
+            "env": {
+              "ODOO_URL": "http://localhost:8069",
+              "ODOO_DB": "odoo18_sgo_football_dev",
+              "ODOO_USER": "admin",
+              "ODOO_PASSWORD": "FILL_THIS_IN"
+            }
+          }
+        }
+
+  [ ] Step 4 — ⚠️ USER ACTION: Fill in Odoo admin password
+      Replace FILL_THIS_IN with the Odoo web login password for the admin user.
+      This is the password used at http://localhost:8069/web — NOT:
+        - db_password in odoo.conf (that is the PostgreSQL password)
+        - admin_passwd hash in odoo.conf (that is the DB manager master password)
+
+      To verify the password works:
+        /home/amir/erpProject/odoo-venv/bin/python - <<'EOF'
+        import xmlrpc.client
+        common = xmlrpc.client.ServerProxy("http://localhost:8069/xmlrpc/2/common")
+        uid = common.authenticate("odoo18_sgo_football_dev", "admin", "YOUR_PASSWORD", {})
+        print("UID:", uid)  # non-zero integer = success, False = wrong password
+        EOF
+
+      To reset admin password if forgotten:
+        /home/amir/erpProject/odoo-venv/bin/python \
+          /home/amir/erpProject/odoo/odoo-bin \
+          -c /home/amir/erpProject/odoo.conf \
+          --stop-after-init --no-http \
+          -d odoo18_sgo_football_dev shell <<'EOF'
+        env['res.users'].browse(2).write({'password': 'newpassword123'})
+        env.cr.commit()
+        print("Password updated")
+        EOF
+
+  [ ] Step 5 — Smoke-test the server (before restarting Claude Code)
+      Command:
+        ODOO_PASSWORD=your_actual_password \
+          /home/amir/erpProject/odoo-venv/bin/python \
+          /home/amir/erpProject/mcp_odoo/server.py
+      Expected: process starts and blocks (waiting for MCP messages via stdio).
+      Press Ctrl-C to stop. If auth fails, a RuntimeError prints immediately.
+
+  [ ] Step 6 — Restart Claude Code
+      MCP servers are loaded only at startup. Fully exit and reopen Claude Code.
+
+  [ ] Step 7 — Verify tools work (in new Claude Code session)
+      Ask Claude:
+        "Use list_custom_modules"
+        "Use search_records with model='res.partner', domain=[], fields=['name'], limit=5"
+        "Use get_model_fields for model='mrp.production'"
+        "Use get_odoo_log with lines=10"
+
+  ── SERVER CODE ──────────────────────────────────────────────────────────
+  File: /home/amir/erpProject/mcp_odoo/server.py
+
+  import os
+  import xmlrpc.client
+  from typing import Any
+  from mcp.server.fastmcp import FastMCP
+
+  ODOO_URL = os.environ.get("ODOO_URL", "http://localhost:8069")
+  ODOO_DB = os.environ.get("ODOO_DB", "odoo18_sgo_football_dev")
+  ODOO_USER = os.environ.get("ODOO_USER", "admin")
+  ODOO_PASSWORD = os.environ.get("ODOO_PASSWORD")
+
+  if not ODOO_PASSWORD:
+      raise RuntimeError("ODOO_PASSWORD env var is required.")
+
+  _uid = None
+  _common = xmlrpc.client.ServerProxy(f"{ODOO_URL}/xmlrpc/2/common")
+  _models = xmlrpc.client.ServerProxy(f"{ODOO_URL}/xmlrpc/2/object")
+
+  def _get_uid():
+      global _uid
+      if _uid is None:
+          _uid = _common.authenticate(ODOO_DB, ODOO_USER, ODOO_PASSWORD, {})
+          if not _uid:
+              raise RuntimeError(f"Odoo auth failed for '{ODOO_USER}' on '{ODOO_DB}'.")
+      return _uid
+
+  def _execute(model, method, *args, **kwargs):
+      return _models.execute_kw(ODOO_DB, _get_uid(), ODOO_PASSWORD, model, method, list(args), kwargs)
+
+  mcp = FastMCP("odoo")
+
+  @mcp.tool()
+  def search_records(model: str, domain: list, fields: list, limit: int = 20) -> list[dict]:
+      """Search and read records from any Odoo model."""
+      return _execute(model, "search_read", domain, fields=fields, limit=limit)
+
+  @mcp.tool()
+  def get_model_fields(model: str) -> list[dict]:
+      """Return field definitions (name, type, label, required, relation) for an Odoo model."""
+      raw = _execute(model, "fields_get", [], attributes=["name","ttype","string","required","relation"])
+      result = [{"name":f,"type":d.get("ttype",""),"string":d.get("string",""),
+                 "required":d.get("required",False),"relation":d.get("relation","")}
+                for f,d in raw.items()]
+      return sorted(result, key=lambda x: x["name"])
+
+  @mcp.tool()
+  def list_models(keyword: str = "") -> list[dict]:
+      """List all installed Odoo models, optionally filtered by keyword."""
+      domain = ["|",["model","ilike",keyword],["name","ilike",keyword]] if keyword else []
+      return _execute("ir.model","search_read",domain,fields=["id","model","name"],order="model asc",limit=200)
+
+  @mcp.tool()
+  def get_record(model: str, record_id: int, fields: list = []) -> dict:
+      """Read a single Odoo record by ID."""
+      kwargs = {"fields": fields} if fields else {}
+      records = _execute(model, "read", [record_id], **kwargs)
+      return records[0] if records else {"error": f"No record: {model} id={record_id}"}
+
+  @mcp.tool()
+  def execute_method(model: str, method: str, ids: list, kwargs: dict = {}) -> Any:
+      """Call any public method on an Odoo model. WARNING: can modify data."""
+      return _execute(model, method, ids, **kwargs)
+
+  @mcp.tool()
+  def get_odoo_log(lines: int = 50) -> str:
+      """Return the last N lines from the Odoo log file (max 500)."""
+      log_path = "/home/amir/erpProject/odoo.log"
+      lines = max(1, min(lines, 500))
+      try:
+          with open(log_path, "rb") as fh:
+              fh.seek(0, 2)
+              size = fh.tell()
+              fh.seek(max(0, size - lines * 200))
+              content = fh.read().decode("utf-8", errors="replace")
+          return "\n".join(content.splitlines()[-lines:])
+      except OSError as exc:
+          return f"Could not read log: {exc}"
+
+  @mcp.tool()
+  def list_custom_modules() -> list[dict]:
+      """List modules from custom_addons with their installation state."""
+      import os as _os
+      path = "/home/amir/erpProject/custom_addons"
+      dirs = [d for d in _os.listdir(path)
+              if _os.path.isdir(_os.path.join(path,d)) and not d.startswith((".",\"__\"))]
+      if not dirs:
+          return []
+      records = _execute("ir.module.module","search_read",[["name","in",dirs]],
+                         fields=["name","shortdesc","state","latest_version"],order="name asc")
+      known = {r["name"] for r in records}
+      for d in sorted(dirs):
+          if d not in known:
+              records.append({"name":d,"shortdesc":"(not in ir.module.module)","state":"unknown","latest_version":False})
+      return records
+
+  if __name__ == "__main__":
+      mcp.run()
+  ── END SERVER CODE ──────────────────────────────────────────────────────
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     WIP EVALUATION — Per-Hall Material Cost & Consumable Costing
+     Prerequisite: BOM components must have operation_id configured (done via UI)
+════════════════════════════════════════════════════════════════════════ -->
+
+[ ] WIP evaluation per hall — material cost attribution using operation_id
+    - Each mrp.bom.line now has a "Consuming Operation" column (operation_id).
+    - Once configured, per-hall material cost = sum of issuance costs for components
+      whose raw_move_id.operation_id matches that hall's work order operation.
+    - Update _compute_wip_costs on mrp.production to break down material cost per hall
+      instead of the current MO-level total.
+    - Update WIP tab in MO form to show per-hall material cost alongside labor cost.
+    - Update WIP Dashboard consolidated list accordingly.
+    - Files: reema_mrp/models/mrp_production.py, reema_mrp/views/mrp_views.xml
+
+[ ] Operation Consumables configuration (indirect materials like ink, oil, needles)
+    - New model: reema.operation.consumable
+        operation_id: Many2one mrp.routing.workcenter (the hall)
+        product_id: Many2one product.product (e.g. Printing Ink)
+        consumption_rate: Float (e.g. 0.002 liters per ball produced)
+        uom_id: Many2one uom.uom
+    - Configuration screen under Manufacturing → Configuration
+    - This links indirect materials to specific halls with a per-ball consumption rate.
+
+[ ] MO costing — add consumable cost based on balls produced × rate
+    - When computing WIP or closing an MO, calculate:
+        consumable_cost = sum(rate × qty_balls_completed) per operation
+    - Add consumable_cost field to mrp.production WIP computation
+    - Show in WIP tab and WIP Dashboard alongside material + labor
+
+[ ] Procurement planning — consumable PO suggestion based on production output
+    - Period report: sum all batch entries in date range × operation consumable rates
+      = total consumable consumed (estimated)
+    - Compare against actual consumable issuance records (reema.consumable.transaction)
+    - Suggest PO quantities for replenishment based on shortfall
+    - Optional: auto-generate draft reema.purchase.order for consumables
+
 [] In batch logs, include a column for PO,
   - Also assign a reference number to Batch log
 

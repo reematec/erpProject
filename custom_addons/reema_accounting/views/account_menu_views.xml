@@ -51,12 +51,12 @@
             <xpath expr="//field[@name='category_id']" position="after">
                 <field name="is_contractor"
                        string="Is Contractor"
-                       invisible="not supplier_rank"
+                       invisible="not supplier_rank or context.get('reema_vendor_context')"
                        widget="boolean_toggle"/>
                 <field name="reema_advance_account_id"
                        string="Advance Account"
                        readonly="1"
-                       invisible="not is_contractor"
+                       invisible="not is_contractor or context.get('reema_vendor_context')"
                        options="{'no_open': True}"/>
             </xpath>
 

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Part 1: Extend product_template_form_view ─────────────────────
+         Hides: Purchase tab, Pricelists button, Documents button
+         Keeps: Purchase Approval tab (owner-only, anchored after General Info)
+    ──────────────────────────────────────────────────────────────────── -->
+    <record id="view_product_template_form_purchase_flag" model="ir.ui.view">
+        <field name="name">product.template.form.purchase.flag</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+
+            <!-- Hide Purchase tab entirely -->
+            <xpath expr="//page[@name='purchase']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Add Purchase Approval tab after General Information instead -->
+            <xpath expr="//page[@name='general_information']" position="after">
+                <page string="Purchase Approval" name="purchase_approval"
+                      groups="reema_purchase.group_reema_owner">
+                    <group>
+                        <field name="purchase_approval_required"/>
+                        <div colspan="2" class="alert alert-info" role="alert"
+                             invisible="not purchase_approval_required">
+                            <strong>Owner Approval Required:</strong> Any Purchase Order containing
+                            this product will require Owner/Admin final approval before it is active.
+                        </div>
+                        <div colspan="2" class="alert alert-warning" role="alert"
+                             invisible="purchase_approval_required">
+                            <strong>No Owner Approval:</strong> Purchase Orders for this product
+                            are approved by the Production Manager alone.
+                        </div>
+                    </group>
+                </page>
+            </xpath>
+
+            <!-- Hide Pricelists smart button -->
+            <xpath expr="//button[@name='open_pricelist_rules']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Hide Documents smart button -->
+            <xpath expr="//button[@name='action_open_documents']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ── Part 2: Extend product_template_only_form_view ────────────────
+         Hides: Update Quantity (header), Replenish (header), Purchased,
+                Putaway Rules, Storage Capacities, BOM, Used In BOM,
+                Manufacturing Orders, Min/Max Reorder Rules
+         Priority 20 ensures this runs after stock (15) and purchase (16).
+    ──────────────────────────────────────────────────────────────────── -->
+    <record id="view_product_template_only_form_reema_hide" model="ir.ui.view">
+        <field name="name">product.template.only.form.reema.hide</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="priority" eval="20"/>
+        <field name="arch" type="xml">
+
+            <!-- Hide Purchase tab (overrides reema_mrp's conditional invisible on same view) -->
+            <xpath expr="//page[@name='purchase']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Update Quantity — header button only (not the On Hand stat button which shares the same name) -->
+            <xpath expr="//button[@name='action_update_quantity_on_hand' and not(contains(@class,'oe_stat_button'))]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Replenish — header button (name is a dynamic action ID; target by type+groups) -->
+            <xpath expr="//button[@type='action' and @groups='stock.group_stock_user']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Purchased smart button (purchase module) -->
+            <xpath expr="//button[@name='action_view_po']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Putaway Rules smart button -->
+            <xpath expr="//button[@name='action_view_related_putaway_rules']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Storage Capacities smart button -->
+            <xpath expr="//button[@name='action_view_storage_category_capacity']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Bill of Materials smart button (dynamic name — target by icon) -->
+            <xpath expr="//button[@icon='fa-sitemap']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Used In (BOM) smart button -->
+            <xpath expr="//button[@name='action_used_in_bom']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Manufacturing Orders smart button -->
+            <xpath expr="//button[@name='action_view_mos']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Min/Max — Reorder Rules smart button -->
+            <xpath expr="//button[@name='action_view_orderpoints']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Print Labels — header button -->
+            <xpath expr="//button[@name='action_open_label_layout']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ── Owner overview: product list with approval flag ────────────── -->
+    <record id="action_product_purchase_approval_overview" model="ir.actions.act_window">
+        <field name="name">Product Purchase Approval Settings</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('purchase_ok', '=', True)]</field>
+        <field name="context">{'search_default_purchase_ok': 1}</field>
+    </record>
+
+    <record id="view_product_template_list_purchase_approval" model="ir.ui.view">
+        <field name="name">product.template.list.purchase.approval</field>
+        <field name="model">product.template</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <list string="Product Purchase Approval" multi_edit="1">
+                <field name="name" string="Product"/>
+                <field name="categ_id" string="Category"
+                       options="{'no_create': True, 'no_edit': True}"/>
+                <field name="purchase_approval_required" widget="boolean_toggle"/>
+                <field name="purchase_ok"/>
+            </list>
+        </field>
+    </record>
+
+</odoo>

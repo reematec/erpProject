@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Form View ──────────────────────────────────────────────────── -->
+    <record id="view_reema_grn_form" model="ir.ui.view">
+        <field name="name">reema.grn.form</field>
+        <field name="model">reema.grn</field>
+        <field name="arch" type="xml">
+            <form string="Goods Receipt Note">
+                <header>
+                    <button name="action_verify" string="Verify Receipt"
+                            type="object" class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Mark this GRN as verified by the store keeper?"/>
+                    <button name="action_approve" string="Approve &amp; Log to Store"
+                            type="object" class="btn-success"
+                            groups="reema_purchase.group_reema_purchase_manager"
+                            invisible="state != 'verified'"
+                            confirm="Approve this GRN? This will post an interim accounting entry and officially log the material into store."/>
+                    <button name="action_print_grn" string="Print Receipt"
+                            type="object" class="btn-secondary"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,verified,approved,accounted"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+
+                    <div class="alert alert-success" role="alert"
+                         invisible="state not in ('approved', 'accounted')">
+                        <strong>Material Logged:</strong> Stock increased and interim entry
+                        <field name="move_id" readonly="1" nolabel="1"
+                               options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                               invisible="not move_id"/> posted.
+                    </div>
+
+                    <group>
+                        <group string="Receipt Info">
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="gate_pass_id"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="state != 'draft'"/>
+                            <field name="po_id" readonly="1"/>
+                            <field name="partner_id" readonly="1"/>
+                        </group>
+                        <group string="Staff">
+                            <field name="received_by"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="state != 'draft'"/>
+                            <field name="approved_by" readonly="1"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   invisible="not approved_by"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Receipt Lines" name="lines">
+                            <field name="line_ids" readonly="state not in ('draft', 'verified')">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="product_id"
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                                    <field name="description"/>
+                                    <field name="color" string="Color (PO Spec)" optional="show"/>
+                                    <field name="thickness" string="Thickness (PO Spec)" optional="show"/>
+                                    <field name="ordered_qty" readonly="1" string="PO Qty"/>
+                                    <field name="received_qty" string="Arrived Qty"/>
+                                    <field name="accepted_qty" string="Accepted Qty"/>
+                                    <field name="rejected_qty" readonly="1" string="Rejected"/>
+                                    <field name="price_unit" string="Unit Price (PKR)"/>
+                                    <field name="color_ok" widget="boolean_toggle" string="Color ✓"/>
+                                    <field name="thickness_ok" widget="boolean_toggle" string="Thickness ✓"/>
+                                    <field name="rejection_reason" optional="show"/>
+                                </list>
+                            </field>
+                            <group class="oe_subtotal_footer oe_right">
+                                <field name="total_accepted_value" readonly="1"
+                                       string="Total Accepted Value (PKR)"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── List View ──────────────────────────────────────────────────── -->
+    <record id="view_reema_grn_list" model="ir.ui.view">
+        <field name="name">reema.grn.list</field>
+        <field name="model">reema.grn</field>
+        <field name="arch" type="xml">
+            <list string="GRNs"
+                  decoration-info="state == 'draft'"
+                  decoration-warning="state == 'verified'"
+                  decoration-success="state in ('approved', 'accounted')"
+                  decoration-muted="state == 'accounted'">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="po_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="partner_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="gate_pass_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="received_by" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="total_accepted_value" string="Value (PKR)"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-warning="state == 'verified'"
+                       decoration-success="state == 'approved'"
+                       decoration-muted="state == 'accounted'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Search View ────────────────────────────────────────────────── -->
+    <record id="view_reema_grn_search" model="ir.ui.view">
+        <field name="name">reema.grn.search</field>
+        <field name="model">reema.grn</field>
+        <field name="arch" type="xml">
+            <search string="Search GRNs">
+                <field name="name"/>
+                <field name="po_id"/>
+                <field name="partner_id"/>
+                <field name="gate_pass_id"/>
+                <separator/>
+                <filter string="Draft" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Verified" name="verified" domain="[('state','=','verified')]"/>
+                <filter string="Approved" name="approved" domain="[('state','=','approved')]"/>
+                <filter string="Accounted" name="accounted" domain="[('state','=','accounted')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Supplier" name="by_supplier" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Status" name="by_state" context="{'group_by': 'state'}"/>
+                    <filter string="Month" name="by_month" context="{'group_by': 'date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Action ─────────────────────────────────────────────────────── -->
+    <record id="action_reema_grn" model="ir.actions.act_window">
+        <field name="name">Goods Receipt Notes</field>
+        <field name="res_model">reema.grn</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_grn_search"/>
+    </record>
+
+</odoo>

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="report_grn" model="ir.actions.report">
+        <field name="name">Goods Receipt Note</field>
+        <field name="model">reema.grn</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">reema_purchase.report_grn_template</field>
+        <field name="report_file">reema_purchase.report_grn_template</field>
+        <field name="binding_model_id" ref="model_reema_grn"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_grn_template">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <!-- Header -->
+                        <div class="row mb-4">
+                            <div class="col-7">
+                                <h2 style="color:#2c3e50;">GOODS RECEIPT NOTE</h2>
+                                <h4 style="color:#7f8c8d;">Material Receipt Confirmation</h4>
+                                <table class="table table-borderless table-sm" style="width:auto;">
+                                    <tr>
+                                        <td><strong>GRN No.:</strong></td>
+                                        <td><strong><t t-esc="o.name"/></strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Date:</strong></td>
+                                        <td><t t-esc="o.date" t-options="{'widget':'date'}"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>PO Reference:</strong></td>
+                                        <td><t t-esc="o.po_id.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Inward Gate Pass:</strong></td>
+                                        <td><t t-esc="o.gate_pass_id.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Status:</strong></td>
+                                        <td>
+                                            <t t-esc="dict(o._fields['state'].selection).get(o.state, o.state).upper()"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-5 text-right">
+                                <strong>Supplier:</strong>
+                                <address>
+                                    <t t-esc="o.partner_id.name"/><br/>
+                                    <t t-if="o.partner_id.street"><t t-esc="o.partner_id.street"/><br/></t>
+                                    <t t-if="o.partner_id.city"><t t-esc="o.partner_id.city"/></t>
+                                    <t t-if="o.partner_id.phone"><br/>Tel: <t t-esc="o.partner_id.phone"/></t>
+                                </address>
+                            </div>
+                        </div>
+
+                        <!-- Line Items -->
+                        <table class="table table-sm table-bordered mt-3">
+                            <thead style="background-color:#2c3e50; color:white;">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th>Color</th>
+                                    <th>Thickness</th>
+                                    <th class="text-right">PO Qty</th>
+                                    <th class="text-right">Arrived Qty</th>
+                                    <th class="text-right">Accepted Qty</th>
+                                    <th class="text-right">Rejected</th>
+                                    <th>Color ✓</th>
+                                    <th>Thickness ✓</th>
+                                    <th>Rejection Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.line_ids" t-as="line">
+                                    <tr>
+                                        <td><t t-esc="line_index + 1"/></td>
+                                        <td><t t-esc="line.product_id.display_name"/></td>
+                                        <td><t t-esc="line.color or '—'"/></td>
+                                        <td><t t-esc="line.thickness or '—'"/></td>
+                                        <td class="text-right"><t t-esc="line.ordered_qty"/></td>
+                                        <td class="text-right"><t t-esc="line.received_qty"/></td>
+                                        <td class="text-right"><strong><t t-esc="line.accepted_qty"/></strong></td>
+                                        <td class="text-right"
+                                            t-attf-style="color:#{line.rejected_qty > 0 and 'red' or 'inherit'}">
+                                            <t t-esc="line.rejected_qty"/>
+                                        </td>
+                                        <td class="text-center">
+                                            <t t-if="line.color_ok">✓</t>
+                                            <t t-else="">✗</t>
+                                        </td>
+                                        <td class="text-center">
+                                            <t t-if="line.thickness_ok">✓</t>
+                                            <t t-else="">✗</t>
+                                        </td>
+                                        <td><small><t t-esc="line.rejection_reason or '—'"/></small></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                            <tfoot>
+                                <tr style="font-weight:bold; background-color:#ecf0f1;">
+                                    <td colspan="6" class="text-right">Total Accepted Value (PKR):</td>
+                                    <td class="text-right" colspan="5">
+                                        <t t-esc="o.total_accepted_value"/>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <!-- Accounting entry reference -->
+                        <div t-if="o.move_id" class="mt-2">
+                            <small class="text-muted">
+                                Interim Journal Entry: <t t-esc="o.move_id.name"/>
+                            </small>
+                        </div>
+
+                        <!-- Signatures -->
+                        <div class="row mt-5">
+                            <div class="col-3 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Received By (Store)<br/>
+                                    <small><t t-esc="o.received_by.name"/></small>
+                                </div>
+                            </div>
+                            <div class="col-3 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Approved By (PM)<br/>
+                                    <small><t t-if="o.approved_by"><t t-esc="o.approved_by.name"/></t></small>
+                                </div>
+                            </div>
+                            <div class="col-3 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Supplier Representative
+                                </div>
+                            </div>
+                            <div class="col-3 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Security / Gate
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-center text-muted mt-4" style="font-size:0.8em;">
+                            This is a system-generated document. GRN: <t t-esc="o.name"/> | <t t-esc="o.date"/>
+                        </p>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

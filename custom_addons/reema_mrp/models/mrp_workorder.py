@@ -23,6 +23,7 @@ class MrpWorkorder(models.Model):
     batch_released = fields.Boolean(string='Released to Next Hall', default=False)
     hall_qty = fields.Float(string='Target', compute='_compute_hall_qty', store=True)
     qty_balls_completed = fields.Float(string='Balls Done', compute='_compute_qty_balls_completed', store=True)
+    wip_labor_cost = fields.Float(string='Labor Cost (PKR)', compute='_compute_wip_labor_cost', store=True, digits=(16, 2))
 
     @api.depends('batch_entry_ids.qty')
     def _compute_qty_batch_completed(self):
@@ -39,6 +40,11 @@ class MrpWorkorder(models.Model):
     def _compute_qty_balls_completed(self):
         for wo in self:
             wo.qty_balls_completed = sum(wo.batch_entry_ids.mapped('qty_balls'))
+
+    @api.depends('batch_entry_ids.amount_earned')
+    def _compute_wip_labor_cost(self):
+        for wo in self:
+            wo.wip_labor_cost = sum(wo.batch_entry_ids.mapped('amount_earned'))
 
     # Extend state computation: a work order blocked by a predecessor is also unblocked
     # when the predecessor sets batch_released=True (partial completion released to next hall).

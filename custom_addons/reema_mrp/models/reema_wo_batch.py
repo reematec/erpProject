@@ -63,6 +63,7 @@ class ReemaWoBatchEntry(models.Model):
         records = super().create(vals_list)
         for entry in records:
             entry._create_sfg_move()
+            entry._backflush_components()
             # First batch logged on this WO → auto-release so the next hall's
             # Start button becomes available without any manual action.
             if not entry.workorder_id.batch_released:
@@ -153,6 +154,42 @@ class ReemaWoBatchEntry(models.Model):
             'views': [(view_id, 'form')],
             'target': 'current',
         }
+
+    def _backflush_components(self):
+        wo = self.workorder_id
+        mo = wo.production_id
+        if not mo.bom_id or not wo.operation_id:
+            return
+        bom_lines = mo.bom_id.bom_line_ids.filtered(
+            lambda l: l.operation_id == wo.operation_id
+        )
+        if not bom_lines:
+            return
+        source_loc = wo.workcenter_id.location_id
+        if not source_loc:
+            return
+        prod_loc = self.env['stock.location'].search(
+            [('usage', '=', 'production')], limit=1
+        )
+        if not prod_loc:
+            return
+        for line in bom_lines:
+            consumed_qty = self.qty_balls * line.product_qty
+            if consumed_qty < 0.0001:
+                continue
+            move = self.env['stock.move'].create({
+                'name': f'Backflush: {line.product_id.display_name}',
+                'product_id': line.product_id.id,
+                'product_uom': line.product_uom_id.id,
+                'product_uom_qty': consumed_qty,
+                'location_id': source_loc.id,
+                'location_dest_id': prod_loc.id,
+                'origin': f'{mo.name} / {wo.name} / {self.name}',
+                'company_id': wo.company_id.id,
+            })
+            move._action_confirm()
+            move.quantity = consumed_qty
+            move._action_done()
 
     def _create_sfg_move(self):
         wo = self.workorder_id

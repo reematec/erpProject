@@ -32,4 +32,35 @@
             </button>
         </div>
     </t>
+
+    <t t-name="reema_mrp.BomComponentsInfoBanner">
+        <div t-if="state.visible"
+             class="alert alert-info d-flex align-items-start gap-2 py-2 mb-2"
+             role="alert"
+             style="font-size:0.8rem; line-height:1.5">
+            <i class="fa fa-info-circle flex-shrink-0 mt-1"/>
+            <span class="flex-grow-1">
+                <strong>Quantity</strong> — per-ball material amount. E.g. enter
+                <strong>0.05</strong> for 0.05m of fabric per ball.
+                Each material must be listed separately.
+                <br/>
+                <strong>Consuming Operation</strong> — the hall that physically uses this material.
+                Define operations in the <strong>Operations tab</strong> first and
+                <strong>save the BOM</strong>, then assign each material here.
+                MOs cannot be created until all materials have a Consuming Operation set.
+            </span>
+            <i class="fa fa-times flex-shrink-0 mt-1"
+               t-on-click="hide"
+               style="cursor:pointer"
+               title="Dismiss"/>
+        </div>
+        <div t-else="" class="mb-2">
+            <button class="btn btn-sm btn-light border px-2 py-0"
+                    t-on-click="show"
+                    title="Show components guide">
+                <i class="fa fa-info-circle text-info me-1"/>
+                <small class="text-muted">Components guide</small>
+            </button>
+        </div>
+    </t>
 </templates>

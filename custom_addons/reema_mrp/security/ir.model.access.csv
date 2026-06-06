@@ -50,3 +50,6 @@ access_reema_ilo_repair_charge_manager,reema.ilo.repair.charge manager,model_ree
 access_reema_ilo_payment_user,reema.ilo.payment user,model_reema_ilo_payment,base.group_user,1,0,0,0
 access_reema_ilo_payment_admin,reema.ilo.payment admin,model_reema_ilo_payment,base.group_system,1,1,1,1
 access_reema_ilo_payment_manager,reema.ilo.payment manager,model_reema_ilo_payment,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_material_requirement_user,reema.material.requirement user,model_reema_material_requirement,base.group_user,1,0,0,0
+access_reema_material_requirement_admin,reema.material.requirement admin,model_reema_material_requirement,base.group_system,1,1,1,1
+access_reema_material_requirement_manager,reema.material.requirement manager,model_reema_material_requirement,reema_mrp.group_reema_production_manager,1,1,1,1

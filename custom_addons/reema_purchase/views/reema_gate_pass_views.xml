@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Form View ──────────────────────────────────────────────────── -->
+    <record id="view_reema_gate_pass_form" model="ir.ui.view">
+        <field name="name">reema.gate.pass.form</field>
+        <field name="model">reema.gate.pass</field>
+        <field name="arch" type="xml">
+            <form string="Inward Gate Pass">
+                <header>
+                    <button name="action_confirm" string="Forward to Store"
+                            type="object" class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Confirm arrival and forward this Inward Gate Pass to the Store Keeper?"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_grn" type="object"
+                                class="oe_stat_button" icon="fa-clipboard-check"
+                                invisible="grn_count == 0">
+                            <field name="grn_count" widget="statinfo" string="GRNs"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Arrival Info">
+                            <field name="date" readonly="state == 'confirmed'"/>
+                            <field name="po_id"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="state == 'confirmed'"/>
+                            <field name="partner_id"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="state == 'confirmed'"/>
+                        </group>
+                        <group string="Vehicle / Carrier">
+                            <field name="vehicle_no" readonly="state == 'confirmed'"/>
+                            <field name="driver_name" readonly="state == 'confirmed'"/>
+                            <field name="carrier" readonly="state == 'confirmed'"/>
+                            <field name="security_guard" readonly="state == 'confirmed'"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Items Arrived" name="items">
+                            <field name="line_ids" readonly="state == 'confirmed'">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="product_id"
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                                    <field name="description"/>
+                                    <field name="color" string="Color (Ordered)"/>
+                                    <field name="thickness" string="Thickness (Ordered)"/>
+                                    <field name="expected_qty" string="Expected (PO)" readonly="1"/>
+                                    <field name="product_uom_id"
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                                    <field name="received_qty" string="Physically Arrived"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Remarks" name="remarks">
+                            <field name="remarks" placeholder="Any notes about the delivery..."
+                                   readonly="state == 'confirmed'"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── List View ──────────────────────────────────────────────────── -->
+    <record id="view_reema_gate_pass_list" model="ir.ui.view">
+        <field name="name">reema.gate.pass.list</field>
+        <field name="model">reema.gate.pass</field>
+        <field name="arch" type="xml">
+            <list string="Inward Gate Passes"
+                  decoration-warning="state == 'draft'"
+                  decoration-success="state == 'confirmed'">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="po_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="partner_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="vehicle_no"/>
+                <field name="driver_name"/>
+                <field name="grn_count" string="GRNs"/>
+                <field name="state" widget="badge"
+                       decoration-warning="state == 'draft'"
+                       decoration-success="state == 'confirmed'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Search View ────────────────────────────────────────────────── -->
+    <record id="view_reema_gate_pass_search" model="ir.ui.view">
+        <field name="name">reema.gate.pass.search</field>
+        <field name="model">reema.gate.pass</field>
+        <field name="arch" type="xml">
+            <search string="Search Inward Gate Passes">
+                <field name="name"/>
+                <field name="po_id"/>
+                <field name="partner_id"/>
+                <separator/>
+                <filter string="Arrived" name="arrived" domain="[('state','=','draft')]"/>
+                <filter string="Forwarded to Store" name="confirmed" domain="[('state','=','confirmed')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Action ─────────────────────────────────────────────────────── -->
+    <record id="action_reema_gate_pass" model="ir.actions.act_window">
+        <field name="name">Inward Gate Passes</field>
+        <field name="res_model">reema.gate.pass</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_gate_pass_search"/>
+    </record>
+
+</odoo>

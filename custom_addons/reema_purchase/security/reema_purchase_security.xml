@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Category ───────────────────────────────────────────────────── -->
+    <record id="module_category_reema_purchase" model="ir.module.category">
+        <field name="name">Reema Purchase</field>
+        <field name="sequence">22</field>
+        <field name="visible" eval="True"/>
+        <field name="description">Controls access to Purchase Orders, Inward Gate Passes, GRNs, and Bill Matching.</field>
+    </record>
+
+    <!-- ── Gate Security Staff ────────────────────────────────────────── -->
+    <record id="group_reema_gate" model="res.groups">
+        <field name="name">Gate Security Staff</field>
+        <field name="category_id" ref="reema_mrp.module_category_reema_operations"/>
+        <field name="comment">Can create and confirm Inward Gate Passes when materials arrive.</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- ── Purchase User (create / submit POs) ───────────────────────── -->
+    <record id="group_reema_purchase_user" model="res.groups">
+        <field name="name">Purchase User</field>
+        <field name="category_id" ref="module_category_reema_purchase"/>
+        <field name="comment">Can create Purchase Orders and submit them for confirmation.</field>
+        <field name="implied_ids" eval="[
+            (4, ref('base.group_user')),
+            (4, ref('purchase.group_purchase_user')),
+        ]"/>
+    </record>
+
+    <!-- ── Purchase Manager (confirm POs, approve GRNs) ─────────────── -->
+    <record id="group_reema_purchase_manager" model="res.groups">
+        <field name="name">Purchase Manager</field>
+        <field name="category_id" ref="module_category_reema_purchase"/>
+        <field name="comment">Can confirm Purchase Orders and approve GRNs (triggers interim accounting entry).</field>
+        <field name="implied_ids" eval="[
+            (4, ref('reema_purchase.group_reema_purchase_user')),
+            (4, ref('purchase.group_purchase_manager')),
+        ]"/>
+    </record>
+
+    <!-- ── Owner / Admin (final PO + bill matching approval) ─────────── -->
+    <record id="group_reema_owner" model="res.groups">
+        <field name="name">Owner / Management</field>
+        <field name="category_id" ref="module_category_reema_purchase"/>
+        <field name="comment">Final approver for Purchase Orders and Bill Matching. Configures product approval flags.</field>
+        <field name="implied_ids" eval="[
+            (4, ref('reema_purchase.group_reema_purchase_manager')),
+            (4, ref('account.group_account_manager')),
+        ]"/>
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+    </record>
+
+    <!-- ── Extend existing production groups with purchase rights ─────── -->
+    <!-- Production Supervisor can create/submit POs -->
+    <record id="reema_mrp.group_reema_supervisor" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('reema_purchase.group_reema_purchase_user'))]"/>
+    </record>
+    <!-- Production Manager can confirm POs and approve GRNs -->
+    <record id="reema_mrp.group_reema_production_manager" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('reema_purchase.group_reema_purchase_manager'))]"/>
+    </record>
+
+</odoo>

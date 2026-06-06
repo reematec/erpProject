@@ -490,13 +490,15 @@
 
     <menuitem id="menu_reema_sampling_root"
               name="Sampling"
-              sequence="10"/>
+              sequence="10"
+              groups="reema_sampling.group_reema_sampling"/>
 
     <menuitem id="menu_reema_sampling_blueprint"
               name="Samples"
               parent="menu_reema_sampling_root"
               action="action_reema_sampling_blueprint"
-              sequence="10"/>
+              sequence="10"
+              groups="reema_sampling.group_reema_sampling"/>
 
     <menuitem id="menu_pending_bom"
               name="Pending BOM"

@@ -1,6 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_reema_sampling_blueprint_user,reema.sampling.blueprint user,model_reema_sampling_blueprint,base.group_user,1,1,1,1
-access_reema_sampling_material_line_user,reema.sampling.material.line user,model_reema_sampling_material_line,base.group_user,1,1,1,1
-access_reema_sampling_size_line_user,reema.sampling.size.line user,model_reema_sampling_size_line,base.group_user,1,1,1,1
-access_reema_sampling_knife_line_user,reema.sampling.knife.line user,model_reema_sampling_knife_line,base.group_user,1,1,1,1
-access_reema_sampling_ship_wizard_user,reema.sampling.ship.wizard user,model_reema_sampling_ship_wizard,base.group_user,1,1,1,1
+access_reema_sampling_blueprint_user,reema.sampling.blueprint user,model_reema_sampling_blueprint,reema_sampling.group_reema_sampling,1,1,1,1
+access_reema_sampling_material_line_user,reema.sampling.material.line user,model_reema_sampling_material_line,reema_sampling.group_reema_sampling,1,1,1,1
+access_reema_sampling_size_line_user,reema.sampling.size.line user,model_reema_sampling_size_line,reema_sampling.group_reema_sampling,1,1,1,1
+access_reema_sampling_knife_line_user,reema.sampling.knife.line user,model_reema_sampling_knife_line,reema_sampling.group_reema_sampling,1,1,1,1
+access_reema_sampling_ship_wizard_user,reema.sampling.ship.wizard user,model_reema_sampling_ship_wizard,reema_sampling.group_reema_sampling,1,1,1,1

@@ -8,7 +8,7 @@
         Includes contractor assignment, batch progress tracking, and SFG inventory movement.
     """,
     'author': 'Gemini CLI',
-    'depends': ['mrp', 'stock', 'account', 'analytic', 'reema_invoice'],
+    'depends': ['mrp', 'stock', 'account', 'analytic', 'purchase', 'reema_invoice'],
     'data': [
         'security/reema_mrp_security.xml',
         'security/ir.model.access.csv',
@@ -16,6 +16,7 @@
         'views/mrp_views.xml',
         'views/reema_piece_rate_views.xml',
         'views/reema_production_order_views.xml',
+        'views/reema_material_requirement_views.xml',
         'views/reema_wo_batch_views.xml',
         'views/reema_material_issuance_views.xml',
         'views/reema_material_issuance_report.xml',

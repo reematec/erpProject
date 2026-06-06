@@ -1,6 +1,6 @@
 from markupsafe import Markup
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 class ReemaMaterialIssuance(models.Model):
@@ -12,7 +12,8 @@ class ReemaMaterialIssuance(models.Model):
     name = fields.Char(string='Reference', readonly=True, copy=False,
                        default=lambda self: _('New'), tracking=True)
     production_id = fields.Many2one('mrp.production', string='Manufacturing Order',
-                                    required=True, readonly=True, tracking=True)
+                                    required=False, ondelete='set null', readonly=True, tracking=True)
+    production_name = fields.Char(string='MO', readonly=True)
     raw_move_id = fields.Many2one('stock.move', string='Component Move',
                                   required=True, readonly=True)
     product_id = fields.Many2one('product.product', related='raw_move_id.product_id',
@@ -42,6 +43,7 @@ class ReemaMaterialIssuance(models.Model):
     return_line_ids = fields.One2many('reema.material.return.line', 'issuance_id',
                                       string='Return Log')
     has_any_issue = fields.Boolean(compute='_compute_has_any_issue')
+    can_withdraw = fields.Boolean(compute='_compute_can_withdraw')
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -49,12 +51,30 @@ class ReemaMaterialIssuance(models.Model):
             if vals.get('name', _('New')) == _('New'):
                 vals['name'] = self.env['ir.sequence'].next_by_code(
                     'reema.material.issuance') or _('New')
+            if vals.get('production_id') and not vals.get('production_name'):
+                vals['production_name'] = self.env['mrp.production'].browse(
+                    vals['production_id']).name
         return super().create(vals_list)
 
     @api.depends('line_ids')
     def _compute_has_any_issue(self):
         for rec in self:
             rec.has_any_issue = bool(rec.line_ids)
+
+    def _compute_can_withdraw(self):
+        user = self.env.user
+        is_manager = user.has_group('reema_mrp.group_reema_production_manager')
+        is_admin = user.has_group('base.group_system')
+        for rec in self:
+            rec.can_withdraw = is_manager or is_admin or (user == rec.authorized_by)
+
+    @api.constrains('production_id', 'state')
+    def _check_production_id_required(self):
+        for rec in self:
+            if not rec.production_id and rec.state != 'cancelled':
+                raise ValidationError(
+                    "Manufacturing Order is required for non-cancelled authorizations."
+                )
 
     @api.depends('line_ids.issued_qty', 'return_line_ids.returned_qty')
     def _compute_totals(self):
@@ -77,9 +97,24 @@ class ReemaMaterialIssuance(models.Model):
             else:
                 rec.state = 'fully_issued'
 
+    def unlink(self):
+        for rec in self:
+            if rec.has_any_issue:
+                raise UserError(
+                    f"Cannot delete {rec.name} — material has already been physically "
+                    f"issued against it. Return all issued material first."
+                )
+        return super().unlink()
+
     def action_cancel(self):
         for rec in self:
             rec.state = 'cancelled'
+
+    def action_bulk_withdraw(self):
+        eligible = self.filtered(lambda r: not r.has_any_issue and r.state not in ('cancelled', 'fully_issued'))
+        if not eligible:
+            raise UserError("No eligible authorizations to withdraw. Records with issued material or already cancelled cannot be withdrawn in bulk.")
+        eligible.action_cancel()
 
     def action_issue_wizard(self):
         self.ensure_one()
@@ -474,6 +509,10 @@ class StockMoveReemaExt(models.Model):
         self.ensure_one()
         if not self.raw_material_production_id:
             raise UserError('This move is not linked to a Manufacturing Order component.')
+        if self.raw_material_production_id.state != 'confirmed':
+            raise UserError(
+                "The Manufacturing Order must be confirmed before creating a material issuance authorization."
+            )
         existing = self.env['reema.material.issuance'].search(
             [('raw_move_id', '=', self.id), ('state', '!=', 'cancelled')], limit=1
         )

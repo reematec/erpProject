@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Form View ──────────────────────────────────────────────────── -->
+    <record id="view_reema_bill_matching_form" model="ir.ui.view">
+        <field name="name">reema.bill.matching.form</field>
+        <field name="model">reema.bill.matching</field>
+        <field name="arch" type="xml">
+            <form string="Purchase Bill Matching">
+                <header>
+                    <button name="action_submit_for_approval" string="Submit for Owner Approval"
+                            type="object" class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Submit this matching for Owner/Admin final approval?"/>
+                    <button name="action_approve" string="Approve &amp; Post"
+                            type="object" class="btn-success"
+                            groups="reema_purchase.group_reema_owner"
+                            invisible="state != 'submitted'"
+                            confirm="Approve and post the payable journal entry? This will clear the GRNI account and create the supplier payable. This cannot be undone."/>
+                    <button name="action_reject" string="Return to Draft"
+                            type="object"
+                            groups="reema_purchase.group_reema_owner"
+                            invisible="state != 'submitted'"
+                            confirm="Return this matching to Draft for correction?"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,submitted,posted"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+
+                    <!-- Posted confirmation -->
+                    <div class="alert alert-success" role="alert"
+                         invisible="state != 'posted'">
+                        <strong>Posted:</strong> Supplier payable entry
+                        <field name="move_id" readonly="1" nolabel="1"
+                               options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                               invisible="not move_id"/> has been created.
+                        Approved by <field name="approved_by" readonly="1" nolabel="1"
+                                          options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>.
+                    </div>
+
+                    <!-- Discrepancy warning -->
+                    <div class="alert alert-warning" role="alert"
+                         invisible="difference == 0 or state == 'posted'">
+                        <strong>Discrepancy Detected:</strong> GRN value and Bill amount differ by
+                        <field name="difference" nolabel="1" readonly="1"/>. Add a note below explaining the difference.
+                    </div>
+
+                    <group>
+                        <group string="Documents">
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="po_id"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="state != 'draft'"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="invoice_id"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="state != 'draft'"
+                                   domain="[('move_type', '=', 'in_invoice'), ('partner_id', '=', partner_id)]"/>
+                        </group>
+                        <group string="Amount Comparison">
+                            <field name="po_amount" readonly="1" string="PO Total"/>
+                            <field name="grn_amount" readonly="1" string="GRN Accepted Value"/>
+                            <field name="invoice_amount" readonly="1" string="Supplier Bill Total"/>
+                            <field name="difference" readonly="1"
+                                   decoration-danger="difference != 0"
+                                   decoration-success="difference == 0"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <field name="gate_pass_ids" widget="many2many_tags"
+                               options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                               readonly="state != 'draft'"
+                               domain="[('po_id', '=', po_id)]"
+                               string="Inward Gate Passes"/>
+                        <field name="grn_ids" widget="many2many_tags"
+                               options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                               readonly="state != 'draft'"
+                               domain="[('po_id', '=', po_id), ('state', 'in', ['approved', 'accounted'])]"
+                               string="GRNs"/>
+                    </group>
+
+                    <group>
+                        <field name="notes" placeholder="Explain any discrepancies between PO, GRN, and Bill amounts..."
+                               readonly="state != 'draft'"/>
+                    </group>
+
+                    <group invisible="state == 'draft'" string="Audit">
+                        <field name="submitted_by" readonly="1"
+                               options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                               invisible="not submitted_by"/>
+                        <field name="approved_by" readonly="1"
+                               options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                               invisible="not approved_by"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── List View ──────────────────────────────────────────────────── -->
+    <record id="view_reema_bill_matching_list" model="ir.ui.view">
+        <field name="name">reema.bill.matching.list</field>
+        <field name="model">reema.bill.matching</field>
+        <field name="arch" type="xml">
+            <list string="Bill Matchings"
+                  decoration-warning="state == 'submitted'"
+                  decoration-success="state == 'posted'"
+                  decoration-info="state == 'draft'">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="po_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="partner_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="invoice_id" optional="show" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="po_amount" string="PO Total"/>
+                <field name="grn_amount" string="GRN Value"/>
+                <field name="invoice_amount" string="Bill Total"/>
+                <field name="difference" decoration-danger="difference != 0" decoration-success="difference == 0"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-warning="state in ('submitted', 'approved')"
+                       decoration-success="state == 'posted'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Search View ────────────────────────────────────────────────── -->
+    <record id="view_reema_bill_matching_search" model="ir.ui.view">
+        <field name="name">reema.bill.matching.search</field>
+        <field name="model">reema.bill.matching</field>
+        <field name="arch" type="xml">
+            <search string="Search Bill Matchings">
+                <field name="name"/>
+                <field name="po_id"/>
+                <field name="partner_id"/>
+                <separator/>
+                <filter string="Draft" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Waiting Approval" name="submitted" domain="[('state','=','submitted')]"/>
+                <filter string="Posted" name="posted" domain="[('state','=','posted')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Action ─────────────────────────────────────────────────────── -->
+    <record id="action_reema_bill_matching" model="ir.actions.act_window">
+        <field name="name">Bill Matching</field>
+        <field name="res_model">reema.bill.matching</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_bill_matching_search"/>
+    </record>
+
+</odoo>

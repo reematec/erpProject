@@ -24,3 +24,26 @@ class BomOpsInfoBanner extends Component {
 }
 
 registry.category("view_widgets").add("bom_ops_info_banner", { component: BomOpsInfoBanner });
+
+class BomComponentsInfoBanner extends Component {
+    static template = "reema_mrp.BomComponentsInfoBanner";
+    static props = ["*"];
+
+    setup() {
+        const key = "reema_bom_components_banner";
+        this.state = useState({ visible: localStorage.getItem(key) !== "hidden" });
+        this._key = key;
+    }
+
+    hide() {
+        this.state.visible = false;
+        localStorage.setItem(this._key, "hidden");
+    }
+
+    show() {
+        this.state.visible = true;
+        localStorage.removeItem(this._key);
+    }
+}
+
+registry.category("view_widgets").add("bom_components_info_banner", { component: BomComponentsInfoBanner });

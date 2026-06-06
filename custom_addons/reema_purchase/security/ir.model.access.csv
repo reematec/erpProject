@@ -1,0 +1,17 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reema_po_user,reema.purchase.order user,model_reema_purchase_order,reema_purchase.group_reema_purchase_user,1,1,1,0
+access_reema_po_manager,reema.purchase.order manager,model_reema_purchase_order,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_po_line_user,reema.purchase.order.line user,model_reema_purchase_order_line,reema_purchase.group_reema_purchase_user,1,1,1,0
+access_reema_po_line_manager,reema.purchase.order.line manager,model_reema_purchase_order_line,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_po_gate,reema.purchase.order gate,model_reema_purchase_order,reema_purchase.group_reema_gate,1,0,0,0
+access_reema_po_line_gate,reema.purchase.order.line gate,model_reema_purchase_order_line,reema_purchase.group_reema_gate,1,0,0,0
+access_reema_gate_pass_gate,reema.gate.pass gate,model_reema_gate_pass,reema_purchase.group_reema_gate,1,1,1,0
+access_reema_gate_pass_manager,reema.gate.pass manager,model_reema_gate_pass,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_gate_pass_line_gate,reema.gate.pass.line gate,model_reema_gate_pass_line,reema_purchase.group_reema_gate,1,1,1,0
+access_reema_gate_pass_line_manager,reema.gate.pass.line manager,model_reema_gate_pass_line,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_grn_store,reema.grn store,model_reema_grn,reema_mrp.group_reema_store,1,1,1,0
+access_reema_grn_manager,reema.grn manager,model_reema_grn,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_grn_line_store,reema.grn.line store,model_reema_grn_line,reema_mrp.group_reema_store,1,1,1,0
+access_reema_grn_line_manager,reema.grn.line manager,model_reema_grn_line,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_bill_matching_accountant,reema.bill.matching accountant,model_reema_bill_matching,account.group_account_invoice,1,1,1,0
+access_reema_bill_matching_manager,reema.bill.matching manager,model_reema_bill_matching,account.group_account_manager,1,1,1,1

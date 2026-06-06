@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- List view for cross-order procurement overview -->
+    <record id="reema_material_requirement_view_list" model="ir.ui.view">
+        <field name="name">reema.material.requirement.list</field>
+        <field name="model">reema.material.requirement</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="order_id" optional="show"/>
+                <field name="product_id"/>
+                <field name="uom_id" string="UOM"/>
+                <field name="supplier_id" optional="show"/>
+                <field name="last_price" string="Agreed Price (PKR)" optional="show"/>
+                <field name="qty_needed" sum="Total Needed"/>
+                <field name="qty_on_hand" sum="Total On Hand"
+                       decoration-danger="qty_on_hand == 0"
+                       decoration-warning="qty_on_hand > 0 and qty_on_hand &lt; qty_needed"/>
+                <field name="qty_on_order" sum="Total On Order"/>
+                <field name="qty_to_procure" sum="Total To Procure"
+                       decoration-danger="qty_to_procure > 0"
+                       decoration-success="qty_to_procure == 0"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search view -->
+    <record id="reema_material_requirement_view_search" model="ir.ui.view">
+        <field name="name">reema.material.requirement.search</field>
+        <field name="model">reema.material.requirement</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_id" string="Material"/>
+                <field name="order_id" string="Production Order"/>
+                <field name="supplier_id" string="Supplier"/>
+                <filter name="needs_procurement" string="Needs Procurement"
+                        domain="[('qty_to_procure', '>', 0)]"/>
+                <filter name="no_supplier" string="No Supplier Set"
+                        domain="[('supplier_id', '=', False), ('qty_to_procure', '>', 0)]"/>
+                <group expand="1" string="Group By">
+                    <filter name="group_product" string="Material" context="{'group_by': 'product_id'}"/>
+                    <filter name="group_supplier" string="Supplier" context="{'group_by': 'supplier_id'}"/>
+                    <filter name="group_order" string="Production Order" context="{'group_by': 'order_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Window action -->
+    <record id="action_reema_procurement_overview" model="ir.actions.act_window">
+        <field name="name">Procurement Overview</field>
+        <field name="res_model">reema.material.requirement</field>
+        <field name="view_mode">list</field>
+        <field name="domain">[('order_id.state', 'in', ['confirmed', 'done'])]</field>
+        <field name="context">{'search_default_group_product': 1, 'search_default_needs_procurement': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No procurement data yet
+            </p>
+            <p>
+                Open a confirmed Production Order, go to the Material Requirements tab,
+                and click "Refresh Requirements" to populate this view.
+            </p>
+        </field>
+    </record>
+
+
+</odoo>

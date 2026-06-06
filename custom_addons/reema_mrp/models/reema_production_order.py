@@ -22,6 +22,7 @@ class ReemaProductionOrder(models.Model):
     ], string='Status', default='draft', required=True, tracking=True)
     date_planned = fields.Date(string='Planned Date', tracking=True)
     line_ids = fields.One2many('reema.production.order.line', 'order_id', string='Lines')
+    requirement_ids = fields.One2many('reema.material.requirement', 'order_id', string='Material Requirements')
     mo_count = fields.Integer(string='MO Count', compute='_compute_mo_count')
 
     @api.model_create_multi
@@ -101,6 +102,18 @@ class ReemaProductionOrder(models.Model):
                 'No lines to process. Either all MOs are already created, '
                 'or remaining lines have no BOM assigned yet.'
             )
+        # Block if any BOM component is missing a Consuming Operation.
+        # Without this, per-hall material cost and WIP attribution cannot work.
+        for line in pending:
+            missing_ops = line.bom_id.bom_line_ids.filtered(lambda bl: not bl.operation_id)
+            if missing_ops:
+                product_names = '\n'.join(f'  • {bl.product_id.display_name}' for bl in missing_ops)
+                raise UserError(
+                    f'BOM "{line.bom_id.reema_reference or line.bom_id.display_name}" has '
+                    f'components without a Consuming Operation:\n\n{product_names}\n\n'
+                    f'Open the BOM → Operations tab → define hall operations and save,\n'
+                    f'then assign each material to its consuming hall in the Components tab.'
+                )
         # Validate operation dependency chain before creating anything.
         # Only block if nobody defined any dependency at all (clear oversight).
         # Multiple roots are allowed — valid for parallel-track workflows.
@@ -129,6 +142,7 @@ class ReemaProductionOrder(models.Model):
                 'product_id': product.id,
                 'product_qty': line.qty,
                 'bom_id': line.bom_id.id,
+                'ball_size': line.size or '',
                 'origin': self.name,
                 'date_deadline': fields.Datetime.to_datetime(self.date_planned) if self.date_planned else False,
             })
@@ -151,6 +165,157 @@ class ReemaProductionOrder(models.Model):
             'res_model': 'mrp.production',
             'view_mode': 'list,form',
             'domain': [('id', 'in', mo_ids)],
+        }
+
+    # ── Procurement visibility ────────────────────────────────────────────
+
+    def action_refresh_requirements(self):
+        self.ensure_one()
+        self.requirement_ids.unlink()
+        self._populate_requirements()
+
+    def _populate_requirements(self):
+        """Aggregate material needs from all linked MOs, compare against stock and open POs."""
+        mos = self.line_ids.mapped('mo_id').filtered(lambda m: m.state != 'cancel')
+        if not mos:
+            return
+
+        # Step 1: needed qty per product from MO component moves
+        needed = {}  # {product_id: {'qty': float, 'uom_id': uom}}
+        for move in mos.mapped('move_raw_ids').filtered(lambda m: m.state != 'cancel'):
+            pid = move.product_id.id
+            qty = move.product_uom._compute_quantity(move.product_uom_qty, move.product_id.uom_id)
+            if pid not in needed:
+                needed[pid] = {'qty': 0.0, 'uom_id': move.product_id.uom_id}
+            needed[pid]['qty'] += qty
+
+        if not needed:
+            return
+
+        product_ids = list(needed.keys())
+
+        # Step 2: on-hand qty at RM store (physical count, not reserved-adjusted)
+        rm_loc = self._get_rm_store_location()
+        quants = self.env['stock.quant'].search([
+            ('product_id', 'in', product_ids),
+            ('location_id', 'child_of', rm_loc.id),
+        ])
+        on_hand = {}
+        for q in quants:
+            on_hand[q.product_id.id] = on_hand.get(q.product_id.id, 0.0) + q.quantity
+
+        # Step 3: qty already on open POs (draft/sent/confirmed, not yet fully received)
+        pol_lines = self.env['purchase.order.line'].search([
+            ('product_id', 'in', product_ids),
+            ('order_id.state', 'in', ['draft', 'sent', 'purchase']),
+        ])
+        on_order = {}
+        for pol in pol_lines:
+            outstanding = max(pol.product_qty - pol.qty_received, 0.0)
+            qty = pol.product_uom._compute_quantity(outstanding, pol.product_id.uom_id)
+            on_order[pol.product_id.id] = on_order.get(pol.product_id.id, 0.0) + qty
+
+        # Step 4: create requirement lines with default supplier + price
+        vals_list = []
+        for pid, info in needed.items():
+            qty_needed = info['qty']
+            qty_oh = on_hand.get(pid, 0.0)
+            qty_oo = on_order.get(pid, 0.0)
+            qty_to_procure = max(qty_needed - qty_oh - qty_oo, 0.0)
+
+            # Default supplier = first registered vendor on the product
+            product = self.env['product.product'].browse(pid)
+            seller = product.seller_ids[:1] if product.seller_ids else False
+            supplier_id = seller.partner_id.id if seller else False
+            last_price = seller.price if seller else 0.0
+
+            vals_list.append({
+                'order_id': self.id,
+                'product_id': pid,
+                'uom_id': info['uom_id'].id,
+                'supplier_id': supplier_id,
+                'last_price': last_price,
+                'qty_needed': qty_needed,
+                'qty_on_hand': qty_oh,
+                'qty_on_order': qty_oo,
+                'qty_to_procure': qty_to_procure,
+            })
+        self.env['reema.material.requirement'].create(vals_list)
+
+    def _get_rm_store_location(self):
+        loc = self.env['stock.location'].search([
+            ('name', 'ilike', 'Raw Material'),
+            ('usage', '=', 'internal'),
+        ], limit=1)
+        if not loc:
+            warehouse = self.env['stock.warehouse'].search([], limit=1)
+            loc = warehouse.lot_stock_id
+        return loc
+
+    def action_create_purchase_order(self):
+        self.ensure_one()
+        to_order = self.requirement_ids.filtered(lambda r: r.qty_to_procure > 0)
+        if not to_order:
+            raise UserError('Nothing to procure — all materials are covered by stock or open POs.')
+
+        # Group by supplier; lines with no supplier collected separately for warning
+        by_supplier = {}
+        no_supplier = []
+        for req in to_order:
+            if req.supplier_id:
+                by_supplier.setdefault(req.supplier_id.id, []).append(req)
+            else:
+                no_supplier.append(req.product_id.display_name)
+
+        if not by_supplier:
+            raise UserError(
+                'No supplier is set on any requirement line.\n\n'
+                'Set a supplier on each line in the Material Requirements tab, then try again.'
+            )
+
+        created_pos = self.env['purchase.order']
+        for supplier_id, reqs in by_supplier.items():
+            po_lines = []
+            for req in reqs:
+                po_qty = req.uom_id._compute_quantity(req.qty_to_procure, req.product_id.uom_po_id)
+                po_lines.append((0, 0, {
+                    'product_id': req.product_id.id,
+                    'name': req.product_id.display_name,
+                    'product_qty': po_qty,
+                    'product_uom': req.product_id.uom_po_id.id,
+                    'price_unit': req.last_price,
+                    'date_planned': fields.Datetime.now(),
+                }))
+            po = self.env['purchase.order'].create({
+                'partner_id': supplier_id,
+                'origin': self.name,
+                'order_line': po_lines,
+            })
+            created_pos |= po
+
+        if no_supplier:
+            # Non-blocking warning — POs were created, just alert about skipped lines
+            skipped = ', '.join(no_supplier)
+            raise UserError(
+                f'Purchase Order(s) created for suppliers with assigned lines.\n\n'
+                f'The following materials were skipped (no supplier set):\n{skipped}\n\n'
+                f'Set a supplier on those lines and create another PO for them.'
+            )
+
+        if len(created_pos) == 1:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'purchase.order',
+                'res_id': created_pos.id,
+                'view_mode': 'form',
+                'target': 'current',
+            }
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Purchase Orders',
+            'res_model': 'purchase.order',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', created_pos.ids)],
         }
 
 
@@ -182,6 +347,7 @@ class ReemaProductionOrderLine(models.Model):
                 )
             # Cancel and delete the linked MO so it doesn't become an orphan
             mo = line.mo_id
+            mo._check_no_active_issuances()
             if mo.state != 'cancel':
                 mo.action_cancel()
             mo.unlink()
@@ -202,6 +368,7 @@ class ReemaProductionOrderLine(models.Model):
                 f'Work orders have been recorded against it. '
                 f'Coordinate with the production team before making changes.'
             )
+        mo._check_no_active_issuances()
         # Cancel first (works for both draft and confirmed states)
         if mo.state != 'cancel':
             mo.action_cancel()

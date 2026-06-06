@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Hide standard Odoo Purchase menu — all items redistributed to other apps -->
+    <record id="purchase.menu_purchase_root" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         INVENTORY > OPERATIONS — Hide irrelevant standard menus
+         Kept: Physical Inventory, Scrap
+         Hidden: Receipts/Deliveries/Internal (custom Gate Pass→GRN handles receipt;
+                 deliveries via sales/packing list; material moves via custom issuance forms)
+                 Replenishment/Procurement (custom PO flow replaces reorder rules)
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Hides Receipts, Deliveries, and Internal Transfers in one record -->
+    <record id="stock.menu_stock_transfers" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
+    <!-- Hides Replenishment (and any future procurement sub-items) -->
+    <record id="stock.menu_stock_procurement" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
+    <!-- Hides Procurement: Run Scheduler (direct child of Operations, not under menu_stock_procurement) -->
+    <record id="stock.menu_procurement_compute" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         INVENTORY — Purchase Orders, GRN, Product Approval Settings
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Purchase Orders under Manufacturing > Products -->
+    <menuitem id="menu_reema_purchase_order_list"
+              name="Purchase Orders"
+              parent="mrp.menu_mrp_bom"
+              action="action_reema_purchase_order"
+              sequence="5"
+              groups="reema_purchase.group_reema_purchase_user"/>
+
+    <!-- GRN under Inventory > Operations -->
+    <menuitem id="menu_reema_grn_list"
+              name="Goods Receipt Notes (GRN)"
+              parent="stock.menu_stock_warehouse_mgmt"
+              action="action_reema_grn"
+              sequence="6"
+              groups="reema_mrp.group_reema_store,reema_purchase.group_reema_purchase_manager"/>
+
+    <!-- Product Approval Settings under Inventory > Configuration -->
+    <menuitem id="menu_reema_product_approval_settings"
+              name="Purchase Approval Settings"
+              parent="stock.menu_stock_config_settings"
+              action="action_product_purchase_approval_overview"
+              sequence="20"
+              groups="reema_purchase.group_reema_owner"/>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SECURITY — Standalone app for gate security staff
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_reema_security_root"
+              name="Security"
+              sequence="26"
+              groups="reema_purchase.group_reema_gate,reema_purchase.group_reema_purchase_manager"
+              web_icon="stock,static/description/icon.png"/>
+
+    <menuitem id="menu_reema_gate_pass_list"
+              name="Inward Gate Passes"
+              parent="menu_reema_security_root"
+              action="action_reema_gate_pass"
+              sequence="10"
+              groups="reema_purchase.group_reema_gate,reema_purchase.group_reema_purchase_manager"/>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         ACCOUNTING > PAYABLES — Bill Matching (3-Way)
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_reema_bill_matching_list"
+              name="Bill Matching (3-Way)"
+              parent="account.menu_finance_payables"
+              action="action_reema_bill_matching"
+              sequence="6"
+              groups="account.group_account_invoice,account.group_account_manager"/>
+
+</odoo>

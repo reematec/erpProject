@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="report_purchase_order" model="ir.actions.report">
+        <field name="name">Purchase Order</field>
+        <field name="model">reema.purchase.order</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">reema_purchase.report_purchase_order_template</field>
+        <field name="report_file">reema_purchase.report_purchase_order_template</field>
+        <field name="binding_model_id" ref="model_reema_purchase_order"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_purchase_order_template">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <!-- Header -->
+                        <div class="row mb-4">
+                            <div class="col-6">
+                                <h2 style="color:#2c3e50;">PURCHASE ORDER</h2>
+                                <table class="table table-borderless table-sm" style="width:auto;">
+                                    <tr>
+                                        <td><strong>PO Number:</strong></td>
+                                        <td><t t-esc="o.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Date:</strong></td>
+                                        <td><t t-esc="o.date" t-options="{'widget':'date'}"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Status:</strong></td>
+                                        <td>
+                                            <span t-attf-style="font-weight:bold; color:#{
+                                                'draft' in o.state and '#888888' or
+                                                'submitted' in o.state and '#e67e22' or
+                                                'confirmed' in o.state and '#27ae60' or
+                                                'approved' in o.state and '#2980b9' or
+                                                '#c0392b'
+                                            };">
+                                                <t t-esc="dict(o._fields['state'].selection).get(o.state, o.state).upper()"/>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="o.date_expected">
+                                        <td><strong>Expected Delivery:</strong></td>
+                                        <td><t t-esc="o.date_expected" t-options="{'widget':'date'}"/></td>
+                                    </tr>
+                                    <tr t-if="o.partner_ref">
+                                        <td><strong>RFQ Ref:</strong></td>
+                                        <td><t t-esc="o.partner_ref"/></td>
+                                    </tr>
+                                    <tr t-if="o.payment_term_id">
+                                        <td><strong>Payment Terms:</strong></td>
+                                        <td><t t-esc="o.payment_term_id.name"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6 text-right">
+                                <strong>Supplier:</strong>
+                                <address>
+                                    <t t-esc="o.partner_id.name"/><br/>
+                                    <t t-if="o.partner_id.street"><t t-esc="o.partner_id.street"/><br/></t>
+                                    <t t-if="o.partner_id.city"><t t-esc="o.partner_id.city"/>, </t>
+                                    <t t-if="o.partner_id.country_id"><t t-esc="o.partner_id.country_id.name"/></t>
+                                    <t t-if="o.partner_id.phone"><br/>Tel: <t t-esc="o.partner_id.phone"/></t>
+                                </address>
+                            </div>
+                        </div>
+
+                        <!-- Line Items -->
+                        <table class="table table-sm table-bordered mt-3">
+                            <thead style="background-color:#2c3e50; color:white;">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product / Material</th>
+                                    <th>Description</th>
+                                    <th>Color</th>
+                                    <th>Thickness / Spec</th>
+                                    <th class="text-right">Qty</th>
+                                    <th>Unit</th>
+                                    <th class="text-right">Unit Price</th>
+                                    <th class="text-right">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.line_ids" t-as="line">
+                                    <tr>
+                                        <td><t t-esc="line_index + 1"/></td>
+                                        <td><t t-esc="line.product_id.display_name"/></td>
+                                        <td><t t-esc="line.name or ''"/></td>
+                                        <td><t t-esc="line.color or '—'"/></td>
+                                        <td><t t-esc="line.thickness or '—'"/></td>
+                                        <td class="text-right"><t t-esc="line.product_qty"/></td>
+                                        <td><t t-esc="line.product_uom_id.name"/></td>
+                                        <td class="text-right">
+                                            <t t-esc="line.price_unit" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </td>
+                                        <td class="text-right">
+                                            <t t-esc="line.price_subtotal" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Totals -->
+                        <div class="row">
+                            <div class="col-6 offset-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td><strong>Subtotal:</strong></td>
+                                        <td class="text-right">
+                                            <t t-esc="o.amount_untaxed" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="o.amount_tax">
+                                        <td><strong>Tax:</strong></td>
+                                        <td class="text-right">
+                                            <t t-esc="o.amount_tax" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                    <tr style="font-size:1.1em; border-top:2px solid #2c3e50;">
+                                        <td><strong>TOTAL:</strong></td>
+                                        <td class="text-right"><strong>
+                                            <t t-esc="o.amount_total" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div t-if="o.notes" class="mt-3">
+                            <strong>Terms &amp; Conditions:</strong>
+                            <p><t t-esc="o.notes"/></p>
+                        </div>
+
+                        <!-- Signatures -->
+                        <div class="row mt-5">
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Prepared By<br/>
+                                    <small><t t-esc="o.buyer_id.name"/></small>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Confirmed By (Production Manager)
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Approved By (Owner)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>
