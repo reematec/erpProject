@@ -168,7 +168,8 @@
                            options="{'no_create': True, 'no_edit': True}"/>
                     <field name="available_contractor_ids" invisible="1"/>
                     <field name="contractor_id"
-                           options="{'no_create': True, 'no_edit': True}"/>
+                           options="{'no_create': True, 'no_edit': True}"
+                           help="Value appears after assigning the contractor in MO &gt; WOs"/>
                     <field name="carried_by"
                            placeholder="Defaults to contractor name — change if assistant is collecting"/>
                     <field name="notes" placeholder="Optional: batch number, shift, remarks"/>
@@ -246,16 +247,17 @@
         <field name="arch" type="xml">
             <list string="MO Authorizations" create="0" delete="0"
                   decoration-warning="pending_issuance_count &gt; 0">
-                <field name="name" string="MO"/>
-                <field name="product_id" string="Product"/>
-                <field name="ball_size" string="Size"/>
-                <field name="construction_type" string="Type"/>
-                <field name="issuance_count" string="Total Auth"/>
-                <field name="pending_issuance_count" string="Pending"/>
+                <field name="name" string="MO" optional="show"/>
+                <field name="product_id" string="Product" optional="show"/>
+                <field name="ball_size" string="Size" optional="show"/>
+                <field name="construction_type" string="Type" optional="show"/>
+                <field name="issuance_count" string="Total Auth" optional="show"/>
+                <field name="pending_issuance_count" string="Pending" optional="show"/>
                 <field name="state" widget="badge"
                        decoration-info="state == 'confirmed'"
                        decoration-warning="state == 'progress'"
-                       decoration-success="state == 'done'"/>
+                       decoration-success="state == 'done'"
+                       optional="show"/>
             </list>
         </field>
     </record>

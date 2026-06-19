@@ -542,6 +542,23 @@ class MrpBomReemaExt(models.Model):
         'product_tmpl_id', 'product_id', 'product_qty', 'product_uom_id',
         'bom_line_ids', 'operation_ids', 'byproduct_ids',
     }
+    # Fields on existing operations that may be updated even when the BOM is locked.
+    _OPERATION_SAFE_FIELDS = {'piece_rate_id'}
+
+    def _operation_changes_blocked(self, vals):
+        protected = self._BOM_PROTECTED_FIELDS & vals.keys()
+        if not protected:
+            return False
+        if protected - {'operation_ids'}:
+            return True
+        for cmd in vals.get('operation_ids', []):
+            code = cmd[0]
+            if code != 1:
+                return True
+            field_changes = cmd[2] if len(cmd) > 2 else {}
+            if field_changes.keys() - self._OPERATION_SAFE_FIELDS:
+                return True
+        return False
 
     def _compute_has_active_mo(self):
         for bom in self:
@@ -549,6 +566,11 @@ class MrpBomReemaExt(models.Model):
                 ('bom_id', '=', bom.id),
                 ('state', '!=', 'cancel'),
             ], limit=1))
+
+    @api.depends('reema_reference')
+    def _compute_display_name(self):
+        for bom in self:
+            bom.display_name = bom.reema_reference or '/'
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -560,7 +582,7 @@ class MrpBomReemaExt(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        if self._BOM_PROTECTED_FIELDS & vals.keys():
+        if self._operation_changes_blocked(vals):
             for bom in self:
                 bom._compute_has_active_mo()
                 if bom.has_active_mo:
@@ -588,9 +610,9 @@ class MrpRoutingWorkcenterReema(models.Model):
 
     balls_per_unit = fields.Float(
         string='Balls per Unit', default=1.0, required=True,
-        digits=(16, 4),
+        digits=(16, 6),
         help='How many finished balls 1 unit of this hall\'s work represents. '
-             'E.g. ~6 for Lamination (1 sheet ≈ 6 balls), 0.0417 for Cutting (1 panel = 1/24 ball), '
+             'E.g. ~6 for Lamination (1 sheet ≈ 6 balls), 0.03125 for Cutting (1 panel = 1/32 ball), '
              '1 for Stitching.'
     )
     piece_rate_id = fields.Many2one(
@@ -598,6 +620,17 @@ class MrpRoutingWorkcenterReema(models.Model):
         string='Piece Rate',
         domain="[('workcenter_id', '=', workcenter_id)]",
     )
+    pay_basis = fields.Selection([
+        ('hall', 'Per Hall Unit'),
+        ('ball', 'Per Ball'),
+    ], string='Pay Basis', default='ball', required=True,
+        help='Per Hall Unit: rate × qty logged (printing: rate × qty_balls × impressions_per_ball when set); '
+             'Per Ball: rate × qty_balls.')
+    impressions_per_ball = fields.Float(
+        string='Impressions / Ball', digits=(10, 2), default=0.0,
+        help='Total silk-screen impressions per finished ball for this design. '
+             'When set, pay = rate × qty_balls × impressions_per_ball. '
+             'Override per MO on the work order if the design revision changes.')
 
     def action_delete_operation(self):
         self.unlink()

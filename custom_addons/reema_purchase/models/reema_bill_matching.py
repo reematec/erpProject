@@ -28,7 +28,7 @@ class ReemaBillMatching(models.Model):
     )
     grn_ids = fields.Many2many(
         'reema.grn', string='Goods Receipt Notes',
-        domain="[('po_id', '=', po_id), ('state', 'in', ('approved', 'accounted'))]",
+        domain="[('po_id', '=', po_id), ('state', '=', 'verified')]",
     )
     invoice_id = fields.Many2one(
         'account.move', string='Supplier Bill',
@@ -103,7 +103,7 @@ class ReemaBillMatching(models.Model):
     def action_submit_for_approval(self):
         for rec in self:
             if not rec.grn_ids:
-                raise UserError(_('Please link at least one approved GRN before submitting.'))
+                raise UserError(_('Please link at least one verified GRN before submitting.'))
             if not rec.invoice_id:
                 raise UserError(_('Please link the Supplier Bill before submitting.'))
             rec.write({'state': 'submitted', 'submitted_by': self.env.uid})
@@ -122,7 +122,6 @@ class ReemaBillMatching(models.Model):
             if rec.state != 'submitted':
                 raise UserError(_('Only submitted matchings can be approved.'))
             move = rec._post_payable_entry()
-            rec.grn_ids.write({'state': 'accounted'})
             rec.write({
                 'state': 'posted',
                 'approved_by': self.env.uid,
@@ -149,59 +148,92 @@ class ReemaBillMatching(models.Model):
         if not journal:
             raise UserError(_('No purchase journal found. Please configure one.'))
 
-        grni_account = self.env.ref('reema_purchase.account_grni_clearing', raise_if_not_found=False)
+        grni_account = self.env['account.account'].search(
+            [('code', '=', '2-1-5-01')], limit=1
+        )
         if not grni_account:
-            raise UserError(_('GRNI Clearing account not found.'))
+            raise UserError(_('Stock Received Not Billed account (2-1-5-01) not found in Chart of Accounts.'))
 
         payable_account = self.partner_id.property_account_payable_id
         if not payable_account:
-            raise UserError(
-                _('No payable account configured for supplier "%s".') % self.partner_id.name
-            )
+            raise UserError(_('No payable account configured for supplier "%s".') % self.partner_id.name)
 
-        grn_amount = self.grn_amount
         bill_amount = self.invoice_amount
 
-        move_lines = [
-            # Dr: GRNI Clearing (clear the interim)
-            (0, 0, {
+        # Split GRNs: zero-cost (no journal entry at GRN time) vs normal
+        zero_cost_grns = self.grn_ids.filtered(lambda g: not g.move_id)
+        normal_grn_amount = sum(
+            sum(l.accepted_qty * l.price_unit for l in grn.line_ids)
+            for grn in self.grn_ids - zero_cost_grns
+        )
+
+        move_lines = []
+
+        # Zero-cost GRNs: post missing stock valuation entry now at bill value
+        for grn in zero_cost_grns:
+            for line in grn.line_ids:
+                if line.accepted_qty <= 0 or not line.product_id:
+                    continue
+                stock_account = line.product_id.categ_id.property_stock_valuation_account_id
+                if not stock_account:
+                    raise UserError(
+                        _('Product category "%s" has no stock valuation account.') % line.product_id.categ_id.name
+                    )
+                # Allocate proportional share of bill to this line
+                line_amount = (line.accepted_qty / sum(
+                    l.accepted_qty for g in zero_cost_grns for l in g.line_ids if l.product_id
+                )) * (bill_amount - normal_grn_amount) if self.grn_amount else bill_amount
+                move_lines += [
+                    (0, 0, {
+                        'account_id': stock_account.id,
+                        'debit': line_amount,
+                        'credit': 0.0,
+                        'name': _('Stock Value — %s — %s') % (line.product_id.display_name, grn.name),
+                        'partner_id': self.partner_id.id,
+                    }),
+                    (0, 0, {
+                        'account_id': grni_account.id,
+                        'debit': 0.0,
+                        'credit': line_amount,
+                        'name': _('GRNI — %s — %s') % (line.product_id.display_name, grn.name),
+                        'partner_id': self.partner_id.id,
+                    }),
+                ]
+
+        # Normal GRNs: clear GRNI balance
+        if normal_grn_amount > 0.01:
+            move_lines.append((0, 0, {
                 'account_id': grni_account.id,
-                'debit': grn_amount,
+                'debit': normal_grn_amount,
                 'credit': 0.0,
                 'name': _('GRNI Clearing — %s') % self.name,
                 'partner_id': self.partner_id.id,
-            }),
-            # Cr: Accounts Payable (supplier)
-            (0, 0, {
-                'account_id': payable_account.id,
-                'debit': 0.0,
-                'credit': bill_amount,
-                'name': _('Payable — %s — %s') % (self.partner_id.name, self.po_id.name),
-                'partner_id': self.partner_id.id,
-            }),
-        ]
+            }))
 
-        # If GRN and Bill amounts differ, post variance
-        variance = grn_amount - bill_amount
+        # Cr: Accounts Payable
+        move_lines.append((0, 0, {
+            'account_id': payable_account.id,
+            'debit': 0.0,
+            'credit': bill_amount,
+            'name': _('Payable — %s — %s') % (self.partner_id.name, self.po_id.name),
+            'partner_id': self.partner_id.id,
+        }))
+
+        # Price variance on normal GRNs
+        variance = normal_grn_amount - (bill_amount - (bill_amount - normal_grn_amount if zero_cost_grns else 0))
+        if not zero_cost_grns:
+            variance = normal_grn_amount - bill_amount
         if abs(variance) > 0.01:
             variance_account = self.env['account.account'].search(
-                [('code', 'like', '6%'), ('account_type', '=', 'expense')], limit=1
+                [('code', '=', '5-9-1-01')], limit=1
             )
             if variance_account:
-                if variance > 0:
-                    move_lines.append((0, 0, {
-                        'account_id': variance_account.id,
-                        'debit': 0.0,
-                        'credit': variance,
-                        'name': _('Purchase Price Variance — %s') % self.name,
-                    }))
-                else:
-                    move_lines.append((0, 0, {
-                        'account_id': variance_account.id,
-                        'debit': abs(variance),
-                        'credit': 0.0,
-                        'name': _('Purchase Price Variance — %s') % self.name,
-                    }))
+                move_lines.append((0, 0, {
+                    'account_id': variance_account.id,
+                    'debit': abs(variance) if variance < 0 else 0.0,
+                    'credit': variance if variance > 0 else 0.0,
+                    'name': _('Purchase Price Variance — %s') % self.name,
+                }))
 
         move = self.env['account.move'].create({
             'move_type': 'entry',

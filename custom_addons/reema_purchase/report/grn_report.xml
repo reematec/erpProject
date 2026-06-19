@@ -63,14 +63,12 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Product</th>
-                                    <th>Color</th>
-                                    <th>Thickness</th>
+                                    <th>Description</th>
+                                    <th>Unit</th>
                                     <th class="text-right">PO Qty</th>
                                     <th class="text-right">Arrived Qty</th>
                                     <th class="text-right">Accepted Qty</th>
                                     <th class="text-right">Rejected</th>
-                                    <th>Color ✓</th>
-                                    <th>Thickness ✓</th>
                                     <th>Rejection Reason</th>
                                 </tr>
                             </thead>
@@ -78,9 +76,9 @@
                                 <t t-foreach="o.line_ids" t-as="line">
                                     <tr>
                                         <td><t t-esc="line_index + 1"/></td>
-                                        <td><t t-esc="line.product_id.display_name"/></td>
-                                        <td><t t-esc="line.color or '—'"/></td>
-                                        <td><t t-esc="line.thickness or '—'"/></td>
+                                        <td><t t-esc="line.product_id.display_name or line.product_name or '—'"/></td>
+                                        <td><small><t t-esc="line.description or '—'"/></small></td>
+                                        <td><t t-esc="line.product_uom_id.name or '—'"/></td>
                                         <td class="text-right"><t t-esc="line.ordered_qty"/></td>
                                         <td class="text-right"><t t-esc="line.received_qty"/></td>
                                         <td class="text-right"><strong><t t-esc="line.accepted_qty"/></strong></td>
@@ -88,27 +86,55 @@
                                             t-attf-style="color:#{line.rejected_qty > 0 and 'red' or 'inherit'}">
                                             <t t-esc="line.rejected_qty"/>
                                         </td>
-                                        <td class="text-center">
-                                            <t t-if="line.color_ok">✓</t>
-                                            <t t-else="">✗</t>
-                                        </td>
-                                        <td class="text-center">
-                                            <t t-if="line.thickness_ok">✓</t>
-                                            <t t-else="">✗</t>
-                                        </td>
                                         <td><small><t t-esc="line.rejection_reason or '—'"/></small></td>
                                     </tr>
                                 </t>
                             </tbody>
-                            <tfoot>
+                            <tfoot t-if="request.env.user.has_group('reema_purchase.group_reema_purchase_manager')">
                                 <tr style="font-weight:bold; background-color:#ecf0f1;">
                                     <td colspan="6" class="text-right">Total Accepted Value (PKR):</td>
-                                    <td class="text-right" colspan="5">
+                                    <td class="text-right" colspan="3">
                                         <t t-esc="o.total_accepted_value"/>
                                     </td>
                                 </tr>
                             </tfoot>
                         </table>
+
+                        <!-- Inspection Results -->
+                        <t t-if="o.inspection_ids">
+                            <h5 class="mt-4" style="color:#2c3e50;">Inspection / QC Results</h5>
+                            <table class="table table-sm table-bordered">
+                                <thead style="background-color:#7f8c8d; color:white;">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Product</th>
+                                        <th>Check</th>
+                                        <th class="text-right">Sample Size</th>
+                                        <th>Expected</th>
+                                        <th>Actual</th>
+                                        <th class="text-center">Result</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="o.inspection_ids" t-as="insp">
+                                        <tr>
+                                            <td><t t-esc="insp_index + 1"/></td>
+                                            <td><t t-esc="insp.product_id.display_name or '—'"/></td>
+                                            <td><t t-esc="insp.check_name"/></td>
+                                            <td class="text-right"><t t-esc="insp.sample_qty or '—'"/></td>
+                                            <td><t t-esc="insp.expected_value or '—'"/></td>
+                                            <td><t t-esc="insp.actual_value or '—'"/></td>
+                                            <td class="text-center"
+                                                t-attf-style="color:#{insp.result == 'pass' and 'green' or (insp.result == 'fail' and 'red' or 'inherit')}">
+                                                <strong><t t-esc="(insp.result or '—').upper()"/></strong>
+                                            </td>
+                                            <td><small><t t-esc="insp.notes or '—'"/></small></td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </t>
 
                         <!-- Accounting entry reference -->
                         <div t-if="o.move_id" class="mt-2">
@@ -123,12 +149,6 @@
                                 <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
                                     Received By (Store)<br/>
                                     <small><t t-esc="o.received_by.name"/></small>
-                                </div>
-                            </div>
-                            <div class="col-3 text-center">
-                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
-                                    Approved By (PM)<br/>
-                                    <small><t t-if="o.approved_by"><t t-esc="o.approved_by.name"/></t></small>
                                 </div>
                             </div>
                             <div class="col-3 text-center">

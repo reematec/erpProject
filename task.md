@@ -9,6 +9,27 @@
 
 ## Current Tasks
 
+[ ] Work Order Start/Pause/Finish button visibility bug (MO form, Work Orders tab) — logged June 16 2026
+    - Reported: after clicking Play (Start), the row still shows the Play button even
+      though the state badge correctly says "In Progress" — confusing, looks like it
+      never started. Also: no Pause button is visible at all to stop/hold a work order
+      mid-process.
+    - Root cause found: the embedded Work Orders list
+      (custom_addons/reema_mrp/views/mrp_views.xml, view `mrp_workorder_reema_list`)
+      inherits Odoo's base buttons, which are driven by `is_user_working` — a *per-viewing-user*
+      clock-in flag (true only for whoever personally clicked Start), not the WO's own
+      `state`. Since this workflow has one operator/contractor per hall (not Odoo's
+      multi-user clock-in model), anyone else viewing the row (or the same person via a
+      different login) still sees stale Play/no-Pause. Pause was also previously hidden
+      outright via `column_invisible="True"` instead of fixing the condition.
+    - Planned fix (not yet implemented): change the `invisible` attribute on
+      button_start/button_pending/button_finish in `mrp_workorder_reema_list` to key off
+      `state` directly (progress/done/cancel) instead of `is_user_working`. No Python/model
+      changes needed — `button_pending()`/`button_finish()` server-side guards in
+      reema_mrp/models/mrp_workorder.py are already correct.
+    - Full plan: /home/amir/.claude/plans/now-in-manufacturing-orders-jolly-meerkat.md
+    - Status: deferred — user wants to pick this up later.
+
 <!-- ═══════════════════════════════════════════════════════════════════════
      CLAUDE AI INTEGRATION — MCP Server for Odoo Development
      Goal: Connect Claude Code to the live Odoo instance so Claude can

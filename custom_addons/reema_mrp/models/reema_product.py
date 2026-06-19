@@ -23,11 +23,13 @@ class ProductTemplateReema(models.Model):
 
     _PRODUCT_GROUP_NOTE = (
         'Used for filtering products in BOMs, work orders, and work center rules. '
-        'Required — cannot save without it.'
+        'Required — cannot save without it. '
+        'Values are fixed selections defined in the system (not configurable from the UI).'
     )
     _CATEG_NOTE = (
         'Controls journal accounts for stock moves (COGS, income, inventory valuation) '
-        'and costing method (AVCO / FIFO / Standard).'
+        'and costing method (AVCO / FIFO / Standard). '
+        'Values come from Inventory → Configuration → Product Categories.'
     )
 
     product_group_note = fields.Char(

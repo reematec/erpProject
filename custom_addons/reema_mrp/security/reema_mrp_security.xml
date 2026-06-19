@@ -33,7 +33,6 @@
         <field name="implied_ids" eval="[
             (4, ref('reema_mrp.group_reema_hall_incharge')),
             (4, ref('mrp.group_mrp_user')),
-            (4, ref('account.group_account_invoice')),
         ]"/>
     </record>
 

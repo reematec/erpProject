@@ -16,6 +16,7 @@
                             string="Start Production"
                             type="object"
                             class="oe_highlight"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"
                             invisible="state != 'draft'"
                             confirm="Start production of this sample?"
                             confirm-label="Yes, Start"
@@ -25,6 +26,7 @@
                             string="Mark Completed"
                             type="object"
                             class="oe_highlight"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"
                             invisible="state != 'in_progress'"
                             confirm="Mark this sample as completed? This means the physical sample is ready for review."
                             confirm-label="Yes, Mark Completed"
@@ -34,6 +36,7 @@
                             string="Sample Approved"
                             type="object"
                             class="oe_highlight"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"
                             invisible="state != 'completed'"
                             confirm="Mark this sample as approved by the customer? Waleed will be notified to define the BOM."
                             confirm-label="Yes, Approve"
@@ -42,6 +45,7 @@
                     <button name="action_sample_rejected"
                             string="Sample Rejected"
                             type="object"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"
                             invisible="state != 'completed'"
                             confirm="Mark this sample as rejected by the customer?"
                             confirm-label="Yes, Mark Rejected"
@@ -50,12 +54,14 @@
                     <button name="action_shipped"
                             string="Ship"
                             type="object"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"
                             invisible="state not in ('completed', 'sample_approved', 'production_ready')"/>
                     <!-- Sample Approved → Production Ready -->
                     <button name="action_production_ready"
                             string="Mark Production Ready"
                             type="object"
                             class="oe_highlight"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"
                             invisible="state != 'sample_approved'"
                             confirm="Mark this sample as production ready? This confirms the BOM is complete and bulk orders can proceed."
                             confirm-label="Yes, Mark Ready"
@@ -82,15 +88,18 @@
                     <button name="action_reset_draft"
                             string="Reset to Draft"
                             type="object"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"
                             invisible="state not in ('cancelled', 'sample_rejected')"
                             confirm="Reset this sample back to Draft?"
                             confirm-label="Yes, Reset"
                             cancel-label="Go Back"/>
-                    <button name="action_print_sampling" string="Print" type="object"/>
+                    <button name="action_print_sampling" string="Print" type="object"
+                            groups="reema_sampling.group_reema_sampling,base.group_system"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,in_progress,completed,sample_approved,production_ready"/>
                 </header>
                 <sheet>
+                    <field name="is_sampling_user" invisible="1"/>
                     <!-- Smart Buttons -->
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_bom"
@@ -107,57 +116,76 @@
                         </h1>
                         <label for="name" string="Sample Name"/>
                         <h2>
-                            <field name="name" placeholder="e.g. World Cup 2026 Pro"/>
+                            <field name="name" placeholder="e.g. World Cup 2026 Pro" readonly="not is_sampling_user"/>
                         </h2>
                     </div>
-                    
+
                     <!-- Main Information Group -->
                     <group>
                         <group string="Basic Details">
-                            <field name="model_alias"/>
+                            <field name="model_alias" readonly="not is_sampling_user"/>
                             <field name="customer_id"
                                    domain="[('customer_rank', '>', 0)]"
-                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                            <field name="sampling_date"/>
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="not is_sampling_user"/>
+                            <field name="sampling_date" readonly="not is_sampling_user"/>
                         </group>
                         <group string="Status &amp; Tracking">
-                            <field name="completion_date"/>
-                            <field name="shipping_date"/>
+                            <field name="completion_date" readonly="not is_sampling_user"/>
+                            <field name="shipping_date" readonly="not is_sampling_user"/>
                             <field name="reference_piece_kept" readonly="1"/>
                         </group>
                     </group>
 
                     <group>
                         <group string="Design Specification">
-                            <field name="ball_type"/>
-                            <field name="construction_type"/>
+                            <field name="ball_type" readonly="not is_sampling_user"/>
+                            <field name="construction_type" readonly="not is_sampling_user"/>
                             <field name="total_panels" readonly="1"/>
-                            <field name="color"/>
+                            <field name="color" readonly="not is_sampling_user"/>
                         </group>
                         <group string="Technical Requirements">
-                            <field name="weight_range"/>
-                            <field name="circumference"/>
-                            <field name="bounce_requirement"/>
+                            <field name="weight_range" readonly="not is_sampling_user"/>
+                            <field name="circumference" readonly="not is_sampling_user"/>
+                            <field name="bounce_requirement" readonly="not is_sampling_user"/>
                         </group>
                     </group>
 
                     <!-- File Uploads Section (Moved before Size Details as requested) -->
+                    <!--
+                        Attachments are sensitive IP. Sampling editors keep the native
+                        upload widgets; everyone else (read-only viewers) sees the
+                        secure_file_preview widget which renders images/PDFs inline with
+                        NO download path. See secure_preview.js.
+                    -->
                     <group string="Attachments &amp; Layouts">
+                        <field name="layout_file_mimetype" invisible="1"/>
                         <group>
                             <label for="layout_file" string="Layout Image/PDF"/>
                             <div class="o_row">
-                                <field name="layout_file" filename="layout_filename"/>
+                                <!-- Editors: native upload (replace/clear) -->
+                                <field name="layout_file" filename="layout_filename"
+                                       invisible="not is_sampling_user"/>
                                 <field name="layout_filename" invisible="1"/>
+                                <!-- Viewers: secure inline preview, no download -->
+                                <field name="layout_file" widget="secure_file_preview"
+                                       nolabel="1" readonly="1" invisible="is_sampling_user"/>
                             </div>
                         </group>
                         <group>
-                            <field name="final_sample_images" widget="many2many_binary" string="Final Sample Images"/>
+                            <!-- Editors: native attach/remove -->
+                            <field name="final_sample_images" widget="many2many_binary"
+                                   string="Final Sample Images" invisible="not is_sampling_user"/>
+                            <!-- Viewers: secure inline preview, no download -->
+                            <field name="final_sample_images" widget="secure_file_preview"
+                                   string="Final Sample Images" readonly="1"
+                                   invisible="is_sampling_user"/>
                         </group>
                     </group>
 
                     <notebook>
                         <page string="Size &amp; Production Quantities" name="sizes">
-                            <field name="size_line_ids" nolabel="1">
+                            <field name="size_line_ids" nolabel="1" readonly="not is_sampling_user">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="ball_size"/>
@@ -171,10 +199,10 @@
                                 Material Lines: 'options' are used here to disable 'create' and 'edit',
                                 ensuring users only select existing materials from the catalog.
                             -->
-                            <field name="material_line_ids">
+                            <field name="material_line_ids" readonly="not is_sampling_user">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
-                                    <field name="product_id" 
+                                    <field name="product_id"
                                            domain="[('type', '=', 'consu')]" 
                                            string="Material"
                                            options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
@@ -185,7 +213,7 @@
                         </page>
                         <!-- Cutting Knives Tab -->
                         <page string="Cutting Knives" name="cutting_knives">
-                            <field name="knife_line_ids">
+                            <field name="knife_line_ids" readonly="not is_sampling_user">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="shape_name"/>
@@ -198,7 +226,7 @@
                         </page>
                         <!-- General Notes Tab -->
                         <page string="General Notes" name="general_notes">
-                            <field name="notes" placeholder="Add any additional requirements..."/>
+                            <field name="notes" placeholder="Add any additional requirements..." readonly="not is_sampling_user"/>
                         </page>
                     </notebook>
                 </sheet>
@@ -491,14 +519,15 @@
     <menuitem id="menu_reema_sampling_root"
               name="Sampling"
               sequence="10"
-              groups="reema_sampling.group_reema_sampling"/>
+              web_icon="mrp,static/description/icon.png"
+              groups="reema_sampling.group_reema_sampling,base.group_erp_manager"/>
 
     <menuitem id="menu_reema_sampling_blueprint"
               name="Samples"
               parent="menu_reema_sampling_root"
               action="action_reema_sampling_blueprint"
               sequence="10"
-              groups="reema_sampling.group_reema_sampling"/>
+              groups="reema_sampling.group_reema_sampling,base.group_erp_manager"/>
 
     <menuitem id="menu_pending_bom"
               name="Pending BOM"

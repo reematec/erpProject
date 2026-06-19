@@ -8,10 +8,11 @@
 
     <!-- ══════════════════════════════════════════════════════════════════
          INVENTORY > OPERATIONS — Hide irrelevant standard menus
-         Kept: Physical Inventory, Scrap
+         Kept: Physical Inventory, Scrap (promoted to direct children of Operations)
          Hidden: Receipts/Deliveries/Internal (custom Gate Pass→GRN handles receipt;
                  deliveries via sales/packing list; material moves via custom issuance forms)
                  Replenishment/Procurement (custom PO flow replaces reorder rules)
+                 Adjustments (hidden; its children promoted to Operations level)
     ══════════════════════════════════════════════════════════════════════ -->
 
     <!-- Hides Receipts, Deliveries, and Internal Transfers in one record -->
@@ -29,6 +30,23 @@
         <field name="active" eval="False"/>
     </record>
 
+    <!-- Hide Adjustments folder — its children are promoted directly under Operations -->
+    <record id="stock.menu_stock_adjustments" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
+    <!-- Promote Physical Inventory to direct child of Operations -->
+    <record id="stock.menu_action_inventory_tree" model="ir.ui.menu">
+        <field name="parent_id" ref="stock.menu_stock_warehouse_mgmt"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <!-- Promote Scrap to direct child of Operations -->
+    <record id="stock.menu_stock_scrap" model="ir.ui.menu">
+        <field name="parent_id" ref="stock.menu_stock_warehouse_mgmt"/>
+        <field name="sequence">20</field>
+    </record>
+
     <!-- ══════════════════════════════════════════════════════════════════
          INVENTORY — Purchase Orders, GRN, Product Approval Settings
     ══════════════════════════════════════════════════════════════════════ -->
@@ -41,12 +59,12 @@
               sequence="5"
               groups="reema_purchase.group_reema_purchase_user"/>
 
-    <!-- GRN under Inventory > Operations -->
+    <!-- GRN at top of Inventory > Operations -->
     <menuitem id="menu_reema_grn_list"
               name="Goods Receipt Notes (GRN)"
               parent="stock.menu_stock_warehouse_mgmt"
               action="action_reema_grn"
-              sequence="6"
+              sequence="1"
               groups="reema_mrp.group_reema_store,reema_purchase.group_reema_purchase_manager"/>
 
     <!-- Product Approval Settings under Inventory > Configuration -->
@@ -64,7 +82,7 @@
     <menuitem id="menu_reema_security_root"
               name="Security"
               sequence="26"
-              groups="reema_purchase.group_reema_gate,reema_purchase.group_reema_purchase_manager"
+              groups="reema_purchase.group_reema_gate"
               web_icon="stock,static/description/icon.png"/>
 
     <menuitem id="menu_reema_gate_pass_list"
@@ -72,7 +90,7 @@
               parent="menu_reema_security_root"
               action="action_reema_gate_pass"
               sequence="10"
-              groups="reema_purchase.group_reema_gate,reema_purchase.group_reema_purchase_manager"/>
+              groups="reema_purchase.group_reema_gate"/>
 
     <!-- ══════════════════════════════════════════════════════════════════
          ACCOUNTING > PAYABLES — Bill Matching (3-Way)

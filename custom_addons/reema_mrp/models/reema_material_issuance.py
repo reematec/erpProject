@@ -109,6 +109,10 @@ class ReemaMaterialIssuance(models.Model):
     def action_cancel(self):
         for rec in self:
             rec.state = 'cancelled'
+            if rec.production_id:
+                rec.production_id._message_log(
+                    body=Markup(f'Material issuance <b>{rec.name}</b> ({rec.product_id.display_name}) cancelled.'),
+                )
 
     def action_bulk_withdraw(self):
         eligible = self.filtered(lambda r: not r.has_any_issue and r.state not in ('cancelled', 'fully_issued'))
@@ -121,7 +125,7 @@ class ReemaMaterialIssuance(models.Model):
         if self.state not in ('authorized', 'partial'):
             raise UserError('This authorization has already been fully issued or cancelled.')
         dest_location_id = False
-        for wo in self.production_id.workorder_ids:
+        for wo in self.production_id.sudo().workorder_ids:
             if wo.workcenter_id.location_id:
                 dest_location_id = wo.workcenter_id.location_id.id
                 break
@@ -235,7 +239,7 @@ class ReemaMaterialIssuanceLine(models.Model):
             'notes': f'Reversal of entry dated {date_str}',
         })
 
-        issuance.message_post(body=Markup(
+        issuance._message_log(body=Markup(
             f'<b>Issue entry reversed</b><br/>'
             f'Original qty: <b>{abs(self.issued_qty):.3f} {uom_name}</b><br/>'
             f'Issued to: {self.destination_location_id.name or "—"}<br/>'
@@ -307,7 +311,7 @@ class ReemaMaterialReturnLine(models.Model):
             'notes': self.notes,
         })
 
-        issuance.message_post(body=Markup(
+        issuance._message_log(body=Markup(
             f'<b>Return entry reversed</b><br/>'
             f'Original qty: <b>{abs(self.returned_qty):.3f} {uom_name}</b><br/>'
             f'Returned from: {self.return_from_location_id.name or "—"}<br/>'
@@ -379,7 +383,7 @@ class ReemaMaterialReturnWizard(models.TransientModel):
             'notes': self.notes,
         })
 
-        issuance.message_post(body=Markup(
+        issuance._message_log(body=Markup(
             f'<b>Material returned to store</b><br/>'
             f'Qty: <b>{self.returned_qty:.3f} {issuance.product_uom_id.name}</b><br/>'
             f'Returned from: {self.return_from_location_id.name}<br/>'
@@ -422,7 +426,7 @@ class ReemaMaterialIssueWizard(models.TransientModel):
     @api.depends('issuance_id')
     def _compute_available_contractors(self):
         for wiz in self:
-            contractors = wiz.issuance_id.production_id.workorder_ids.mapped('contractor_ids')
+            contractors = wiz.issuance_id.production_id.sudo().workorder_ids.mapped('contractor_ids')
             wiz.available_contractor_ids = contractors
 
     @api.onchange('contractor_id')
@@ -484,6 +488,13 @@ class ReemaMaterialIssueWizard(models.TransientModel):
         })
 
         issuance._recompute_state()
+        issuance.production_id._message_log(
+            body=Markup(
+                f'Material issued — <b>{issuance.name}</b>: '
+                f'{self.issued_qty:.3f} {issuance.product_uom_id.name} of {issuance.product_id.display_name} '
+                f'→ {self.destination_location_id.name} (by {self.env.user.name})'
+            ),
+        )
 
 
 class StockMoveReemaExt(models.Model):

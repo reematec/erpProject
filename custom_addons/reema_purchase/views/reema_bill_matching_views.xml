@@ -79,7 +79,7 @@
                         <field name="grn_ids" widget="many2many_tags"
                                options="{'no_create': True, 'no_edit': True, 'no_open': True}"
                                readonly="state != 'draft'"
-                               domain="[('po_id', '=', po_id), ('state', 'in', ['approved', 'accounted'])]"
+                               domain="[('po_id', '=', po_id), ('state', '=', 'verified')]"
                                string="GRNs"/>
                     </group>
 

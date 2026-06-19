@@ -53,6 +53,19 @@ class ReemaSamplingBlueprint(models.Model):
     # and a 'Char' field to store the filename for correct downloading/display.
     layout_file = fields.Binary(string='Layout Image/PDF')
     layout_filename = fields.Char(string='Layout Filename')
+    # Exposes the stored attachment mimetype so the secure_file_preview widget
+    # can decide between an <img> and a pdf.js <canvas> render (no download path).
+    layout_file_mimetype = fields.Char(compute='_compute_layout_file_mimetype')
+
+    def _compute_layout_file_mimetype(self):
+        Att = self.env['ir.attachment'].sudo()
+        for rec in self:
+            att = Att.search([
+                ('res_model', '=', 'reema.sampling.blueprint'),
+                ('res_field', '=', 'layout_file'),
+                ('res_id', '=', rec.id),
+            ], limit=1) if rec.id else Att.browse()
+            rec.layout_file_mimetype = att.mimetype or False
     
     # 'Many2many' to 'ir.attachment' allows uploading multiple files (images/docs)
     # for the final samples, providing a flexible way to document the result.
@@ -96,11 +109,21 @@ class ReemaSamplingBlueprint(models.Model):
     bom_count = fields.Integer(string='BOM Count', compute='_compute_bom_count', store=True)
 
     notes = fields.Text(string='Notes', tracking=True)
-    
+
     # One2many relationships allow us to manage child records (Sizes and Materials)
     # directly within the parent sample form.
     size_line_ids = fields.One2many('reema.sampling.size.line', 'blueprint_id', string='Size Details')
     material_line_ids = fields.One2many('reema.sampling.material.line', 'blueprint_id', string='Material Lines')
+
+    is_sampling_user = fields.Boolean(compute='_compute_is_sampling_user')
+
+    def _compute_is_sampling_user(self):
+        is_editor = (
+            self.env.user.has_group('reema_sampling.group_reema_sampling')
+            or self.env.user.has_group('base.group_system')
+        )
+        for rec in self:
+            rec.is_sampling_user = is_editor
 
     # This 'create' method override is how we automate the reference numbering.
     # Before the record is saved to the database, we fetch the next sequence value.

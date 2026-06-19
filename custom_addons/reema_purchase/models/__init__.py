@@ -1,4 +1,6 @@
 from . import product_template_ext
+from . import reema_product_spec
+from . import reema_inspection_check
 from . import reema_purchase_order
 from . import reema_gate_pass
 from . import reema_grn

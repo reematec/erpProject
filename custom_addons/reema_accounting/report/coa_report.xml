@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Body sub-template: pure COA content, no layout, no toolbar ── -->
+    <template id="report_coa_body">
+        <div class="text-center mb-3">
+            <h2 style="margin-bottom: 2px;">Chart of Accounts</h2>
+            <p style="font-size: 12px; color: #555; margin: 0;">
+                <t t-esc="company.name"/> — <t t-esc="print_date"/>
+            </p>
+        </div>
+
+        <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #111111; color: #ffffff;">
+                    <th style="width: 22%; padding: 5px 6px; text-align: left;">Code</th>
+                    <th style="padding: 5px 6px; text-align: left;">Name</th>
+                    <th style="width: 22%; padding: 5px 6px; text-align: left;">Type</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <t t-foreach="groups_l1" t-as="g1">
+
+                    <!-- ── Level 1: near-black bg, white text ── -->
+                    <tr style="background: #2e2e2e; color: #ffffff; page-break-inside: avoid;">
+                        <td style="padding: 6px 6px; color: #ffffff;">
+                            <strong style="font-size: 12px;"><t t-esc="g1.code_prefix_start"/></strong>
+                        </td>
+                        <td style="padding: 6px 6px; color: #ffffff;">
+                            <strong style="font-size: 12px;"><t t-esc="g1.name"/></strong>
+                        </td>
+                        <td style="padding: 6px 6px;"></td>
+                    </tr>
+
+                    <t t-foreach="g1.child_ids.sorted(key=lambda r: r.code_prefix_start)" t-as="g2">
+
+                        <!-- ── Level 2: mid-gray bg, white text ── -->
+                        <tr style="background: #7a7a7a; color: #ffffff; page-break-inside: avoid;">
+                            <td style="padding: 5px 6px 5px 18px; color: #ffffff;">
+                                <strong><t t-esc="g2.code_prefix_start"/></strong>
+                            </td>
+                            <td style="padding: 5px 6px 5px 18px; color: #ffffff;">
+                                <strong><t t-esc="g2.name"/></strong>
+                            </td>
+                            <td style="padding: 5px 6px;"></td>
+                        </tr>
+
+                        <t t-foreach="g2.child_ids.sorted(key=lambda r: r.code_prefix_start)" t-as="g3">
+
+                            <!-- ── Level 3: light gray bg, black text ── -->
+                            <tr style="background: #d6d6d6; page-break-inside: avoid;">
+                                <td style="padding: 4px 6px 4px 30px;">
+                                    <em><t t-esc="g3.code_prefix_start"/></em>
+                                </td>
+                                <td style="padding: 4px 6px 4px 30px;">
+                                    <em><t t-esc="g3.name"/></em>
+                                </td>
+                                <td style="padding: 4px 6px;"></td>
+                            </tr>
+
+                            <!-- ── Accounts under L3 ── -->
+                            <t t-foreach="accounts_by_group.get(g3.id, [])" t-as="acc">
+                                <tr>
+                                    <td style="padding: 2px 6px 2px 42px; font-family: monospace;">
+                                        <t t-esc="acc.code"/>
+                                    </td>
+                                    <td style="padding: 2px 6px 2px 42px;">
+                                        <t t-esc="acc.name"/>
+                                    </td>
+                                    <td style="padding: 2px 6px; color: #555;">
+                                        <t t-esc="type_labels.get(acc.account_type, '')"/>
+                                    </td>
+                                </tr>
+                            </t>
+
+                        </t>
+
+                        <!-- ── Accounts directly under L2 ── -->
+                        <t t-foreach="accounts_by_group.get(g2.id, [])" t-as="acc">
+                            <tr>
+                                <td style="padding: 2px 6px 2px 30px; font-family: monospace;">
+                                    <t t-esc="acc.code"/>
+                                </td>
+                                <td style="padding: 2px 6px 2px 30px;">
+                                    <t t-esc="acc.name"/>
+                                </td>
+                                <td style="padding: 2px 6px; color: #555;">
+                                    <t t-esc="type_labels.get(acc.account_type, '')"/>
+                                </td>
+                            </tr>
+                        </t>
+
+                    </t>
+
+                    <!-- ── Accounts directly under L1 ── -->
+                    <t t-foreach="accounts_by_group.get(g1.id, [])" t-as="acc">
+                        <tr>
+                            <td style="padding: 2px 6px 2px 18px; font-family: monospace;">
+                                <t t-esc="acc.code"/>
+                            </td>
+                            <td style="padding: 2px 6px 2px 18px;">
+                                <t t-esc="acc.name"/>
+                            </td>
+                            <td style="padding: 2px 6px; color: #555;">
+                                <t t-esc="type_labels.get(acc.account_type, '')"/>
+                            </td>
+                        </tr>
+                    </t>
+
+                </t>
+
+                <!-- ── Ungrouped accounts ── -->
+                <t t-if="accounts_by_group.get('ungrouped')">
+                    <tr style="background: #2e2e2e; color: #ffffff;">
+                        <td colspan="3" style="padding: 6px 6px; color: #ffffff;">
+                            <strong style="font-size: 12px;">Ungrouped</strong>
+                        </td>
+                    </tr>
+                    <t t-foreach="accounts_by_group.get('ungrouped', [])" t-as="acc">
+                        <tr>
+                            <td style="padding: 2px 6px 2px 18px; font-family: monospace;">
+                                <t t-esc="acc.code"/>
+                            </td>
+                            <td style="padding: 2px 6px 2px 18px;">
+                                <t t-esc="acc.name"/>
+                            </td>
+                            <td style="padding: 2px 6px; color: #555;">
+                                <t t-esc="type_labels.get(acc.account_type, '')"/>
+                            </td>
+                        </tr>
+                    </t>
+                </t>
+
+                <!-- closing border -->
+                <tr style="border-top: 1.5px solid #333;">
+                    <td colspan="3" style="padding: 0;"/>
+                </tr>
+
+            </tbody>
+        </table>
+    </template>
+
+    <!-- ── Pure report: no toolbar — used by print popup and PDF export ── -->
+    <template id="report_coa">
+        <t t-call="web.html_container">
+            <t t-call="web.internal_layout">
+                <div class="page">
+                    <t t-call="reema_accounting.report_coa_body"/>
+                </div>
+            </t>
+        </t>
+    </template>
+
+
+    <!-- Required so /report/pdf/reema_accounting.report_coa resolves to an ir.actions.report -->
+    <record id="action_report_coa" model="ir.actions.report">
+        <field name="name">Chart of Accounts</field>
+        <field name="model">account.account</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">reema_accounting.report_coa</field>
+        <field name="report_file">reema_accounting.report_coa</field>
+        <field name="print_report_name">'Chart of Accounts'</field>
+        <field name="paperformat_id" ref="base.paperformat_euro"/>
+    </record>
+
+</odoo>

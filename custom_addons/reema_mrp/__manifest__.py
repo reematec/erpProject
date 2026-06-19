@@ -27,12 +27,15 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'reema_mrp/static/src/components/wo_list_styles.css',
             'reema_mrp/static/src/components/wo_list_dropdown_patch.xml',
             'reema_mrp/static/src/components/many2one_no_create_patch.js',
             'reema_mrp/static/src/components/info_banner.js',
             'reema_mrp/static/src/components/info_banner.xml',
             'reema_mrp/static/src/components/mo_confirm_banner.js',
             'reema_mrp/static/src/components/mo_confirm_banner.xml',
+            'reema_mrp/static/src/views/workorder_standalone_list_view.js',
+            'reema_mrp/static/src/views/move_one2many_no_detail.js',
         ],
     },
     'installable': True,

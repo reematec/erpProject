@@ -9,7 +9,7 @@ class ReemaIloPieceRate(models.Model):
 
     contractor_id = fields.Many2one(
         'res.partner', string='Contractor', required=True,
-        domain=[('is_contractor', '=', True)],
+        domain="[('is_contractor', '=', True)]",
         options={'no_create': True, 'no_edit': True},
     )
     ball_size = fields.Selection(
@@ -47,7 +47,7 @@ class ReemaIloDispatch(models.Model):
     )
     contractor_id = fields.Many2one(
         'res.partner', string='ILO Contractor', required=True,
-        domain=[('is_contractor', '=', True)],
+        domain="[('is_contractor', '=', True)]",
         options={'no_create': True, 'no_edit': True},
         tracking=True,
     )
@@ -109,7 +109,7 @@ class ReemaIloDispatch(models.Model):
         if not self.verified_by:
             raise UserError('Please select the person who verified and counted the outgoing quantity.')
         self.state = 'dispatched'
-        self.message_post(
+        self._message_log(
             body=f'Dispatched {self.qty_panels} panels, {self.qty_bladders} bladders to ILO center. '
                  f'Verified by {self.verified_by.name}.'
         )
@@ -229,7 +229,7 @@ class ReemaIloReceipt(models.Model):
                 f'({self.dispatch_id.qty_panels}). Please check the quantities.'
             )
         self.state = 'received'
-        self.message_post(
+        self._message_log(
             body=f'Received: {self.qty_full} full, {self.qty_no_bladder} no-bladder, '
                  f'{self.qty_damaged} damaged. Verified by {self.verified_by.name}. '
                  f'Amount due: PKR {self.amount_due:,.2f}'
@@ -274,7 +274,7 @@ class ReemaIloPayment(models.Model):
     name = fields.Char(string='Reference', readonly=True, copy=False, default='New')
     contractor_id = fields.Many2one(
         'res.partner', string='Contractor', required=True,
-        domain=[('is_contractor', '=', True)],
+        domain="[('is_contractor', '=', True)]",
         options={'no_create': True, 'no_edit': True},
         tracking=True,
     )
@@ -302,4 +302,4 @@ class ReemaIloPayment(models.Model):
         if self.amount <= 0:
             raise UserError('Payment amount must be greater than 0.')
         self.state = 'confirmed'
-        self.message_post(body=f'Payment of PKR {self.amount:,.2f} confirmed ({self.payment_type}).')
+        self._message_log(body=f'Payment of PKR {self.amount:,.2f} confirmed ({self.payment_type}).')

@@ -11,9 +11,48 @@
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
 
+            <!-- Make is_storable always visible (not just when type=consu) so users can see/set it -->
+            <xpath expr="//div[@class='o_row w-100' and .//field[@name='is_storable']]" position="attributes">
+                <attribute name="invisible">False</attribute>
+            </xpath>
+            <xpath expr="//label[@for='is_storable']" position="attributes">
+                <attribute name="invisible">False</attribute>
+                <attribute name="string">Track Inventory (Storable Product)</attribute>
+            </xpath>
+
             <!-- Hide Purchase tab entirely -->
             <xpath expr="//page[@name='purchase']" position="attributes">
                 <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Specifications tab: custom key-value attributes -->
+            <xpath expr="//page[@name='general_information']" position="after">
+                <page string="Specifications" name="reema_specifications">
+                    <field name="reema_spec_ids">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="name" string="Attribute"
+                                   placeholder="e.g. Color"/>
+                            <field name="value" string="Value"
+                                   placeholder="e.g. Red"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+
+            <!-- Inspection Checklist tab: per-product QC checks for GRN -->
+            <xpath expr="//page[@name='reema_specifications']" position="after">
+                <page string="Inspection Checklist" name="inspection_checklist">
+                    <field name="reema_inspection_check_ids">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="check_name" string="Check"
+                                   placeholder="e.g. Density Check"/>
+                            <field name="expected_value" string="Standard / Expected"
+                                   placeholder="e.g. 28 kg/m³"/>
+                        </list>
+                    </field>
+                </page>
             </xpath>
 
             <!-- Add Purchase Approval tab after General Information instead -->
@@ -61,6 +100,17 @@
         <field name="inherit_id" ref="product.product_template_only_form_view"/>
         <field name="priority" eval="20"/>
         <field name="arch" type="xml">
+
+            <!-- Stock Moves smart button -->
+            <xpath expr="//div[hasclass('oe_title')]" position="before">
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_view_stock_moves" type="object"
+                            class="oe_stat_button" icon="fa-history"
+                            invisible="stock_move_count == 0">
+                        <field name="stock_move_count" widget="statinfo" string="Stock Moves"/>
+                    </button>
+                </div>
+            </xpath>
 
             <!-- Hide Purchase tab (overrides reema_mrp's conditional invisible on same view) -->
             <xpath expr="//page[@name='purchase']" position="attributes">

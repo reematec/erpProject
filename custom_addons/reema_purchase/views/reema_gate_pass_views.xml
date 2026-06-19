@@ -12,6 +12,11 @@
                             type="object" class="btn-primary"
                             invisible="state != 'draft'"
                             confirm="Confirm arrival and forward this Inward Gate Pass to the Store Keeper?"/>
+                    <button name="action_reset_to_draft" string="Reverse Store"
+                            type="object" class="btn-warning"
+                            invisible="state != 'confirmed'"
+                            groups="reema_purchase.group_reema_purchase_manager"
+                            confirm="Are you sure you want to reverse this gate pass back to Arrived?"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,confirmed"/>
                 </header>
@@ -40,23 +45,51 @@
                             <field name="vehicle_no" readonly="state == 'confirmed'"/>
                             <field name="driver_name" readonly="state == 'confirmed'"/>
                             <field name="carrier" readonly="state == 'confirmed'"/>
+                            <field name="no_of_packages" readonly="state == 'confirmed'"/>
                             <field name="security_guard" readonly="state == 'confirmed'"/>
                         </group>
                     </group>
                     <notebook>
                         <page string="Items Arrived" name="items">
                             <field name="line_ids" readonly="state == 'confirmed'">
+                                <form>
+                                    <group>
+                                        <group string="Product">
+                                            <field name="product_id"
+                                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                                   placeholder="Select from system..."/>
+                                            <field name="product_name" placeholder="Or type custom product name..."/>
+                                            <field name="description"/>
+                                            <field name="product_uom_id"
+                                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                                            <field name="color"/>
+                                            <field name="thickness"/>
+                                        </group>
+                                        <group string="Quantity">
+                                            <field name="expected_qty" string="Expected (PO)" readonly="1"/>
+                                            <field name="received_qty" string="Physically Arrived"/>
+                                        </group>
+                                    </group>
+                                    <separator string="Attributes"/>
+                                    <field name="attribute_ids">
+                                        <list editable="bottom">
+                                            <field name="sequence" widget="handle"/>
+                                            <field name="attribute_name" string="Attribute" placeholder="e.g. Color"/>
+                                            <field name="attribute_value" string="Value" placeholder="e.g. Red, Yellow"/>
+                                        </list>
+                                    </field>
+                                </form>
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
-                                    <field name="product_id"
+                                    <field name="product_id" string="Product"
                                            options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                                    <field name="product_name" string="Custom Product"/>
                                     <field name="description"/>
-                                    <field name="color" string="Color (Ordered)"/>
-                                    <field name="thickness" string="Thickness (Ordered)"/>
-                                    <field name="expected_qty" string="Expected (PO)" readonly="1"/>
+                                    <field name="color" optional="show"/>
+                                    <field name="thickness" optional="show"/>
+                                    <field name="received_qty" string="Physically Arrived"/>
                                     <field name="product_uom_id"
                                            options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                                    <field name="received_qty" string="Physically Arrived"/>
                                 </list>
                             </field>
                         </page>
@@ -79,14 +112,18 @@
             <list string="Inward Gate Passes"
                   decoration-warning="state == 'draft'"
                   decoration-success="state == 'confirmed'">
-                <field name="name"/>
-                <field name="date"/>
-                <field name="po_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                <field name="partner_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                <field name="vehicle_no"/>
-                <field name="driver_name"/>
-                <field name="grn_count" string="GRNs"/>
-                <field name="state" widget="badge"
+                <field name="name" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="po_id" optional="show" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="partner_id" optional="show" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="product_summary" string="Products" optional="hide"/>
+                <field name="custom_product_summary" string="Custom Products" optional="hide"/>
+                <field name="total_arrived_qty" string="Arrived Qty" optional="show"/>
+                <field name="vehicle_no" optional="hide"/>
+                <field name="driver_name" optional="hide"/>
+                <field name="no_of_packages" optional="hide"/>
+                <field name="grn_count" string="GRNs" optional="hide"/>
+                <field name="state" widget="badge" optional="hide"
                        decoration-warning="state == 'draft'"
                        decoration-success="state == 'confirmed'"/>
             </list>

@@ -4,6 +4,14 @@
     <delete model="ir.ui.menu" search="[('name', '=', 'Piece Rate Matrix')]"/>
     <delete model="ir.actions.act_window" search="[('name', '=', 'Piece Rate Matrix')]"/>
 
+    <!-- Hide Planning menu and its Procurement: Run Scheduler submenu -->
+    <record id="mrp.mrp_planning_menu_root" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+    <record id="mrp.menu_procurement_compute_mrp" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
     <!-- Vendors: action + menu under Manufacturing > Configuration -->
     <record id="action_reema_vendors" model="ir.actions.act_window">
         <field name="name">Vendors</field>
@@ -25,8 +33,8 @@
         <field name="name">Contractors</field>
         <field name="res_model">res.partner</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('supplier_rank', '>', 0)]</field>
-        <field name="context">{'default_supplier_rank': 1, 'default_is_contractor': True}</field>
+        <field name="domain">[('supplier_rank', '>', 0), ('is_contractor', '=', True)]</field>
+        <field name="context">{'default_supplier_rank': 1, 'default_is_contractor': True, 'reema_contractor_context': True}</field>
     </record>
     <menuitem
         id="reema_mrp_menu_contractors"
@@ -36,12 +44,38 @@
         sequence="25"
         groups="reema_mrp.group_reema_production_manager,base.group_erp_manager"/>
 
+    <!-- Remove "New" button from Production Orders list and kanban -->
+    <record id="mrp_production_reema_list" model="ir.ui.view">
+        <field name="name">mrp.production.reema.list</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="." position="attributes">
+                <attribute name="create">0</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="mrp_production_reema_kanban" model="ir.ui.view">
+        <field name="name">mrp.production.reema.kanban</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_kanban_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="." position="attributes">
+                <attribute name="create">0</attribute>
+            </xpath>
+        </field>
+    </record>
+
     <!-- Extend Manufacturing Order Form -->
     <record id="mrp_production_reema_form" model="ir.ui.view">
         <field name="name">mrp.production.reema.form</field>
         <field name="model">mrp.production</field>
         <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
         <field name="arch" type="xml">
+            <form position="attributes">
+                <attribute name="create">0</attribute>
+            </form>
             <!-- Smart button: Material Issuances -->
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_issuances"
@@ -58,6 +92,12 @@
                         invisible="ilo_dispatch_count == 0">
                     <field name="ilo_dispatch_count" widget="statinfo" string="ILO"/>
                 </button>
+            </xpath>
+            <!-- Drop the core "Open Move" detail-operations icon: components aren't
+                 lot/serial tracked and reservation is handled via physical RMI issuance,
+                 so that column is dead weight here (scoped widget swap, stock.picking unaffected) -->
+            <xpath expr="//field[@name='move_raw_ids']" position="attributes">
+                <attribute name="widget">reema_move_one2many</attribute>
             </xpath>
             <!-- Authorize/View issuance buttons — separate columns with headers -->
             <xpath expr="//field[@name='move_raw_ids']//list" position="inside">
@@ -88,12 +128,11 @@
                 <field name="construction_type" options="{'no_create': True, 'no_edit': True}"
                        readonly="state != 'draft'"/>
                 <field name="ball_size" readonly="state != 'draft'"/>
-                <field name="complexity_level" options="{'no_create': True, 'no_edit': True}"
-                       readonly="state != 'draft'"/>
+
             </xpath>
-            <!-- Responsible becomes readonly once MO is confirmed -->
-            <xpath expr="//field[@name='user_id'][@widget='many2one_avatar']" position="attributes">
-                <attribute name="readonly">state != 'draft'</attribute>
+            <!-- Responsible: replace avatar/link with plain char text -->
+            <xpath expr="//field[@name='user_id'][@widget='many2one_avatar']" position="replace">
+                <field name="responsible_name" readonly="1"/>
             </xpath>
             <!-- qty_producing is tracked through work order batch entries — make it readonly -->
             <xpath expr="//field[@name='qty_producing']" position="attributes">
@@ -110,8 +149,17 @@
             <xpath expr="//button[@name='do_unreserve']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
-            <!-- Produce/Produce All, Plan, Start are redundant — tracked via work order batch entries -->
-            <xpath expr="//button[@name='button_mark_done']" position="attributes">
+            <!-- Produce/Produce All — bypasses batch tracking flow, hide all variants -->
+            <xpath expr="(//button[@name='button_mark_done'])[1]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="(//button[@name='button_mark_done'])[2]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="(//button[@name='button_mark_done'])[3]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="(//button[@name='button_mark_done'])[4]" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
             <xpath expr="//button[@name='button_plan']" position="attributes">
@@ -120,12 +168,24 @@
             <xpath expr="//button[@name='action_start']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
+            <!-- Remove forecast report buttons and "To Produce" label -->
+            <xpath expr="//button[@name='action_product_forecast_report'][1]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_product_forecast_report'][2]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//span[text()='To Produce']" position="replace"/>
             <!-- Move Cancel to the very end and rename to "Cancel MO" so it's not confused with browser back -->
             <xpath expr="//header/button[@name='action_cancel']" position="replace"/>
+            <xpath expr="//header/field[@name='show_lock']" position="before">
+                <field name="has_active_issuance" invisible="1"/>
+            </xpath>
             <xpath expr="//header/button[@name='button_unbuild']" position="after">
                 <button name="action_cancel" type="object" string="Cancel MO"
                         data-hotkey="x"
                         invisible="not id or state in ('done', 'cancel')"
+                        disabled="has_active_issuance"
                         confirm="Are you sure you want to cancel this Manufacturing Order? This cannot be undone."
                         confirm-label="Yes, Cancel MO"
                         cancel-label="Go Back"/>
@@ -139,14 +199,22 @@
         <field name="model">mrp.workorder</field>
         <field name="inherit_id" ref="mrp.mrp_production_workorder_tree_editable_view_mo_form"/>
         <field name="arch" type="xml">
-            <!-- Insert custom columns after product_id so product stays right after work center -->
+            <xpath expr="//field[@name='product_id']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <!-- Insert custom columns after product_id -->
             <xpath expr="//field[@name='product_id']" position="after">
                 <field name="workforce_type" column_invisible="1"/>
                 <field name="contractor_ids" widget="many2many_tags" options="{'no_create': True, 'no_edit': True}"
                        invisible="workforce_type == 'employee'"/>
                 <field name="hall_qty" string="Target" readonly="1"/>
                 <field name="qty_batch_completed" string="Completed" readonly="1"/>
+                <field name="hall_unit_label" string="UOM" readonly="1" optional="show"/>
                 <field name="qty_balls_completed" string="Balls Done" readonly="1" optional="show"/>
+            </xpath>
+            <!-- Place the Log-batch button adjacent to the native Start/Done buttons so all
+                 action buttons share ONE button column (avoids a second reserved ~90px column) -->
+            <xpath expr="//button[@name='button_start']" position="before">
                 <button name="action_log_batch" type="object"
                         icon="fa-plus-circle"
                         title="Log batch progress"
@@ -185,6 +253,75 @@
             <xpath expr="//field[@name='duration']" position="attributes">
                 <attribute name="column_invisible">True</attribute>
             </xpath>
+            <xpath expr="//field[@name='finished_lot_id']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='date_start']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='date_finished']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <!-- Remove redundant green circle status widget — Status text column is sufficient -->
+            <xpath expr="//widget[@name='mo_view_list_dropdown']" position="replace"/>
+            <!-- Hide json_popover cell — scheduling warnings never fire since button_plan is hidden -->
+            <xpath expr="//field[@name='json_popover']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Work Orders search: add Operation as a filterable/groupable field -->
+    <record id="mrp_workorder_search_reema" model="ir.ui.view">
+        <field name="name">mrp.workorder.search.reema</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp.view_mrp_production_workorder_form_view_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="string">Operation</attribute>
+            </xpath>
+            <xpath expr="//field[@name='workcenter_id']" position="before">
+                <field name="operation_id" string="Operation Template" options="{'no_create': True, 'no_edit': True}"/>
+            </xpath>
+            <xpath expr="//filter[@name='scheduled_month']" position="after">
+                <filter string="Operation" name="operation" domain="[]" context="{'group_by': 'operation_id'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Standalone Work Orders (Operations > Work Orders): sort by production order, all columns togglable -->
+    <record id="mrp_workorder_standalone_reema" model="ir.ui.view">
+        <field name="name">mrp.workorder.standalone.reema</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp.mrp_production_workorder_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="default_order">production_id</attribute>
+                <attribute name="delete">0</attribute>
+                <attribute name="js_class">reema_workorder_standalone_list</attribute>
+            </xpath>
+            <xpath expr="//field[@name='production_id']" position="replace">
+                <field name="production_id"/>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='workcenter_id']" position="attributes">
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='duration_expected']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='duration']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='state']" position="attributes">
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//button[@name='button_start']" position="replace"/>
+            <xpath expr="//button[@name='button_pending']" position="replace"/>
+            <xpath expr="//button[@name='button_finish']" position="replace"/>
+            <xpath expr="//widget[@name='mo_view_list_dropdown']" position="replace"/>
         </field>
     </record>
 
@@ -300,6 +437,8 @@
                 <field name="balls_per_unit"/>
                 <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
                        domain="[('workcenter_id', '=', workcenter_id)]"/>
+                <field name="pay_basis"/>
+                <field name="impressions_per_ball" optional="show"/>
             </xpath>
             <!-- Hide Duration Computation and Duration columns — not relevant for floor ops -->
             <xpath expr="//field[@name='time_mode']" position="attributes">
@@ -327,6 +466,8 @@
                 <field name="balls_per_unit"/>
                 <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
                        domain="[('workcenter_id', '=', workcenter_id)]"/>
+                <field name="pay_basis"/>
+                <field name="impressions_per_ball"/>
             </xpath>
             <!-- Blocked by: only allow selecting existing operations, no create/edit -->
             <xpath expr="//field[@name='blocked_by_operation_ids']" position="attributes">
@@ -348,8 +489,12 @@
                        groups="base.group_erp_manager"
                        invisible="workforce_type == 'employee'"/>
                 <field name="is_qc_point"/>
+                <field name="is_packing" string="Is Packing Station"
+                       help="Enable if this work center is the packing stage. The MO's quantity-producing counter will be driven by batch entries logged here."/>
                 <field name="is_ilo" string="ILO Work Center"
                        help="Enable if this work center represents the ILO (hand stitching) external step. Completion will be gated on ILO receipt confirmation."/>
+                <field name="is_printing"/>
+                <field name="hall_unit"/>
                 <field name="sfg_product_id"
                        domain="[('product_group', '=', 'sfg')]"
                        options="{'no_create': True, 'no_edit': True}"/>
@@ -462,6 +607,12 @@
             </xpath>
             <xpath expr="//field[@name='list_price']" position="replace"/>
             <xpath expr="//field[@name='standard_price']" position="replace"/>
+            <!-- Stock move history — opens all receipts/issues for this product -->
+            <xpath expr="//field[@name='virtual_available']" position="after">
+                <button name="action_view_stock_move_lines" type="object"
+                        icon="fa-exchange" title="Stock Moves"
+                        groups="stock.group_stock_user"/>
+            </xpath>
         </field>
     </record>
 

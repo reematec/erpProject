@@ -1,12 +1,14 @@
 {
     'name': 'Reema Accounting',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.0.4',
     'category': 'Accounting',
     'summary': 'Chart of Accounts, Taxes, and Journals for Reema Tec',
     'depends': ['account', 'stock_account', 'purchase_stock', 'account_financial_report', 'reema_mrp', 'reema_invoice', 'account_payment', 'account_edi_ubl_cii'],
     'data': [
         'security/ir.model.access.csv',
         'security/reema_apps_access.xml',
+        'report/coa_report.xml',
+        'views/reema_contractor_bill_approval_views.xml',
         'views/account_menu_views.xml',
         'data/account_group_data.xml',
         'data/account_account_data.xml',

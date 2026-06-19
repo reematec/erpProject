@@ -134,7 +134,7 @@ class ReemaConsumableTransaction(models.Model):
         })
 
         if self.transaction_type == 'issuance':
-            self.message_post(body=Markup(
+            self._message_log(body=Markup(
                 f'<b>Consumable issued</b><br/>'
                 f'Product: <b>{self.product_id.name}</b><br/>'
                 f'Qty: <b>{self.qty:.3f} {uom_name}</b><br/>'
@@ -143,7 +143,7 @@ class ReemaConsumableTransaction(models.Model):
                 f'<b>Processed by: {self.env.user.name}</b>'
             ))
         else:
-            self.message_post(body=Markup(
+            self._message_log(body=Markup(
                 f'<b>Consumable returned to store</b><br/>'
                 f'Product: <b>{self.product_id.name}</b><br/>'
                 f'Qty: <b>{self.qty:.3f} {uom_name}</b><br/>'
@@ -176,7 +176,7 @@ class ReemaConsumableTransaction(models.Model):
             move._action_done()
 
         self.state = 'voided'
-        self.message_post(body=Markup(
+        self._message_log(body=Markup(
             f'<b>Issuance voided</b><br/>'
             f'Qty reversed: <b>{self.qty:.3f} {self.product_uom_id.name}</b><br/>'
             f'<b>Voided by: {self.env.user.name}</b>'

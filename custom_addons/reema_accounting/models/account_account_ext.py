@@ -10,6 +10,8 @@ class AccountGroupExt(models.Model):
     _inherit = 'account.group'
     _parent_name = 'parent_id'
 
+    child_ids = fields.One2many('account.group', 'parent_id', string='Child Groups')
+
 
 class AccountAccountExt(models.Model):
     _inherit = 'account.account'
@@ -55,6 +57,13 @@ class AccountAccountExt(models.Model):
             if group.code_prefix_start:
                 domain += [('code', '=like', group.code_prefix_start + '-%')]
         return ['|'] * (len(domain) - 1) + domain if domain else [('id', '=', False)]
+
+    def action_print_coa(self):
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/reema/coa/preview',
+            'target': 'new',
+        }
 
     @api.onchange('target_group_id')
     def _onchange_target_group_id(self):

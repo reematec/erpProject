@@ -15,7 +15,7 @@ access_reema_wo_batch_entry_manager,reema.wo.batch.entry manager,model_reema_wo_
 access_reema_batch_entry_wizard_user,reema.batch.entry.wizard user,model_reema_batch_entry_wizard,base.group_user,1,1,1,1
 access_reema_material_issuance_user,reema.material.issuance user,model_reema_material_issuance,base.group_user,1,0,0,0
 access_reema_material_issuance_admin,reema.material.issuance admin,model_reema_material_issuance,base.group_system,1,1,1,1
-access_reema_material_issuance_store,reema.material.issuance store,model_reema_material_issuance,reema_mrp.group_reema_store,1,0,1,0
+access_reema_material_issuance_store,reema.material.issuance store,model_reema_material_issuance,reema_mrp.group_reema_store,1,1,1,0
 access_reema_material_issuance_manager,reema.material.issuance manager,model_reema_material_issuance,reema_mrp.group_reema_production_manager,1,1,1,1
 access_reema_material_issuance_line_user,reema.material.issuance.line user,model_reema_material_issuance_line,base.group_user,1,0,0,0
 access_reema_material_issuance_line_admin,reema.material.issuance.line admin,model_reema_material_issuance_line,base.group_system,1,1,1,1

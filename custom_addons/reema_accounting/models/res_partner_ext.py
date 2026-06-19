@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 VENDOR_PREFIX = '2-1-1'
@@ -11,19 +11,45 @@ CUSTOMER_PREFIX = '1-1-2'
 class ResPartnerExt(models.Model):
     _inherit = 'res.partner'
 
-    is_contractor = fields.Boolean(
-        string='Is Contractor',
-        default=False,
-        help="Check if this partner is a labor contractor. "
-             "Contractors share a single Payable account (2-1-2-01) and each get "
-             "their own Advance account (1-1-3-xx) for advance tracking.",
-    )
-
     reema_advance_account_id = fields.Many2one(
         'account.account',
         string='Advance Account',
         help='Individual current-asset account (1-1-3-xx) tracking advances given to this contractor.',
     )
+
+    def _get_contractor_payable_account(self):
+        """Return the shared Contractors Payable account (2-1-2-01) or False if not found."""
+        return self.env['account.account'].search(
+            [('code', '=', CONTRACTOR_PAYABLE_CODE)], limit=1
+        )
+
+    def _assign_contractor_payable(self):
+        """Link any contractor without a payable account to the shared 2-1-2-01 account.
+
+        Silent no-op when the account doesn't exist yet — never blocks partner save.
+        """
+        candidates = self.filtered(
+            lambda p: p.is_contractor and not p.property_account_payable_id
+        )
+        if not candidates:
+            return
+        shared_payable = self._get_contractor_payable_account()
+        if not shared_payable:
+            return
+        candidates.property_account_payable_id = shared_payable
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        partners = super().create(vals_list)
+        partners._assign_contractor_payable()
+        return partners
+
+    def write(self, vals):
+        result = super().write(vals)
+        # Auto-link when a partner is flagged as a contractor on any form
+        if vals.get('is_contractor'):
+            self._assign_contractor_payable()
+        return result
 
     def _next_account_code(self, prefix):
         existing = self.env['account.account'].search(
@@ -49,43 +75,27 @@ class ResPartnerExt(models.Model):
 
     def _setup_contractor_gl(self):
         """
-        Contractors: assign to shared 2121 Contractors Payable + create individual advance account.
+        Contractors: assign to shared Contractors Payable account only.
+        Advance account is created separately when a contractor actually needs one.
         """
-        if self.reema_advance_account_id:
-            raise UserError(
-                f'This contractor is already configured:\n'
-                f'  Payable: {self.property_account_payable_id.code} · {self.property_account_payable_id.name}\n'
-                f'  Advance: {self.reema_advance_account_id.code} · {self.reema_advance_account_id.name}'
-            )
-
-        shared_payable = self.env['account.account'].search(
-            [('code', '=', CONTRACTOR_PAYABLE_CODE)], limit=1
-        )
+        shared_payable = self._get_contractor_payable_account()
         if not shared_payable:
             raise UserError(
                 f'Shared payable account {CONTRACTOR_PAYABLE_CODE} not found in the Chart of Accounts. '
                 f'Please create it first.'
             )
+        if self.property_account_payable_id == shared_payable:
+            raise UserError(
+                f'This contractor is already assigned to {shared_payable.code} · {shared_payable.name}.'
+            )
         self.property_account_payable_id = shared_payable
-
-        advance_code = self._next_account_code(CONTRACTOR_ADVANCE_PREFIX)
-        advance_account = self.env['account.account'].create({
-            'name': self.name + ' — Advance',
-            'code': advance_code,
-            'account_type': 'asset_current',
-            'partner_id': self.id,
-        })
-        self.reema_advance_account_id = advance_account
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Contractor GL Accounts Configured',
-                'message': (
-                    f'Payable: {shared_payable.code} · {shared_payable.name}  |  '
-                    f'Advance: {advance_code} · {self.name} — Advance'
-                ),
+                'title': 'Contractor Payable Account Assigned',
+                'message': f'Payable: {shared_payable.code} · {shared_payable.name}',
                 'sticky': False,
                 'type': 'success',
             },

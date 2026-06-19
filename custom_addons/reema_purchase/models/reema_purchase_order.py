@@ -249,6 +249,6 @@ class ReemaPurchaseOrderLine(models.Model):
         for line in self:
             grn_lines = self.env['reema.grn.line'].sudo().search([
                 ('po_line_id', '=', line.id),
-                ('grn_id.state', 'in', ['approved', 'accounted']),
+                ('grn_id.state', '=', 'verified'),
             ])
             line.qty_received = sum(grn_lines.mapped('accepted_qty'))

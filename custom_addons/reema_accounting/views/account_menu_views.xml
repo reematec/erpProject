@@ -39,7 +39,7 @@
                         class="oe_stat_button"
                         icon="fa-university"
                         confirm="This will create or correct the GL account for this partner in the Chart of Accounts. Continue?"
-                        invisible="not supplier_rank"/>
+                        invisible="is_contractor or not supplier_rank"/>
                 <button name="action_create_customer_gl_account"
                         type="object"
                         string="Create GL Account"
@@ -51,13 +51,12 @@
             <xpath expr="//field[@name='category_id']" position="after">
                 <field name="is_contractor"
                        string="Is Contractor"
-                       invisible="not supplier_rank or context.get('reema_vendor_context')"
+                       invisible="not supplier_rank or context.get('reema_vendor_context') or context.get('reema_contractor_context')"
                        widget="boolean_toggle"/>
                 <field name="reema_advance_account_id"
                        string="Advance Account"
-                       readonly="1"
                        invisible="not is_contractor or context.get('reema_vendor_context')"
-                       options="{'no_open': True}"/>
+                       options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
             </xpath>
 
             <!-- ── Sales &amp; Purchase tab: hide irrelevant fields ── -->
@@ -117,9 +116,10 @@
         </field>
     </record>
 
-    <!-- Rename top-level "Invoicing" to "Accounting" -->
+    <!-- Rename top-level "Invoicing" to "Accounting"; restrict to accounting staff only -->
     <record id="account.menu_finance" model="ir.ui.menu">
         <field name="name">Accounting</field>
+        <field name="groups_id" eval="[(6, 0, [ref('account.group_account_manager')])]"/>
     </record>
 
     <!-- ── Partner Reports ────────────────────────────────────────── -->
@@ -150,7 +150,7 @@
         <field name="sequence">40</field>
     </record>
 
-    <!-- ── COA list: disable inline editing so New always opens the form dialog ── -->
+    <!-- ── COA list: disable inline editing + Print COA button ── -->
     <record id="view_account_list_ext" model="ir.ui.view">
         <field name="name">reema.account.account.list</field>
         <field name="model">account.account</field>
@@ -158,6 +158,15 @@
         <field name="arch" type="xml">
             <xpath expr="//list" position="attributes">
                 <attribute name="editable"></attribute>
+            </xpath>
+            <xpath expr="//list" position="inside">
+                <header>
+                    <button name="action_print_coa"
+                            string="Preview COA"
+                            type="object"
+                            class="btn-primary"
+                            display="always"/>
+                </header>
             </xpath>
         </field>
     </record>
@@ -476,6 +485,19 @@
                 <field name="reema_mo_id" string="MO" readonly="1"/>
             </xpath>
 
+            <!-- is_printing_bill must be declared in the form so parent.is_printing_bill works in the embedded list -->
+            <xpath expr="//field[@name='invoice_line_ids']" position="before">
+                <field name="is_printing_bill" invisible="1"/>
+            </xpath>
+
+            <!-- Printing-only columns: Ball Qty and Imp/Ball (hidden on non-printing bills) -->
+            <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='quantity']" position="before">
+                <field name="reema_balls_qty" string="Ball Qty" readonly="1"
+                       invisible="not parent.is_printing_bill"/>
+                <field name="reema_impressions_per_ball" string="Imp/Ball" readonly="1"
+                       invisible="not parent.is_printing_bill"/>
+            </xpath>
+
             <!-- Lock remaining editable columns -->
             <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='name']" position="attributes">
                 <attribute name="readonly">1</attribute>
@@ -525,14 +547,14 @@
         sequence="5"
         groups="account.group_account_invoice,account.group_account_manager"/>
 
-    <!-- Same view accessible from Manufacturing for production staff -->
+    <!-- Contractor Bills from Manufacturing — production staff see proxy view, no accounting access needed -->
     <menuitem
         id="menu_contractor_bills_mfg"
         name="Contractor Bills"
         parent="mrp.menu_mrp_manufacturing"
-        action="action_contractor_bills"
+        action="action_contractor_bill_approval"
         sequence="30"
-        groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor,account.group_account_invoice,account.group_account_manager"/>
+        groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor"/>
 
     <!-- ── Bills to Post: accountant queue of approved-but-unposted bills ── -->
     <record id="action_contractor_bills_to_post" model="ir.actions.act_window">
@@ -586,6 +608,75 @@
     <record id="account.menu_action_account_journal_group_list" model="ir.ui.menu">
         <field name="groups_id" eval="[(4, ref('account.group_account_manager'))]"/>
     </record>
+
+    <!-- ── Stock Ledger ───────────────────────────────────────────── -->
+
+    <record id="view_stock_valuation_layer_list" model="ir.ui.view">
+        <field name="name">stock.valuation.layer.list.reema</field>
+        <field name="model">stock.valuation.layer</field>
+        <field name="arch" type="xml">
+            <list string="Stock Ledger" create="false" edit="false" delete="false"
+                  default_order="create_date desc">
+                <field name="create_date" string="Date"/>
+                <field name="stock_move_id" string="Reference" optional="show"/>
+                <field name="description" string="Description"/>
+                <field name="product_id" string="Product"/>
+                <field name="quantity" string="Qty" decoration-danger="quantity &lt; 0"/>
+                <field name="uom_id" string="Unit" optional="hide"/>
+                <field name="unit_cost" string="Unit Cost (PKR)" widget="monetary"
+                       options="{'currency_field': 'currency_id'}"/>
+                <field name="value" string="Value (PKR)" widget="monetary"
+                       options="{'currency_field': 'currency_id'}"
+                       decoration-danger="value &lt; 0" decoration-success="value &gt; 0"/>
+                <field name="remaining_qty" string="Rem. Qty" optional="hide"/>
+                <field name="remaining_value" string="Rem. Value (PKR)" optional="hide"
+                       widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                <field name="account_move_id" string="Journal Entry" optional="show"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_stock_valuation_layer_search" model="ir.ui.view">
+        <field name="name">stock.valuation.layer.search.reema</field>
+        <field name="model">stock.valuation.layer</field>
+        <field name="arch" type="xml">
+            <search string="Stock Ledger">
+                <field name="product_id"/>
+                <field name="description"/>
+                <field name="stock_move_id"/>
+                <filter string="Receipts (In)" name="filter_in"
+                        domain="[('quantity', '&gt;', 0)]"/>
+                <filter string="Issues (Out)" name="filter_out"
+                        domain="[('quantity', '&lt;', 0)]"/>
+                <separator/>
+                <filter string="This Month" name="filter_this_month"
+                        domain="[('create_date', '&gt;=', (context_today() + relativedelta(day=1)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Product" name="groupby_product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter string="Date" name="groupby_date"
+                            context="{'group_by': 'create_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_stock_ledger" model="ir.actions.act_window">
+        <field name="name">Stock Ledger</field>
+        <field name="res_model">stock.valuation.layer</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_stock_valuation_layer_list"/>
+        <field name="search_view_id" ref="view_stock_valuation_layer_search"/>
+        <field name="context">{'search_default_groupby_product': 1}</field>
+    </record>
+
+    <menuitem id="menu_stock_ledger"
+        name="Stock Ledger"
+        parent="account.menu_finance_reports"
+        action="action_stock_ledger"
+        sequence="50"
+        groups="account.group_account_readonly"/>
 
     <!-- Remove redundant cog-menu actions from contractor bill form.
          These are irrelevant to the contractor billing workflow and confuse staff. -->

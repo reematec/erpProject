@@ -5,7 +5,7 @@
         <field name="name">reema.production.order.form</field>
         <field name="model">reema.production.order</field>
         <field name="arch" type="xml">
-            <form>
+            <form create="0">
                 <header>
                     <button name="action_confirm"
                             string="Confirm"
@@ -71,18 +71,19 @@
                             <field name="line_ids">
                                 <list editable="bottom" delete="0">
                                     <field name="sample_id"
+                                           widget="many2one"
                                            readonly="1"
                                            options="{'no_create': True, 'no_edit': True}"/>
                                     <field name="product_tmpl_id" column_invisible="True"/>
                                     <field name="size" readonly="1"/>
                                     <field name="qty" readonly="mo_id"/>
                                     <field name="bom_id"
+                                           widget="many2one"
                                            readonly="1"
-                                           column_invisible="True"
                                            domain="[('product_tmpl_id', '=', product_tmpl_id)]"
-                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                                    <field name="bom_reference" readonly="1"/>
-                                    <field name="mo_id" readonly="1" options="{'no_open': False}"/>
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': False}"/>
+                                    <field name="bom_reference" readonly="1" column_invisible="True"/>
+                                    <field name="mo_id" widget="many2one" readonly="1" options="{'no_open': False}"/>
                                     <field name="mo_state" widget="badge"
                                            decoration-success="mo_state == 'done'"
                                            decoration-warning="mo_state in ('progress', 'to_close')"
@@ -122,7 +123,7 @@
         <field name="name">reema.production.order.list</field>
         <field name="model">reema.production.order</field>
         <field name="arch" type="xml">
-            <list>
+            <list create="0">
                 <field name="name"/>
                 <field name="invoice_id"/>
                 <field name="partner_id"/>

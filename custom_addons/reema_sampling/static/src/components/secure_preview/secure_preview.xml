@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="reema_sampling.SecureFilePreview">
+        <div class="o_secure_preview d-flex flex-wrap gap-2" t-ref="root"
+             t-on-contextmenu.prevent="() => {}">
+            <t t-if="!state.items.length">
+                <span class="text-muted fst-italic">No file</span>
+            </t>
+            <t t-foreach="state.items" t-as="item" t-key="item_index">
+                <div class="o_secure_preview_item">
+                    <t t-if="isImage(item)">
+                        <img class="o_secure_preview_thumb border rounded"
+                             style="height:100px;width:auto;object-fit:contain;cursor:pointer;"
+                             t-att-src="item.url"
+                             t-att-alt="item.name"
+                             title="Click to preview"
+                             draggable="false"
+                             t-on-click="() => this.openPreview(item)"/>
+                    </t>
+                    <t t-elif="isPdf(item)">
+                        <div class="o_secure_pdf_thumb border rounded position-relative d-flex align-items-center justify-content-center overflow-hidden"
+                             style="height:100px;width:auto;min-width:80px;cursor:pointer;"
+                             t-att-data-url="item.url"
+                             title="Click to preview"
+                             t-on-click="() => this.openPreview(item)">
+                            <span class="position-absolute top-0 end-0 badge text-bg-danger m-1">
+                                <i class="fa fa-file-pdf-o"/> PDF
+                            </span>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <span class="text-muted">
+                            <i class="fa fa-file-o me-1"/>
+                            <t t-esc="item.name"/> (no inline preview)
+                        </span>
+                    </t>
+                </div>
+            </t>
+        </div>
+    </t>
+
+    <t t-name="reema_sampling.SecurePreviewDialog">
+        <Dialog title="props.item.name" size="'xl'" footer="false">
+            <div class="o_secure_preview_modal text-center" t-on-contextmenu.prevent="() => {}">
+                <t t-if="isImage">
+                    <img class="img-fluid" t-att-src="props.item.url"
+                         t-att-alt="props.item.name" draggable="false"/>
+                </t>
+                <t t-elif="isPdf">
+                    <div t-ref="body" class="o_secure_pdf_modal"/>
+                </t>
+                <t t-else="">
+                    <span class="text-muted">No inline preview available.</span>
+                </t>
+                <div t-if="props.allowDownload" class="mt-2">
+                    <a class="btn btn-sm btn-secondary"
+                       t-att-href="props.item.downloadUrl"
+                       download="download">
+                        <i class="fa fa-download me-1"/>Download
+                    </a>
+                </div>
+            </div>
+        </Dialog>
+    </t>
+
+</templates>

@@ -5,6 +5,8 @@ from odoo.exceptions import UserError
 class MrpProduction(models.Model):
     _inherit = 'mrp.production'
 
+    responsible_name = fields.Char(related='user_id.name', string='Responsible', readonly=True)
+
     construction_type = fields.Selection([
         ('hs', 'Hand Stitched (HS)'),
         ('ms', 'Machine Stitched (MS)'),
@@ -21,6 +23,14 @@ class MrpProduction(models.Model):
     ], string='Complexity', default='standard')
 
     ilo_dispatch_count = fields.Integer(compute='_compute_ilo_dispatch_count', string='ILO Dispatches')
+
+    has_active_issuance = fields.Boolean(compute='_compute_has_active_issuance')
+
+    def _compute_has_active_issuance(self):
+        for rec in self:
+            rec.has_active_issuance = bool(
+                rec.issuance_ids.filtered(lambda i: i.state != 'cancelled')
+            )
 
     # WIP Evaluation — material cost (AVCO × net issued) + labor cost (batch piece rates)
     wip_material_cost = fields.Float(string='Material Cost (PKR)', compute='_compute_wip_costs', digits=(16, 2))
@@ -86,6 +96,13 @@ class MrpProduction(models.Model):
         self._check_no_active_issuances()
         return super().action_cancel()
 
+    def _sync_packing_qty(self):
+        for production in self:
+            packing_wos = production.workorder_ids.filtered(
+                lambda w: w.workcenter_id.is_packing
+            )
+            production.qty_producing = sum(packing_wos.mapped('qty_batch_completed'))
+
     def action_confirm(self):
         res = super().action_confirm()
         # Material is issued physically via reema.material.issuance (RMI).
@@ -94,4 +111,6 @@ class MrpProduction(models.Model):
         self.move_raw_ids.filtered(
             lambda m: m.state not in ('done', 'cancel')
         )._do_unreserve()
+        # qty_producing should start at 0 and climb only when packing batches are logged.
+        self.write({'qty_producing': 0.0})
         return res

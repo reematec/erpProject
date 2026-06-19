@@ -28,8 +28,11 @@
                            invisible="workforce_type == 'employee'"/>
                     <field name="notes" placeholder="Optional: e.g. 'Morning shift batch'"/>
                 </group>
+                <div class="alert alert-warning mb-0 mt-2" role="alert" invisible="not qty_warning">
+                    <field name="qty_warning" readonly="1" nolabel="1"/>
+                </div>
                 <footer>
-                    <button name="action_confirm" type="object" string="Save" class="btn-primary"/>
+                    <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
@@ -46,19 +49,22 @@
                     <button name="action_create_contractor_bill" type="object"
                             string="Create Contractor Bill" class="btn-primary"
                             confirm="Create a vendor bill for the selected unbilled batch entries? All entries must belong to the same contractor."/>
+                    <button name="action_supervisor_delete" type="object"
+                            string="Delete" class="btn-danger"
+                            confirm="This will permanently delete the batch entry AND reverse all inventory movements (SFG product and raw material consumption). This action cannot be undone. Supervisors only. Proceed?"/>
                 </header>
-                <field name="name" string="Reference" readonly="1"/>
-                <field name="date" string="Date"/>
-                <field name="logged_by" string="Logged By"/>
-                <field name="contractor_id" string="Contractor"/>
-                <field name="reema_po_id" string="PO"/>
-                <field name="mo_id" string="MO"/>
-                <field name="process_name" string="Process"/>
-                <field name="qty" string="Qty"/>
-                <field name="qty_balls" string="Balls"/>
-                <field name="piece_rate_value" string="Rate"/>
-                <field name="amount_earned" string="Amount" sum="Total"/>
-                <field name="is_billed" string="Billed" widget="boolean_toggle" readonly="1"/>
+                <field name="name" string="Reference" readonly="1" optional="show"/>
+                <field name="date" string="Date" optional="show"/>
+                <field name="logged_by" string="Logged By" optional="hide"/>
+                <field name="contractor_id" string="Contractor" optional="show"/>
+                <field name="reema_po_id" string="PO" optional="show"/>
+                <field name="mo_id" string="MO" optional="show"/>
+                <field name="process_name" string="Process" optional="show"/>
+                <field name="qty" string="Qty" optional="show"/>
+                <field name="qty_balls" string="Balls" optional="show"/>
+                <field name="piece_rate_value" string="Rate" optional="show"/>
+                <field name="amount_earned" string="Amount" sum="Total" optional="show"/>
+                <field name="is_billed" string="Billed" widget="boolean_toggle" readonly="1" optional="show"/>
                 <field name="bill_id" string="Bill Ref" optional="show"
                        context="{'form_view_ref': 'reema_accounting.view_contractor_bill_form'}"/>
                 <field name="notes" string="Notes" optional="hide"/>

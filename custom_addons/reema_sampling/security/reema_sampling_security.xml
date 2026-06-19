@@ -11,6 +11,7 @@
         <field name="name">Sampling Team</field>
         <field name="category_id" ref="module_category_reema_sampling"/>
         <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
     </record>
 
 </odoo>

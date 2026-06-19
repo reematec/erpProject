@@ -16,7 +16,13 @@
         'views/reema_sampling_blueprint_views.xml',
         'reports/reema_sampling_report.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'reema_sampling/static/src/components/secure_preview/secure_preview.js',
+            'reema_sampling/static/src/components/secure_preview/secure_preview.xml',
+        ],
+    },
     'installable': True,
-    'application': False,
+    'application': True,
     'license': 'LGPL-3',
 }
