@@ -4,6 +4,8 @@ from . import mrp_workcenter
 from . import mrp_production
 from . import mrp_workorder
 from . import reema_piece_rate
+from . import reema_piece_rate_report
+from . import reema_mo_report
 from . import reema_production_order
 from . import reema_wo_batch
 from . import reema_material_issuance

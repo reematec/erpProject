@@ -11,6 +11,10 @@
     <record id="mrp.menu_procurement_compute_mrp" model="ir.ui.menu">
         <field name="active" eval="False"/>
     </record>
+    <!-- Hide Configuration > Operations (accessible via Operations > MO > Work Orders) -->
+    <record id="mrp.menu_mrp_routing_action" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
 
     <!-- Vendors: action + menu under Manufacturing > Configuration -->
     <record id="action_reema_vendors" model="ir.actions.act_window">
@@ -53,6 +57,11 @@
             <xpath expr="." position="attributes">
                 <attribute name="create">0</attribute>
             </xpath>
+            <!-- Print Selected: prints the chosen MOs (appears once rows are ticked) -->
+            <xpath expr="//header" position="inside">
+                <button name="action_print_mo" string="Print Selected"
+                        type="object" class="btn-secondary"/>
+            </xpath>
         </field>
     </record>
 
@@ -76,6 +85,11 @@
             <form position="attributes">
                 <attribute name="create">0</attribute>
             </form>
+            <!-- Print button: opens an HTML preview of this MO in a new tab -->
+            <xpath expr="//header" position="inside">
+                <button name="action_print_mo" string="Print"
+                        type="object" class="btn-secondary"/>
+            </xpath>
             <!-- Smart button: Material Issuances -->
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_issuances"
@@ -115,14 +129,30 @@
                         title="Authorization already exists — click to view"
                         invisible="not has_issuance or state == 'cancel'"/>
             </xpath>
-            <!-- Make quantity (done) readonly and relabel to Consumed -->
+            <!-- Hide stock.move.quantity (shows reserved amount, not actual consumed) -->
             <xpath expr="//field[@name='move_raw_ids']//field[@name='quantity']" position="attributes">
-                <attribute name="readonly">1</attribute>
-                <attribute name="string">Consumed</attribute>
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <!-- Show actual backflush consumed qty (sum of batch-driven consumption moves) -->
+            <xpath expr="//field[@name='move_raw_ids']//field[@name='quantity']" position="after">
+                <field name="backflush_qty" string="Consumed" readonly="1" widget="trim_float"/>
             </xpath>
             <!-- Hide picked (Consumed checkbox) — consumption tracked via RMI, not MO form -->
             <xpath expr="//field[@name='move_raw_ids']//field[@name='picked']" position="attributes">
                 <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <!-- Trim padding zeros from the "To Consume" column (both variants:
+                 the plain one and the mrp_should_consume one) — display only. -->
+            <xpath expr="//field[@name='move_raw_ids']//field[@name='product_uom_qty'][not(@widget)]" position="attributes">
+                <attribute name="widget">trim_float</attribute>
+            </xpath>
+            <xpath expr="//field[@name='move_raw_ids']//field[@name='product_uom_qty'][@widget='mrp_should_consume']" position="attributes">
+                <attribute name="widget">trim_mrp_should_consume</attribute>
+            </xpath>
+            <!-- Miscellaneous tab is for admins only (warehouse/location/scheduling
+                 internals); hide it from Production Manager and all staff. -->
+            <xpath expr="//page[@name='miscellaneous']" position="attributes">
+                <attribute name="groups">base.group_system</attribute>
             </xpath>
             <xpath expr="//field[@name='bom_id']" position="after">
                 <field name="construction_type" options="{'no_create': True, 'no_edit': True}"
@@ -207,10 +237,10 @@
                 <field name="workforce_type" column_invisible="1"/>
                 <field name="contractor_ids" widget="many2many_tags" options="{'no_create': True, 'no_edit': True}"
                        invisible="workforce_type == 'employee'"/>
-                <field name="hall_qty" string="Target" readonly="1"/>
-                <field name="qty_batch_completed" string="Completed" readonly="1"/>
+                <field name="hall_qty" string="Target" readonly="1" widget="trim_float"/>
+                <field name="qty_batch_completed" string="Completed" readonly="1" widget="trim_float"/>
                 <field name="hall_unit_label" string="UOM" readonly="1" optional="show"/>
-                <field name="qty_balls_completed" string="Balls Done" readonly="1" optional="show"/>
+                <field name="qty_balls_completed" string="Balls Done" readonly="1" optional="show" widget="trim_float"/>
             </xpath>
             <!-- Place the Log-batch button adjacent to the native Start/Done buttons so all
                  action buttons share ONE button column (avoids a second reserved ~90px column) -->
@@ -331,6 +361,39 @@
         <field name="model">mrp.bom</field>
         <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
         <field name="arch" type="xml">
+            <!-- Header with a Print button: opens an HTML preview in a new tab. -->
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_print_bom" string="Print"
+                            type="object" class="btn-secondary"/>
+                </header>
+            </xpath>
+            <!-- Hide BoM Overview smart button — not used in our flow -->
+            <xpath expr="//div[@name='button_box']/button[@icon='fa-bars']" position="replace"/>
+            <!-- Hide the Archived ribbon — archiving is disabled -->
+            <xpath expr="//widget[@name='web_ribbon']" position="replace"/>
+            <!-- BOM Type is always "Manufacture this Product" in our flow; hide the
+                 field (and its Kit option). The model default is 'normal'. -->
+            <xpath expr="//field[@name='type']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <!-- Miscellaneous tab is for admins only. -->
+            <xpath expr="//page[@name='miscellaneous']" position="attributes">
+                <attribute name="groups">base.group_system</attribute>
+            </xpath>
+            <!-- Manuf. Lead Time and Days to Prepare MO are not used in our flow — hide them. -->
+            <xpath expr="//label[@for='produce_delay']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//div[field[@name='produce_delay']]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//label[@for='days_to_prepare_mo']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//div[field[@name='days_to_prepare_mo']]" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
             <!-- Show BOM reference as a title above the fields -->
             <xpath expr="//sheet/group[1]" position="before">
                 <div class="oe_title">
@@ -370,9 +433,23 @@
             <xpath expr="//page[@name='components']/field[@name='bom_line_ids']" position="before">
                 <widget name="bom_components_info_banner"/>
             </xpath>
-            <!-- Lock product and qty fields when BOM has active MOs -->
+            <!-- Lock product and qty fields when BOM has active MOs.
+                 Also hide the raw product field when a sample exists — the sample
+                 (shown below, labelled "Product") is displayed instead so clicking
+                 it opens the sample sheet rather than the product. -->
             <xpath expr="//field[@name='product_tmpl_id']" position="attributes">
                 <attribute name="readonly">has_active_mo</attribute>
+                <attribute name="invisible">sample_id != False</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_tmpl_id']" position="after">
+                <field name="sample_id" string="Product" readonly="1"
+                       widget="many2one_new_tab"
+                       invisible="sample_id == False"
+                       options="{'no_create': True, 'no_edit': True}"/>
+                <field name="sample_layout_file" widget="image"
+                       options="{'size': [120, 120]}"
+                       invisible="not sample_id or not sample_layout_file"
+                       readonly="1" string="Sample Layout"/>
             </xpath>
             <xpath expr="//field[@name='product_qty']" position="attributes">
                 <attribute name="readonly">has_active_mo</attribute>
@@ -398,6 +475,10 @@
             <!-- Operations tab: collapsible info banner (OWL widget with localStorage) -->
             <xpath expr="//page[@name='operations']/field[@name='operation_ids']" position="before">
                 <widget name="bom_ops_info_banner"/>
+                <!-- Single design-level Impressions/Ball, applied at the printing work center -->
+                <group>
+                    <field name="impressions_per_ball"/>
+                </group>
             </xpath>
         </field>
     </record>
@@ -409,6 +490,8 @@
         <field name="inherit_id" ref="mrp.mrp_bom_tree_view"/>
         <field name="arch" type="xml">
             <xpath expr="//list/field[1]" position="before">
+                <field name="sample_layout_file" widget="image"
+                       options="{'size': [40, 40]}" string="Layout" optional="show"/>
                 <field name="reema_reference" string="BOM Ref"/>
             </xpath>
         </field>
@@ -434,11 +517,10 @@
                         invisible="context.get('parent_production_id')"/>
             </xpath>
             <xpath expr="//field[@name='workcenter_id']" position="after">
-                <field name="balls_per_unit"/>
+                <field name="balls_per_unit" widget="trim_float"/>
                 <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
                        domain="[('workcenter_id', '=', workcenter_id)]"/>
                 <field name="pay_basis"/>
-                <field name="impressions_per_ball" optional="show"/>
             </xpath>
             <!-- Hide Duration Computation and Duration columns — not relevant for floor ops -->
             <xpath expr="//field[@name='time_mode']" position="attributes">
@@ -462,12 +544,22 @@
         <field name="model">mrp.routing.workcenter</field>
         <field name="inherit_id" ref="mrp.mrp_routing_workcenter_form_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-info" role="alert" style="margin: 0;">
+                    <strong>What is an Operation?</strong>
+                    An Operation is a single production step — for example <em>Cutting</em>, <em>Stitching</em>, or <em>Printing</em>.
+                    Each operation is linked to one Hall (Work Center) and is added to a Bill of Materials so that when a Manufacturing Order is confirmed,
+                    the system automatically creates a Work Order for that hall.<br/>
+                    The <strong>Piece Rate</strong> and <strong>Pay Basis</strong> fields here control how contractors in that hall get paid:
+                    the rate comes from the Piece Rates list and the pay basis decides whether payment is calculated per ball or per hall unit logged.
+                    The <strong>Balls per Unit</strong> factor converts logged hall units into balls for reporting.
+                </div>
+            </xpath>
             <xpath expr="//field[@name='workcenter_id']" position="after">
-                <field name="balls_per_unit"/>
+                <field name="balls_per_unit" widget="trim_float"/>
                 <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
                        domain="[('workcenter_id', '=', workcenter_id)]"/>
                 <field name="pay_basis"/>
-                <field name="impressions_per_ball"/>
             </xpath>
             <!-- Blocked by: only allow selecting existing operations, no create/edit -->
             <xpath expr="//field[@name='blocked_by_operation_ids']" position="attributes">
@@ -527,6 +619,41 @@
             <xpath expr="//field[@name='default_capacity']" position="replace"/>
             <xpath expr="//group[@name='costing']" position="replace"/>
             <xpath expr="//page[@name='capacity']" position="replace"/>
+        </field>
+    </record>
+
+    <!-- Work Center List: drop irrelevant shop-floor columns (OEE, time efficiency,
+         productive time, time start/stop, costs/hour, capacity, tags, alternatives)
+         and surface the business-relevant hall fields instead. -->
+    <record id="mrp_workcenter_reema_list" model="ir.ui.view">
+        <field name="name">mrp.workcenter.reema.list</field>
+        <field name="model">mrp.workcenter</field>
+        <field name="inherit_id" ref="mrp.mrp_workcenter_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='tag_ids']" position="replace"/>
+            <xpath expr="//field[@name='alternative_workcenter_ids']" position="replace"/>
+            <xpath expr="//field[@name='productive_time']" position="replace"/>
+            <xpath expr="//field[@name='costs_hour']" position="replace"/>
+            <xpath expr="//field[@name='default_capacity']" position="replace"/>
+            <xpath expr="//field[@name='time_efficiency']" position="replace"/>
+            <xpath expr="//field[@name='oee_target']" position="replace"/>
+            <xpath expr="//field[@name='time_start']" position="replace"/>
+            <xpath expr="//field[@name='time_stop']" position="replace"/>
+            <xpath expr="//field[@name='code']" position="after">
+                <field name="location_id" optional="show"
+                       options="{'no_create': True, 'no_edit': True}"/>
+                <field name="hall_unit" optional="show"/>
+                <field name="workforce_type" optional="show"/>
+                <field name="sfg_product_id" optional="hide"
+                       options="{'no_create': True, 'no_edit': True}"/>
+                <field name="expense_account_id" optional="hide"
+                       groups="base.group_erp_manager"
+                       options="{'no_create': True, 'no_edit': True}"/>
+                <field name="is_qc_point" optional="hide"/>
+                <field name="is_packing" optional="hide"/>
+                <field name="is_ilo" optional="hide"/>
+                <field name="is_printing" optional="hide"/>
+            </xpath>
         </field>
     </record>
 

@@ -38,17 +38,39 @@ class ResPartnerExt(models.Model):
             return
         candidates.property_account_payable_id = shared_payable
 
+    def _assign_customer_receivable(self):
+        """Auto-create individual receivable account (1-1-2-xx) for customers that don't have one yet."""
+        candidates = self.filtered(
+            lambda p: p.customer_rank > 0
+            and not (
+                p.property_account_receivable_id
+                and p.property_account_receivable_id.code.startswith(CUSTOMER_PREFIX + '-')
+            )
+        )
+        for partner in candidates:
+            code = partner._next_account_code(CUSTOMER_PREFIX)
+            account = partner.env['account.account'].sudo().create({
+                'name': partner.name + ' — Receivable',
+                'code': code,
+                'account_type': 'asset_receivable',
+                'reconcile': True,
+                'partner_id': partner.id,
+            })
+            partner.property_account_receivable_id = account
+
     @api.model_create_multi
     def create(self, vals_list):
         partners = super().create(vals_list)
         partners._assign_contractor_payable()
+        partners._assign_customer_receivable()
         return partners
 
     def write(self, vals):
         result = super().write(vals)
-        # Auto-link when a partner is flagged as a contractor on any form
         if vals.get('is_contractor'):
             self._assign_contractor_payable()
+        if vals.get('customer_rank'):
+            self._assign_customer_receivable()
         return result
 
     def _next_account_code(self, prefix):

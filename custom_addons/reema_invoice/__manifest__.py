@@ -11,6 +11,7 @@
         'data/reema_invoice_data.xml',
         'views/reema_invoice_views.xml',
         'reports/reema_invoice_report.xml',
+        'reports/reema_invoice_html_report.xml',
     ],
     'assets': {
         'web.assets_backend': [

@@ -13,10 +13,10 @@
                 <header>
                     <!-- Draft → In Progress -->
                     <button name="action_start"
-                            string="Start Production"
+                            string="Start Sample"
                             type="object"
                             class="oe_highlight"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"
                             invisible="state != 'draft'"
                             confirm="Start production of this sample?"
                             confirm-label="Yes, Start"
@@ -26,46 +26,34 @@
                             string="Mark Completed"
                             type="object"
                             class="oe_highlight"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"
                             invisible="state != 'in_progress'"
                             confirm="Mark this sample as completed? This means the physical sample is ready for review."
                             confirm-label="Yes, Mark Completed"
                             cancel-label="Go Back"/>
-                    <!-- Completed → Sample Approved -->
+                    <!-- Completed → Shipped (send physical sample to customer for review) -->
+                    <button name="action_shipped"
+                            string="Ship to Customer"
+                            type="object"
+                            class="oe_highlight"
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"
+                            invisible="state != 'completed'"/>
+                    <!-- Completed / Shipped → Sample Approved -->
                     <button name="action_sample_approved"
                             string="Sample Approved"
                             type="object"
                             class="oe_highlight"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"
-                            invisible="state != 'completed'"
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"
+                            invisible="state not in ('completed', 'shipped')"
                             confirm="Mark this sample as approved by the customer? Waleed will be notified to define the BOM."
                             confirm-label="Yes, Approve"
                             cancel-label="Go Back"/>
-                    <!-- Completed → Sample Rejected -->
-                    <button name="action_sample_rejected"
+                    <!-- Completed / Shipped → Rejected (opens wizard for reason + outcome) -->
+                    <button name="action_open_rejection_wizard"
                             string="Sample Rejected"
                             type="object"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"
-                            invisible="state != 'completed'"
-                            confirm="Mark this sample as rejected by the customer?"
-                            confirm-label="Yes, Mark Rejected"
-                            cancel-label="Go Back"/>
-                    <!-- Completed / Sample Approved / Production Ready → Shipped (opens wizard) -->
-                    <button name="action_shipped"
-                            string="Ship"
-                            type="object"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"
-                            invisible="state not in ('completed', 'sample_approved', 'production_ready')"/>
-                    <!-- Sample Approved → Production Ready -->
-                    <button name="action_production_ready"
-                            string="Mark Production Ready"
-                            type="object"
-                            class="oe_highlight"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"
-                            invisible="state != 'sample_approved'"
-                            confirm="Mark this sample as production ready? This confirms the BOM is complete and bulk orders can proceed."
-                            confirm-label="Yes, Mark Ready"
-                            cancel-label="Go Back"/>
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"
+                            invisible="state not in ('completed', 'shipped')"/>
                     <!-- Admin only: revert one step back to correct an accidental status change -->
                     <button name="action_step_back"
                             string="Revert Last Step"
@@ -88,15 +76,18 @@
                     <button name="action_reset_draft"
                             string="Reset to Draft"
                             type="object"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"
                             invisible="state not in ('cancelled', 'sample_rejected')"
                             confirm="Reset this sample back to Draft?"
                             confirm-label="Yes, Reset"
                             cancel-label="Go Back"/>
                     <button name="action_print_sampling" string="Print" type="object"
-                            groups="reema_sampling.group_reema_sampling,base.group_system"/>
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
+                    <button name="action_open_status_info" type="object"
+                            icon="fa-info-circle"
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="draft,in_progress,completed,sample_approved,production_ready"/>
+                           statusbar_visible="draft,in_progress,completed,shipped,sample_approved"/>
                 </header>
                 <sheet>
                     <field name="is_sampling_user" invisible="1"/>
@@ -106,7 +97,7 @@
                                 type="object"
                                 class="oe_stat_button"
                                 icon="fa-list"
-                                invisible="state not in ('sample_approved', 'production_ready', 'shipped')">
+                                invisible="state not in ('sample_approved', 'shipped')">
                             <field name="bom_count" widget="statinfo" string="BoM"/>
                         </button>
                     </div>
@@ -116,76 +107,78 @@
                         </h1>
                         <label for="name" string="Sample Name"/>
                         <h2>
-                            <field name="name" placeholder="e.g. World Cup 2026 Pro" readonly="not is_sampling_user"/>
+                            <field name="name" placeholder="e.g. World Cup 2026 Pro" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                         </h2>
                     </div>
 
                     <!-- Main Information Group -->
                     <group>
                         <group string="Basic Details">
-                            <field name="model_alias" readonly="not is_sampling_user"/>
+                            <field name="model_alias" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                             <field name="customer_id"
                                    domain="[('customer_rank', '>', 0)]"
                                    options="{'no_create': True, 'no_edit': True, 'no_open': True}"
-                                   readonly="not is_sampling_user"/>
-                            <field name="sampling_date" readonly="not is_sampling_user"/>
+                                   readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
+                            <field name="sampling_date" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                         </group>
                         <group string="Status &amp; Tracking">
-                            <field name="completion_date" readonly="not is_sampling_user"/>
-                            <field name="shipping_date" readonly="not is_sampling_user"/>
+                            <field name="completion_date" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
+                            <field name="shipping_date" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                             <field name="reference_piece_kept" readonly="1"/>
                         </group>
                     </group>
 
                     <group>
                         <group string="Design Specification">
-                            <field name="ball_type" readonly="not is_sampling_user"/>
-                            <field name="construction_type" readonly="not is_sampling_user"/>
+                            <field name="product_type_id" options="{'no_create': True, 'no_edit': True}"
+                                   readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
+                            <field name="ball_type" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
+                            <field name="construction_type" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                             <field name="total_panels" readonly="1"/>
-                            <field name="color" readonly="not is_sampling_user"/>
+                            <field name="color" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                         </group>
                         <group string="Technical Requirements">
-                            <field name="weight_range" readonly="not is_sampling_user"/>
-                            <field name="circumference" readonly="not is_sampling_user"/>
-                            <field name="bounce_requirement" readonly="not is_sampling_user"/>
+                            <field name="weight_range" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
+                            <field name="circumference" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
+                            <field name="bounce_requirement" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                         </group>
                     </group>
 
                     <!-- File Uploads Section (Moved before Size Details as requested) -->
                     <!--
-                        Attachments are sensitive IP. Sampling editors keep the native
-                        upload widgets; everyone else (read-only viewers) sees the
-                        secure_file_preview widget which renders images/PDFs inline with
-                        NO download path. See secure_preview.js.
+                        Attachments are sensitive IP. The secure_file_preview widget
+                        (inline image/PDF thumbnails + click-to-modal, NO download path)
+                        is shown to EVERY user. Sampling editors/admin additionally keep
+                        the native upload widgets alongside it for upload/delete/download.
+                        See secure_preview.js.
                     -->
                     <group string="Attachments &amp; Layouts">
                         <field name="layout_file_mimetype" invisible="1"/>
                         <group>
                             <label for="layout_file" string="Layout Image/PDF"/>
                             <div class="o_row">
-                                <!-- Editors: native upload (replace/clear) -->
+                                <!-- Editors/admin: native upload (replace/clear/download) -->
                                 <field name="layout_file" filename="layout_filename"
-                                       invisible="not is_sampling_user"/>
+                                       invisible="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                                 <field name="layout_filename" invisible="1"/>
-                                <!-- Viewers: secure inline preview, no download -->
+                                <!-- Viewers: secure inline thumbnail + modal, no download -->
                                 <field name="layout_file" widget="secure_file_preview"
-                                       nolabel="1" readonly="1" invisible="is_sampling_user"/>
+                                       nolabel="1" readonly="1" invisible="is_sampling_user and state not in ('shipped', 'sample_approved')"/>
                             </div>
                         </group>
                         <group>
-                            <!-- Editors: native attach/remove -->
+                            <!-- Editors/admin: native attach/remove -->
                             <field name="final_sample_images" widget="many2many_binary"
-                                   string="Final Sample Images" invisible="not is_sampling_user"/>
-                            <!-- Viewers: secure inline preview, no download -->
+                                   string="Final Sample Images" invisible="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
+                            <!-- Viewers: secure inline thumbnail + modal, no download -->
                             <field name="final_sample_images" widget="secure_file_preview"
-                                   string="Final Sample Images" readonly="1"
-                                   invisible="is_sampling_user"/>
+                                   string="Final Sample Images" readonly="1" invisible="is_sampling_user and state not in ('shipped', 'sample_approved')"/>
                         </group>
                     </group>
 
                     <notebook>
                         <page string="Size &amp; Production Quantities" name="sizes">
-                            <field name="size_line_ids" nolabel="1" readonly="not is_sampling_user">
+                            <field name="size_line_ids" nolabel="1" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="ball_size"/>
@@ -199,7 +192,7 @@
                                 Material Lines: 'options' are used here to disable 'create' and 'edit',
                                 ensuring users only select existing materials from the catalog.
                             -->
-                            <field name="material_line_ids" readonly="not is_sampling_user">
+                            <field name="material_line_ids" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="product_id"
@@ -213,7 +206,7 @@
                         </page>
                         <!-- Cutting Knives Tab -->
                         <page string="Cutting Knives" name="cutting_knives">
-                            <field name="knife_line_ids" readonly="not is_sampling_user">
+                            <field name="knife_line_ids" readonly="not is_sampling_user or state in ('shipped', 'sample_approved')">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="shape_name"/>
@@ -226,7 +219,7 @@
                         </page>
                         <!-- General Notes Tab -->
                         <page string="General Notes" name="general_notes">
-                            <field name="notes" placeholder="Add any additional requirements..." readonly="not is_sampling_user"/>
+                            <field name="notes" placeholder="Add any additional requirements..." readonly="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                         </page>
                     </notebook>
                 </sheet>
@@ -258,6 +251,98 @@
                             type="object"
                             string="Confirm Shipment"
                             class="btn-primary"/>
+                    <button string="Go Back" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Status Info Wizard -->
+    <record id="view_reema_sampling_status_info_wizard_form" model="ir.ui.view">
+        <field name="name">reema.sampling.status.info.wizard.form</field>
+        <field name="model">reema.sampling.status.info.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Sample Status Reference">
+                <sheet>
+                    <table class="table table-sm table-bordered" style="font-size:13px;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:160px">Status</th>
+                                <th>What it means &amp; key effects</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge text-bg-secondary">Draft</span></td>
+                                <td>Initial state. All fields editable. Sample not yet started.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-info">In Progress</span></td>
+                                <td>Sample is being physically made. All fields editable.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-primary">Completed</span></td>
+                                <td>Physical sample is ready. Can be shipped to the customer for review, or approved/rejected directly if the customer visited in person.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-warning text-dark">Shipped</span></td>
+                                <td>Sample sent to customer for review. Form is <strong>locked</strong> — no edits allowed. Approve or reject once the customer responds.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-success">Sample Approved</span></td>
+                                <td>Customer has signed off. Form is <strong>permanently locked</strong>. Production Manager is automatically notified to create the Bill of Materials. Sample stays in the Pending BOM queue until a BOM is created.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-danger">Sample Rejected</span></td>
+                                <td>
+                                    A wizard appears asking for the rejection reason and what happens next:
+                                    <ul class="mb-0 mt-1">
+                                        <li><strong>No Further Development</strong> — sample is cancelled permanently.</li>
+                                        <li><strong>Revise &amp; Remake</strong> — sample returns to In Progress so specs can be revised and a new sample made.</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-dark">Cancelled</span></td>
+                                <td>Dead end. Sample is locked and will not be developed further. Can only be reset to Draft by an administrator.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </sheet>
+                <footer>
+                    <button string="Close" class="btn-primary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Rejection Wizard -->
+    <record id="view_reema_sampling_rejection_wizard_form" model="ir.ui.view">
+        <field name="name">reema.sampling.rejection.wizard.form</field>
+        <field name="model">reema.sampling.rejection.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Sample Rejected">
+                <group>
+                    <field name="blueprint_id" readonly="1"/>
+                </group>
+                <group string="Rejection Details">
+                    <field name="rejection_reason"
+                           placeholder="Describe the customer's reason for rejection (color, weight, stitching, etc.)..."
+                           nolabel="1"
+                           colspan="2"/>
+                </group>
+                <group string="What should happen next?">
+                    <field name="outcome" widget="radio" nolabel="1" colspan="2"/>
+                </group>
+                <div class="alert alert-warning" role="alert">
+                    <strong>No Further Development</strong> will permanently lock this sample — it cannot be edited or restarted.<br/>
+                    <strong>Revise &amp; Remake</strong> will move it back to In Progress so specs can be updated and a new sample made.
+                </div>
+                <footer>
+                    <button name="action_confirm"
+                            type="object"
+                            string="Confirm"
+                            class="btn-danger"/>
                     <button string="Go Back" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
@@ -345,7 +430,8 @@
         <field name="name">reema.sampling.blueprint.pending.bom.list</field>
         <field name="model">reema.sampling.blueprint</field>
         <field name="arch" type="xml">
-            <list create="0" edit="0" delete="0" string="Pending BOM">
+            <list create="0" edit="0" delete="0" string="Pending BOM"
+                  js_class="pending_bom_list">
                 <field name="layout_file" widget="image" options="{'size': [40, 40]}" string="Layout"/>
                 <field name="reference"/>
                 <field name="name" string="Sample Name"/>
@@ -369,16 +455,8 @@
             <form string="Sample — Pending BOM" readonly="1">
                 <header>
                     <field name="bom_count" invisible="1"/>
-                    <button name="action_production_ready"
-                            type="object"
-                            string="Mark Production Ready"
-                            class="btn-primary"
-                            invisible="bom_count == 0"
-                            confirm="Mark this sample as Production Ready? It will be removed from the Pending BOM queue."
-                            confirm-label="Yes, Mark Ready"
-                            cancel-label="Go Back"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="draft,in_progress,completed,sample_approved,production_ready"/>
+                           statusbar_visible="draft,in_progress,completed,shipped,sample_approved"/>
                 </header>
                 <sheet>
                     <!-- BOM Smart Button — always visible here, this is Waleed's entry point -->
@@ -492,7 +570,7 @@
         <field name="name">Pending BOM</field>
         <field name="res_model">reema.sampling.blueprint</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('state', '=', 'sample_approved')]</field>
+        <field name="domain">[('bom_count', '=', 0), ('state', '=', 'sample_approved')]</field>
         <field name="view_id" ref="view_pending_bom_list"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
@@ -516,23 +594,55 @@
         <field name="act_window_id" ref="action_pending_bom_samples"/>
     </record>
 
+    <!-- ── Product Types config ─────────────────────────────────────────── -->
+    <record id="view_reema_product_type_list" model="ir.ui.view">
+        <field name="name">reema.product.type.list</field>
+        <field name="model">reema.product.type</field>
+        <field name="arch" type="xml">
+            <list string="Product Types" editable="bottom">
+                <field name="name"/>
+                <field name="sales_account_id" options="{'no_create': True, 'no_edit': True}"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reema_product_type" model="ir.actions.act_window">
+        <field name="name">Product Types</field>
+        <field name="res_model">reema.product.type</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <menuitem id="menu_reema_sampling_config"
+              name="Configuration"
+              parent="menu_reema_sampling_root"
+              sequence="90"
+              groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
+
+    <menuitem id="menu_reema_product_types"
+              name="Product Types"
+              parent="menu_reema_sampling_config"
+              action="action_reema_product_type"
+              sequence="10"
+              groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
+
     <menuitem id="menu_reema_sampling_root"
               name="Sampling"
               sequence="10"
               web_icon="mrp,static/description/icon.png"
-              groups="reema_sampling.group_reema_sampling,base.group_erp_manager"/>
+              groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
 
     <menuitem id="menu_reema_sampling_blueprint"
               name="Samples"
               parent="menu_reema_sampling_root"
               action="action_reema_sampling_blueprint"
               sequence="10"
-              groups="reema_sampling.group_reema_sampling,base.group_erp_manager"/>
+              groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
 
     <menuitem id="menu_pending_bom"
               name="Pending BOM"
               parent="mrp.menu_mrp_manufacturing"
               action="action_pending_bom_samples"
               sequence="15"
-              groups="base.group_user"/>
+              groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
+
 </odoo>

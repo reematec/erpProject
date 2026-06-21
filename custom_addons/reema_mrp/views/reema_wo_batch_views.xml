@@ -23,7 +23,22 @@
                     <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"
                            invisible="workforce_type == 'employee'"
                            required="workforce_type != 'employee'"/>
-                    <field name="qty" autofocus="1"/>
+                    <field name="hall_unit" invisible="1"/>
+                    <!-- Sheet halls (Lamination) -->
+                    <field name="qty" string="Sheets Completed" autofocus="1"
+                           invisible="hall_unit != 'sheet'"/>
+                    <!-- Ball halls (Stitching, Shaping, QC, ...) -->
+                    <field name="qty" string="Balls Completed" autofocus="1"
+                           invisible="hall_unit != 'ball'"/>
+                    <!-- Panel halls (Cutting, Printing, Sorting): bidirectional Balls <-> Panels, real-time -->
+                    <field name="qty_balls_input" string="Balls Completed" autofocus="1"
+                           widget="panels_balls_sync"
+                           invisible="hall_unit != 'panel'"/>
+                    <field name="qty" string="Panels Completed"
+                           widget="panels_balls_sync"
+                           invisible="hall_unit != 'panel'"/>
+                    <field name="panels_per_ball" string="Panels per Ball" readonly="1"
+                           invisible="hall_unit != 'panel'"/>
                     <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
                            invisible="workforce_type == 'employee'"/>
                     <field name="notes" placeholder="Optional: e.g. 'Morning shift batch'"/>
@@ -49,6 +64,13 @@
                     <button name="action_create_contractor_bill" type="object"
                             string="Create Contractor Bill" class="btn-primary"
                             confirm="Create a vendor bill for the selected unbilled batch entries? All entries must belong to the same contractor."/>
+                    <button name="action_exclude_from_payment" type="object"
+                            string="Exclude from Payment" class="btn-warning"
+                            confirm="Mark the selected batch entries as NOT to be paid? They will be removed from the unbilled list and will not be added to any contractor bill.&#10;&#10;⚠ WARNING: This action CANNOT be reversed. Once a log is excluded from payment it stays excluded — make absolutely sure before you proceed."/>
+                    <button name="action_include_in_payment" type="object"
+                            string="Include in Payment" class="btn-secondary"
+                            groups="base.group_system"
+                            confirm="Re-include the selected batch entries in payment? They will reappear in the unbilled list and become billable again. Proceed?"/>
                     <button name="action_supervisor_delete" type="object"
                             string="Delete" class="btn-danger"
                             confirm="This will permanently delete the batch entry AND reverse all inventory movements (SFG product and raw material consumption). This action cannot be undone. Supervisors only. Proceed?"/>
@@ -65,6 +87,8 @@
                 <field name="piece_rate_value" string="Rate" optional="show"/>
                 <field name="amount_earned" string="Amount" sum="Total" optional="show"/>
                 <field name="is_billed" string="Billed" widget="boolean_toggle" readonly="1" optional="show"/>
+                <field name="payment_excluded" string="Excluded" widget="boolean_toggle" readonly="1" optional="show"/>
+                <field name="exclusion_reason" string="Exclusion Reason" optional="hide"/>
                 <field name="bill_id" string="Bill Ref" optional="show"
                        context="{'form_view_ref': 'reema_accounting.view_contractor_bill_form'}"/>
                 <field name="notes" string="Notes" optional="hide"/>
@@ -103,6 +127,10 @@
                     <group>
                         <field name="notes" readonly="1"/>
                     </group>
+                    <group string="Payment" invisible="workforce_type == 'employee'">
+                        <field name="payment_excluded" readonly="1"/>
+                        <field name="exclusion_reason" invisible="not payment_excluded"/>
+                    </group>
                     <group invisible="not is_billed">
                         <field name="bill_id" readonly="1"
                                context="{'form_view_ref': 'reema_accounting.view_contractor_bill_form'}"/>
@@ -122,8 +150,9 @@
                 <field name="contractor_id" string="Contractor"/>
                 <field name="workorder_id" string="Work Order"/>
                 <field name="piece_rate_id" string="Piece Rate"/>
-                <filter string="Unbilled" name="unbilled" domain="[('is_billed', '=', False)]"/>
+                <filter string="Unbilled" name="unbilled" domain="[('is_billed', '=', False), ('payment_excluded', '=', False)]"/>
                 <filter string="Billed"   name="billed"   domain="[('is_billed', '=', True)]"/>
+                <filter string="Excluded from Payment" name="excluded" domain="[('payment_excluded', '=', True)]"/>
                 <separator/>
                 <filter string="Today" name="today"
                         domain="[('date', '>=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>

@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!--
-        Report Action: This registers the PDF report in Odoo.
-        - report_type="qweb-pdf" tells Odoo to render the template and convert to PDF via wkhtmltopdf.
-        - binding_model_id links it to reema.sampling.blueprint so it also appears in the Print menu.
-        - The 'Print' button in the form calls action_print_sampling(), which returns this action by name.
+        Report Action: registers the HTML report in Odoo.
+        - report_type="qweb-html" renders the template to HTML (no PDF/wkhtmltopdf).
+        - No binding_model_id/binding_type: we deliberately keep it OUT of the cog
+          Print menu so there is a single print path. The 'Print' button in the form
+          calls action_print_sampling(), which opens /report/html/... in a new tab;
+          the user prints with the browser.
     -->
     <record id="action_report_reema_sampling" model="ir.actions.report">
         <field name="name">Sampling Blueprint</field>
         <field name="model">reema.sampling.blueprint</field>
-        <field name="report_type">qweb-pdf</field>
+        <field name="report_type">qweb-html</field>
         <field name="report_name">reema_sampling.report_reema_sampling_template</field>
         <field name="report_file">reema_sampling.report_reema_sampling_template</field>
         <field name="print_report_name">'Blueprint - %s' % (object.reference)</field>
-        <field name="binding_model_id" ref="model_reema_sampling_blueprint"/>
-        <field name="binding_type">report</field>
     </record>
 
     <!--
@@ -29,14 +29,21 @@
                 <t t-call="web.external_layout">
                     <div class="page">
 
-                        <!-- Title Block -->
-                        <div class="row mb-4">
+                        <style>
+                            @page { margin: 12mm; }
+                        </style>
+
+                        <!-- Title Block: align both columns to the bottom so the title/alias
+                             line up with the bottom of the layout image. -->
+                        <div class="row mt-2 mb-2 align-items-end">
                             <div class="col-8">
-                                <h2 style="margin-bottom:2px;">
-                                    <span t-field="o.reference"/> — <span t-field="o.name"/>
-                                </h2>
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    <span t-field="o.reference"/>
+                                    <br/>
+                                    <span t-field="o.name"/>
+                                </div>
                                 <t t-if="o.model_alias">
-                                    <p class="text-muted" style="margin:0;">Alias: <span t-field="o.model_alias"/></p>
+                                    <p class="text-muted" style="margin:0; font-size:11px;">Alias: <span t-field="o.model_alias"/></p>
                                 </t>
                             </div>
                             <div class="col-4 text-right">
@@ -44,7 +51,7 @@
                                      Binary fields arrive as base64-encoded bytes; .decode() converts to string. -->
                                 <t t-if="o.layout_file">
                                     <img t-att-src="'data:image/png;base64,' + o.layout_file.decode('utf-8')"
-                                         style="max-height:90px; max-width:140px; object-fit:contain;"/>
+                                         style="max-height:100px; max-width:120px; object-fit:contain;"/>
                                 </t>
                             </div>
                         </div>
@@ -80,11 +87,7 @@
                             <div class="col-6">
                                 <table class="table table-sm table-borderless" style="font-size:13px;">
                                     <tr>
-                                        <td style="width:50%;"><strong>HS Code</strong></td>
-                                        <td><span t-field="o.hs_code"/></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Ball Type</strong></td>
+                                        <td style="width:50%;"><strong>Ball Type</strong></td>
                                         <td><span t-field="o.ball_type"/></td>
                                     </tr>
                                     <tr>

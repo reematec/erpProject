@@ -51,7 +51,7 @@
                     <button name="action_reject"         string="Reject"       type="object"
                             invisible="state != 'sent'"/>
                     <button name="action_close"          string="Mark as Shipped" type="object"
-                            invisible="state not in ('accepted', 'rejected')"/>
+                            invisible="state != 'accepted'"/>
                     <button name="action_undo_shipped"   string="Undo Shipped"    type="object"
                             groups="base.group_system"
                             invisible="state != 'closed'"
@@ -62,11 +62,24 @@
                             invisible="state in ('draft', 'pending')"/>
                     <button name="action_print_invoice"  string="Print PI"     type="object"
                             invisible="state == 'draft'"/>
+                    <button name="action_open_status_info" type="object"
+                            icon="fa-info-circle"
+                            groups="reema_invoice.group_reema_invoice_user,base.group_erp_manager,base.group_system"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,pending,sent,accepted,rejected"/>
                 </header>
 
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_move" type="object"
+                                class="oe_stat_button" icon="fa-book"
+                                invisible="not move_id">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Journal Entry</span>
+                            </div>
+                        </button>
+                    </div>
+
                     <div class="oe_title">
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
@@ -88,6 +101,8 @@
                             <field name="client_order_number" readonly="state not in ('draft', 'pending')"/>
                             <field name="client_order_date" readonly="state not in ('draft', 'pending')"/>
                             <field name="payment_terms_id" readonly="state not in ('draft', 'pending')"
+                                   options="{'no_create': True, 'no_edit': True}"/>
+                            <field name="currency_id" readonly="state not in ('draft', 'pending')"
                                    options="{'no_create': True, 'no_edit': True}"/>
                         </group>
                     </group>
@@ -187,17 +202,10 @@
                                     <field name="net_weight" readonly="state not in ('draft', 'pending')"/>
                                 </group>
                             </group>
+                        </page>
 
-                            <!--
-                                Shipping Documents — each row is a named document category
-                                (e.g. "Sticker") with any number of files attached.
-                                Files are stored in Odoo's filestore (disk), not in the DB.
-                                The many2many_binary widget in the popup shows an "Attach Files"
-                                button and lists uploaded files with preview/download links.
-                                Workflow: type name inline → click the → arrow to open popup
-                                → click "Attach Files" to upload → close popup.
-                            -->
-                            <separator string="Shipping Documents"/>
+                        <!-- ── Shipping Documents tab ────────────────────────────────── -->
+                        <page string="Shipping Documents" name="shipping_documents">
                             <field name="document_ids" readonly="state not in ('draft', 'pending')">
                                 <list>
                                     <field name="name"       string="Document Name"/>
@@ -375,6 +383,27 @@
               sequence="20"
               groups="reema_invoice.group_reema_invoice_user,base.group_erp_manager"/>
 
+    <menuitem id="menu_reema_payment_terms"
+              name="Payment Terms"
+              parent="menu_reema_invoice_config"
+              action="account.action_payment_term_form"
+              sequence="30"
+              groups="reema_invoice.group_reema_invoice_user,base.group_erp_manager,base.group_system"/>
+
+    <menuitem id="menu_reema_incoterms"
+              name="Incoterms"
+              parent="menu_reema_invoice_config"
+              action="account.action_incoterms_tree"
+              sequence="35"
+              groups="reema_invoice.group_reema_invoice_user,base.group_erp_manager,base.group_system"/>
+
+    <menuitem id="menu_reema_currencies"
+              name="Currencies"
+              parent="menu_reema_invoice_config"
+              action="base.action_currency_form"
+              sequence="40"
+              groups="base.group_erp_manager,base.group_system"/>
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          PACKING STAFF VIEWS
          Packing Staff see only accepted/closed invoices in read-only mode.
@@ -469,8 +498,8 @@
                             </div>
                         </page>
 
-                        <!-- Carton details + shipping documents — the core packing workflow -->
-                        <page string="Shipping &amp; Documents" name="shipping">
+                        <!-- Carton details — the core packing workflow -->
+                        <page string="Shipping &amp; Terms" name="shipping">
                             <group>
                                 <group string="Terms &amp; Logistics">
                                     <field name="transport_method"  readonly="1"/>
@@ -487,12 +516,10 @@
                                     <field name="net_weight"   readonly="1"/>
                                 </group>
                             </group>
+                        </page>
 
-                            <!--
-                                Shipping documents list — packing staff can view and download files
-                                but cannot upload or delete. The popup form still works read-only.
-                            -->
-                            <separator string="Shipping Documents"/>
+                        <!-- Shipping documents — packing staff can view and download files -->
+                        <page string="Shipping Documents" name="shipping_documents">
                             <field name="document_ids" readonly="1">
                                 <list string="Documents">
                                     <field name="name"       string="Document Name"/>
@@ -553,5 +580,56 @@
               action="action_reema_invoice_packing"
               groups="reema_invoice.group_reema_packing_user"
               sequence="20"/>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         PI STATUS INFO WIZARD — opened by the ⓘ button in the form header
+    ════════════════════════════════════════════════════════════════════════ -->
+    <record id="view_reema_invoice_status_info_wizard_form" model="ir.ui.view">
+        <field name="name">reema.invoice.status.info.wizard.form</field>
+        <field name="model">reema.invoice.status.info.wizard</field>
+        <field name="arch" type="xml">
+            <form string="PI Status Reference">
+                <sheet>
+                    <table class="table table-sm table-bordered" style="font-size:13px;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:140px">Status</th>
+                                <th>What it means &amp; key effects</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge text-bg-secondary">Draft</span></td>
+                                <td>Invoice is being prepared. All fields editable. Can be discarded (permanently deleted).</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-info">Pending</span></td>
+                                <td>Invoice confirmed internally. All fields still editable. Ready to be finalized and sent to the client.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-warning text-dark">Sent</span></td>
+                                <td>PI sent to the client. Fields are now <strong>locked</strong>. Awaiting client acceptance or rejection.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-success">Accepted</span></td>
+                                <td>Client accepted the PI. A journal entry is created automatically. Production Manager is notified to finalize BOMs and create Production Orders. Click <em>Mark as Shipped</em> once dispatched.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-danger">Rejected</span></td>
+                                <td>Client rejected the PI. No accounting entry created. Use <em>Reset to Pending</em> to make corrections and resend.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-dark">Shipped</span></td>
+                                <td>Order physically dispatched. <strong>Final status.</strong> Any journal entry created at Accepted remains intact.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </sheet>
+                <footer>
+                    <button string="Close" class="btn-primary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
 
 </odoo>

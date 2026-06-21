@@ -432,6 +432,23 @@ class ReemaInvoiceProductionExt(models.Model):
                     )
         return super().action_close()
 
+    def action_accept(self):
+        result = super().action_accept()
+        pm_group = self.env.ref('reema_mrp.group_reema_production_manager')
+        for rec in self:
+            for manager in pm_group.users:
+                rec.activity_schedule(
+                    'mail.mail_activity_data_todo',
+                    summary='Finalize BOM & create Production Orders',
+                    note=(
+                        f'Pro Forma Invoice <b>{rec.name}</b> has been accepted by the client. '
+                        f'Please finalize the Bill of Materials for each sample and create the '
+                        f'Production Orders to proceed with manufacturing.'
+                    ),
+                    user_id=manager.id,
+                )
+        return result
+
     def action_create_production_order(self):
         self.ensure_one()
         lines = []
@@ -533,9 +550,38 @@ class MrpBomReemaExt(models.Model):
     # Every BOM created in this company must have operation dependencies enabled.
     # Overriding default so Waleed never has to remember to tick the checkbox.
     allow_operation_dependencies = fields.Boolean(default=True)
+    # readonly=True makes fields_get() report active as readonly, which causes
+    # the Odoo 18 list/form controller to set archiveEnabled=False — removing
+    # Archive/Unarchive from the gear menu without any view-level tricks.
+    active = fields.Boolean(readonly=True)
     reema_reference = fields.Char(string='BOM Reference', readonly=True, copy=False,
                                    default=lambda self: _('New'))
     has_active_mo = fields.Boolean(compute='_compute_has_active_mo', string='Has Active MO')
+    impressions_per_ball = fields.Float(
+        string='Impressions / Ball', digits=(10, 2), default=0.0,
+        help='Total silk-screen impressions per finished ball for this design — a '
+             'design-level constant. Applied at the printing work center, where '
+             'pay = rate × qty_balls × impressions_per_ball.')
+
+    # Defaults tuned to our flow (Miscellaneous tab is admin-only in the view).
+    ready_to_produce = fields.Selection(default='asap')   # When components for 1st operation are available
+    consumption = fields.Selection(default='warning')     # Allowed with warning
+
+    # The sampling blueprint for this product. The blueprint _inherits product.template,
+    # so its display name is the product name; shown on the form (as "Product") so clicking
+    # it opens the sample sheet instead of the raw product.
+    sample_id = fields.Many2one(
+        'reema.sampling.blueprint', string='Sample',
+        compute='_compute_sample_id')
+    sample_layout_file = fields.Binary(related='sample_id.layout_file', string='Sample Layout')
+
+    @api.depends('product_tmpl_id')
+    def _compute_sample_id(self):
+        Blueprint = self.env['reema.sampling.blueprint']
+        for bom in self:
+            bom.sample_id = Blueprint.search(
+                [('product_tmpl_id', '=', bom.product_tmpl_id.id)], limit=1
+            ) if bom.product_tmpl_id else False
 
     # Fields that must not change once a confirmed MO exists for this BOM.
     _BOM_PROTECTED_FIELDS = {
@@ -594,6 +640,15 @@ class MrpBomReemaExt(models.Model):
 
     def unlink(self):
         for bom in self:
+            mo = self.env['mrp.production'].search(
+                [('bom_id', '=', bom.id), ('state', '!=', 'cancel')], limit=1
+            )
+            if mo:
+                raise UserError(
+                    f"BOM {bom.reema_reference} cannot be deleted — "
+                    f"Manufacturing Order {mo.name} is using it. "
+                    f"Cancel the MO first, then delete the BOM."
+                )
             line = self.env['reema.production.order.line'].search(
                 [('bom_id', '=', bom.id)], limit=1
             )
@@ -603,6 +658,16 @@ class MrpBomReemaExt(models.Model):
                     f"Production Order {line.order_id.name}. Remove the reference first."
                 )
         return super().unlink()
+
+    def action_print_bom(self):
+        # Open the BOM sheet as an HTML preview in a new browser tab; the user
+        # prints with the browser (Ctrl+P) and closes the tab to return.
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/report/html/reema_mrp.report_bom/%s' % self.id,
+            'target': 'new',
+        }
 
 
 class MrpRoutingWorkcenterReema(models.Model):
@@ -624,13 +689,8 @@ class MrpRoutingWorkcenterReema(models.Model):
         ('hall', 'Per Hall Unit'),
         ('ball', 'Per Ball'),
     ], string='Pay Basis', default='ball', required=True,
-        help='Per Hall Unit: rate × qty logged (printing: rate × qty_balls × impressions_per_ball when set); '
-             'Per Ball: rate × qty_balls.')
-    impressions_per_ball = fields.Float(
-        string='Impressions / Ball', digits=(10, 2), default=0.0,
-        help='Total silk-screen impressions per finished ball for this design. '
-             'When set, pay = rate × qty_balls × impressions_per_ball. '
-             'Override per MO on the work order if the design revision changes.')
+        help='Per Hall Unit: rate × qty logged (printing halls additionally multiply by the '
+             "BOM's Impressions / Ball); Per Ball: rate × qty_balls.")
 
     def action_delete_operation(self):
         self.unlink()

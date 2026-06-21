@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Company-wide tweaks to the "folder" report layout (the layout selected for
+        Reema Group). Applies to EVERY report (sampling, piece rate, invoice, PO, GRN…)
+        because they all render through web.external_layout.
+
+        Goals:
+          - Save vertical space: smaller decorative header band + smaller logo.
+          - Smaller company-info font in the header.
+          - Remove the company NTN/VAT line ("NTN: 1441286-1") from the header.
+            (Only hidden from print; the company's tax number stays in the database.)
+    -->
+    <template id="external_layout_folder_reema" inherit_id="web.external_layout_folder">
+
+        <!-- Shrink the decorative SVG header band (was 174px) so the body starts higher. -->
+        <xpath expr="//t[@t-set='header_shape_height']" position="replace">
+            <t t-set="header_shape_height" t-value="'105'"/>
+        </xpath>
+
+        <!-- Compact sizing for logo + company info, injected once for the whole report. -->
+        <xpath expr="//div[hasclass('o_folder_company_info')]" position="before">
+            <style>
+                /* The report layout reserves 11mm of top/bottom padding by default;
+                   tighten it to reclaim vertical space. */
+                .header { padding-top: 4mm !important; }
+                .footer > .o_footer_content { padding-bottom: 4mm !important; }
+                /* Compact logo + readable (but smaller) company info. */
+                .o_company_logo_big { max-height: 100px !important; max-width: 100px !important; width: auto !important; margin-bottom: 2px !important; }
+                .o_folder_company_info { font-size: 12.5px !important; margin: 0 !important; padding: 0 !important; }
+                .o_folder_company_info .o_company_tagline { font-size: 13px !important; margin-bottom: 2px !important; }
+                .o_folder_company_info ul { margin-bottom: 0 !important; line-height: 1.3 !important; }
+                .o_folder_adaptative_shape { height: 1.8rem !important; }
+                /* Reema reports set no document title: drop the angled notch and the
+                   empty 25% placeholder so the header bar spans full width (no gap). */
+                .o_folder_angle_shape { display: none !important; }
+                .o_folder_adaptative_shape > h2.w-25 { display: none !important; }
+            </style>
+        </xpath>
+
+        <!--
+            Remove the two VAT/NTN <li> nodes (the t-if="not forced_vat" line and its
+            t-else). Remove the LAST one first: deleting the t-if before its t-else
+            would leave an orphan t-else and break QWeb. last() targets the t-else,
+            then the t-if.
+        -->
+        <xpath expr="//ul[@name='company_address_list']/li[last()]" position="replace"/>
+        <xpath expr="//ul[@name='company_address_list']/li[last()]" position="replace"/>
+
+    </template>
+</odoo>

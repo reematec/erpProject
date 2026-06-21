@@ -33,19 +33,19 @@ class ReemaInvoice(models.Model):
         'res.partner', string='Client', required=True, tracking=True,
     )
     # Auto-filled when a client is selected via _onchange_partner_id below.
-    client_address = fields.Text(string='Client Address')
+    client_address = fields.Text(string='Client Address', tracking=True)
 
     # Client's purchase order reference
     client_order_number = fields.Char(string='Client Order Number', tracking=True)
-    client_order_date   = fields.Date(string='Client Order Date')
-    payment_terms_id    = fields.Many2one('account.payment.term', string='Payment Terms')
+    client_order_date   = fields.Date(string='Client Order Date', tracking=True)
+    payment_terms_id    = fields.Many2one('account.payment.term', string='Payment Terms', tracking=True)
 
     # ── Shipping & Terms ──────────────────────────────────────────────────────
     # Auto-filled from the current company — no manual entry needed.
     our_address = fields.Text(
         string='Our Address', compute='_compute_our_address', store=False,
     )
-    country_of_origin = fields.Char(string='Country of Origin', default='Pakistan')
+    country_of_origin = fields.Char(string='Country of Origin', default='Pakistan', tracking=True)
 
     transport_method = fields.Selection([
         ('sea',     'Sea Freight'),
@@ -56,17 +56,17 @@ class ReemaInvoice(models.Model):
 
     shipping_date      = fields.Date(string='Shipping Date', tracking=True)
     # account.incoterms comes from the 'account' module (e.g. FOB, CIF, EXW).
-    incoterm_id        = fields.Many2one('account.incoterms', string='Incoterms')
-    incoterm_location  = fields.Char(string='Incoterm Location', default='Sialkot, Pakistan')
-    destination        = fields.Char(string='Destination')
+    incoterm_id        = fields.Many2one('account.incoterms', string='Incoterms', tracking=True)
+    incoterm_location  = fields.Char(string='Incoterm Location', default='Sialkot, Pakistan', tracking=True)
+    destination        = fields.Char(string='Destination', tracking=True)
 
     # ── Carton & Weight ───────────────────────────────────────────────────────
     # These fields feed the packing details section of the PI PDF.
-    carton_qty   = fields.Integer(string='Number of Cartons')
-    carton_size  = fields.Char(string='Carton Size (L×W×H cm)')
-    total_cbm    = fields.Float(string='Total CBM', digits=(10, 3))
-    gross_weight = fields.Float(string='Gross Weight (kg)', digits=(10, 2))
-    net_weight   = fields.Float(string='Net Weight (kg)', digits=(10, 2))
+    carton_qty   = fields.Integer(string='Number of Cartons', tracking=True)
+    carton_size  = fields.Char(string='Carton Size (L×W×H cm)', tracking=True)
+    total_cbm    = fields.Float(string='Total CBM', digits=(10, 3), tracking=True)
+    gross_weight = fields.Float(string='Gross Weight (kg)', digits=(10, 2), tracking=True)
+    net_weight   = fields.Float(string='Net Weight (kg)', digits=(10, 2), tracking=True)
 
     # Inline shipping documents — each row has a custom label + one file.
     # Using a child model lets users upload multiple files with meaningful names
@@ -78,13 +78,13 @@ class ReemaInvoice(models.Model):
     # ── Bank Details ──────────────────────────────────────────────────────────
     # Selecting a bank fills all the detail fields automatically (onchange below).
     # The detail fields remain editable so one-off overrides are possible per invoice.
-    bank_id      = fields.Many2one('reema.bank.account', string='Select Bank')
-    bank_name    = fields.Char(string='Bank Name')
-    bank_title   = fields.Char(string='Account Title')
-    bank_address = fields.Text(string='Bank Address')
-    account_num  = fields.Char(string='Account Number')
-    iban         = fields.Char(string='IBAN')
-    swift        = fields.Char(string='SWIFT / BIC')
+    bank_id      = fields.Many2one('reema.bank.account', string='Select Bank', tracking=True)
+    bank_name    = fields.Char(string='Bank Name', tracking=True)
+    bank_title   = fields.Char(string='Account Title', tracking=True)
+    bank_address = fields.Text(string='Bank Address', tracking=True)
+    account_num  = fields.Char(string='Account Number', tracking=True)
+    iban         = fields.Char(string='IBAN', tracking=True)
+    swift        = fields.Char(string='SWIFT / BIC', tracking=True)
 
     # ── Lines & Totals ────────────────────────────────────────────────────────
     line_ids = fields.One2many('reema.invoice.line', 'invoice_id', string='Invoice Lines')
@@ -92,13 +92,14 @@ class ReemaInvoice(models.Model):
     currency_id = fields.Many2one(
         'res.currency', string='Currency',
         default=lambda self: self.env.company.currency_id,
+        tracking=True,
     )
     total_qty = fields.Float(
-        string='Total Qty', compute='_compute_totals', store=True,
+        string='Total Qty', compute='_compute_totals', store=True, tracking=True,
     )
     total_amount = fields.Monetary(
         string='Total Amount', compute='_compute_totals', store=True,
-        currency_field='currency_id',
+        currency_field='currency_id', tracking=True,
     )
     # Inline additional charges — each row has a custom label and an amount.
     # This replaces the old fixed handling_charges / courier_charges fields
@@ -109,12 +110,14 @@ class ReemaInvoice(models.Model):
     )
     total_charges = fields.Monetary(
         string='Total Charges', compute='_compute_totals', store=True,
-        currency_field='currency_id',
+        currency_field='currency_id', tracking=True,
     )
     net_total_payable = fields.Monetary(
         string='Net Total Payable', compute='_compute_totals', store=True,
-        currency_field='currency_id',
+        currency_field='currency_id', tracking=True,
     )
+
+    move_id = fields.Many2one('account.move', string='Journal Entry', readonly=True, copy=False)
 
     # ── Computed / onchange ───────────────────────────────────────────────────
 
@@ -224,6 +227,8 @@ class ReemaInvoice(models.Model):
         self.write({'state': 'sent'})
 
     def action_accept(self):
+        for rec in self:
+            rec._create_accounting_entry()
         self.write({'state': 'accepted'})
 
     def action_reject(self):
@@ -253,10 +258,113 @@ class ReemaInvoice(models.Model):
                         f"Cannot reset {rec.name} to Pending.\n\n"
                         f"Production Order {po.name} must be cancelled first."
                     )
+        for rec in self:
+            if rec.move_id and rec.move_id.state == 'posted':
+                rec.move_id.button_cancel()
+                rec.move_id.unlink()
+                rec.move_id = False
         self.write({'state': 'pending'})
 
+    def _create_accounting_entry(self):
+        self.ensure_one()
+        company = self.env.company
+        company_currency = company.currency_id
+        invoice_currency = self.currency_id
+        date = fields.Date.today()
+        is_foreign = invoice_currency != company_currency
+
+        if not self.line_ids:
+            raise UserError('Cannot accept an invoice with no lines.')
+
+        receivable_account = self.partner_id.property_account_receivable_id
+        if not receivable_account:
+            raise UserError(
+                f'Customer "{self.partner_id.name}" has no receivable account set. '
+                f'Create a GL account for this customer first.'
+            )
+
+        pkr_total = invoice_currency._convert(
+            self.net_total_payable, company_currency, company, date
+        )
+
+        move_lines = [(0, 0, {
+            'account_id': receivable_account.id,
+            'name': self.name,
+            'debit': pkr_total,
+            'credit': 0.0,
+            'currency_id': invoice_currency.id if is_foreign else False,
+            'amount_currency': self.net_total_payable if is_foreign else 0.0,
+        })]
+
+        account_totals = {}
+        for line in self.line_ids:
+            account = line.sample_id.product_type_id.sales_account_id
+            if not account:
+                raise UserError(
+                    f'Sample "{line.sample_code}" has no Product Type or Sales Account configured. '
+                    f'Go to Sampling > Configuration > Product Types, then set the Product Type '
+                    f'on the sampling blueprint.'
+                )
+            pkr_line = invoice_currency._convert(
+                line.price_subtotal, company_currency, company, date
+            )
+            if account.id not in account_totals:
+                account_totals[account.id] = {'pkr': 0.0, 'fc': 0.0}
+            account_totals[account.id]['pkr'] += pkr_line
+            account_totals[account.id]['fc'] += line.price_subtotal
+
+        for account_id, amounts in account_totals.items():
+            move_lines.append((0, 0, {
+                'account_id': account_id,
+                'name': self.name,
+                'debit': 0.0,
+                'credit': amounts['pkr'],
+                'currency_id': invoice_currency.id if is_foreign else False,
+                'amount_currency': -amounts['fc'] if is_foreign else 0.0,
+            }))
+
+        journal = self.env['account.journal'].search(
+            [('type', '=', 'sale'), ('company_id', '=', company.id)], limit=1
+        )
+        if not journal:
+            raise UserError('No Sales journal found. Please configure one in Accounting.')
+
+        move = self.env['account.move'].sudo().create({
+            'move_type': 'entry',
+            'journal_id': journal.id,
+            'date': date,
+            'ref': self.name,
+            'line_ids': move_lines,
+        })
+        move.action_post()
+        self.move_id = move
+
+    def action_view_move(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'account.move',
+            'view_mode': 'form',
+            'res_id': self.move_id.id,
+            'target': 'current',
+        }
+
     def action_print_invoice(self):
-        return self.env.ref('reema_invoice.action_report_reema_invoice').report_action(self)
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/report/html/reema_invoice.report_reema_invoice_html/%s' % ','.join(str(i) for i in self.ids),
+            'target': 'new',
+        }
+
+    def action_open_status_info(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'PI Status Reference',
+            'res_model': 'reema.invoice.status.info.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {},
+        }
 
 
 class ReemaInvoiceLine(models.Model):
@@ -271,13 +379,14 @@ class ReemaInvoiceLine(models.Model):
         'reema.sampling.blueprint', string='Sample', required=True,
     )
 
-    # sample_name auto-fills from the sample's product name but stays editable.
-    # In Odoo a non-related Char field is always editable; we populate it in onchange.
-    sample_name  = fields.Char(string='Name')
-    # sample_code stores the reference (e.g. RG/2026-0001) — auto-filled when sample_id
-    # is selected via onchange. Stored as Char so the code is stable on the PDF even if
-    # the sample reference is later changed.
-    sample_code  = fields.Char(string='Sample Code')
+    sample_name = fields.Char(
+        string='Name',
+        compute='_compute_sample_fields', store=True, readonly=False,
+    )
+    sample_code = fields.Char(
+        string='Sample Code',
+        compute='_compute_sample_fields', store=True, readonly=False,
+    )
     description  = fields.Char(string='Description')
 
     # Color, HS Code, and EAN pre-fill from the sample but can be overridden per line.
@@ -305,15 +414,16 @@ class ReemaInvoiceLine(models.Model):
         for line in self:
             line.price_subtotal = line.qty * line.price_unit
 
+    @api.depends('sample_id', 'sample_id.product_tmpl_id.name')
+    def _compute_sample_fields(self):
+        for line in self:
+            line.sample_name = line.sample_id.product_tmpl_id.name or False
+            line.sample_code = line.sample_id.reference or False
+
     @api.onchange('sample_id')
     def _onchange_sample_id(self):
-        # Pre-fill all line fields from the selected sample.
-        # Because these are now plain Char fields (not related), the user can still edit them
-        # after selection — for example to override the color for a specific order.
         if self.sample_id:
             s = self.sample_id
-            self.sample_name  = s.name
-            self.sample_code  = s.reference
             self.sample_color = s.color
             self.hs_code      = s.hs_code
             self.ean          = s.barcode
@@ -371,3 +481,17 @@ class ReemaInvoiceCharge(models.Model):
     # currency_id is pulled from the parent invoice so the monetary widget
     # displays the correct symbol without the user having to set it manually.
     currency_id = fields.Many2one('res.currency', related='invoice_id.currency_id')
+
+
+class AccountIncotermsReema(models.Model):
+    _inherit = 'account.incoterms'
+
+    @api.depends('code')
+    def _compute_display_name(self):
+        for rec in self:
+            rec.display_name = rec.code or ''
+
+
+class ReemaInvoiceStatusInfoWizard(models.TransientModel):
+    _name = 'reema.invoice.status.info.wizard'
+    _description = 'PI Status Reference'

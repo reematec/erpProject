@@ -77,6 +77,18 @@ class MrpProduction(models.Model):
             'context': {'default_mo_id': self.id},
         }
 
+    def action_print_mo(self):
+        # Open the MO HTML preview in a new browser tab (works for a single order
+        # from the form, or several selected orders from the list). The user
+        # prints with the in-page Print button / Ctrl+P and closes the tab.
+        if not self:
+            return False
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/report/html/reema_mrp.report_mo/%s' % ','.join(str(i) for i in self.ids),
+            'target': 'new',
+        }
+
     def _check_no_active_issuances(self):
         active = self.env['reema.material.issuance'].search([
             ('production_id', 'in', self.ids),
@@ -114,3 +126,51 @@ class MrpProduction(models.Model):
         # qty_producing should start at 0 and climb only when packing batches are logged.
         self.write({'qty_producing': 0.0})
         return res
+
+
+class StockMoveReema(models.Model):
+    _inherit = 'stock.move'
+
+    backflush_qty = fields.Float(
+        string='Consumed', digits=(16, 6),
+        compute='_compute_backflush_qty',
+        help='Sum of backflush moves from currently existing batch entries only. '
+             'Orphan moves (from deleted batches) are excluded.')
+
+    def _compute_backflush_qty(self):
+        # Group by MO so we query batch entries once per MO, not once per row.
+        by_mo = {}
+        for move in self:
+            mo = move.raw_material_production_id
+            if mo:
+                by_mo.setdefault(mo, []).append(move)
+            else:
+                move.backflush_qty = 0.0
+
+        for mo, moves in by_mo.items():
+            # Build the exact set of valid origins from EXISTING batch entries.
+            # This excludes orphan backflush moves whose batch was later deleted.
+            batches = self.env['reema.wo.batch.entry'].search([
+                ('workorder_id.production_id', '=', mo.id)
+            ])
+            valid_origins = [
+                f'{mo.name} / {b.workorder_id.name} / {b.name}'
+                for b in batches
+            ]
+            if not valid_origins:
+                for m in moves:
+                    m.backflush_qty = 0.0
+                continue
+
+            # Sum all valid backflush moves for this MO, grouped by product.
+            backflush_moves = self.env['stock.move'].search([
+                ('origin', 'in', valid_origins),
+                ('state', 'not in', ['draft', 'cancel']),
+            ])
+            by_product = {}
+            for bm in backflush_moves:
+                by_product[bm.product_id.id] = (
+                    by_product.get(bm.product_id.id, 0.0) + bm.quantity
+                )
+            for m in moves:
+                m.backflush_qty = by_product.get(m.product_id.id, 0.0)

@@ -30,18 +30,15 @@ class ReemaSamplingBlueprint(models.Model):
     sampling_date = fields.Date(string='Date', default=fields.Date.context_today, tracking=True)
 
     # Full lifecycle status for a sampling blueprint.
-    # sample_approved: client has physically signed off the sample →
-    #   Sameer can invoice, Waleed gets notified to define the BOM.
-    # production_ready: Waleed has completed the BOM (quantities, routing,
-    #   wastage) → the blueprint is safe to include in invoices for bulk orders.
+    # shipped: sample physically sent to customer for review (mid-flow, not end).
+    # sample_approved: client has signed off → form locks, Waleed notified to define BOM.
     state = fields.Selection([
         ('draft',            'Draft'),
         ('in_progress',      'In Progress'),
         ('completed',        'Completed'),
+        ('shipped',          'Shipped'),
         ('sample_approved',  'Sample Approved'),
         ('sample_rejected',  'Sample Rejected'),
-        ('production_ready', 'Production Ready'),
-        ('shipped',          'Shipped'),
         ('cancelled',        'Cancelled'),
     ], string='Status', default='draft', required=True, tracking=True)
     
@@ -94,6 +91,11 @@ class ReemaSamplingBlueprint(models.Model):
         ('training', 'Training Ball')
     ], string='Type', tracking=True)
 
+    product_type_id = fields.Many2one(
+        'reema.product.type', string='Product Type',
+        help='Links this sample to its sales account category (e.g. Balls, Teamwear, Gloves).',
+    )
+
     knife_line_ids = fields.One2many('reema.sampling.knife.line', 'blueprint_id', string='Cutting Knives')
     total_panels = fields.Integer(string='Number of Panels', compute='_compute_total_panels', store=True)
     weight_range = fields.Char(string='Weight Range (g)', tracking=True)
@@ -117,13 +119,24 @@ class ReemaSamplingBlueprint(models.Model):
 
     is_sampling_user = fields.Boolean(compute='_compute_is_sampling_user')
 
+    @api.depends_context('uid')
     def _compute_is_sampling_user(self):
-        is_editor = (
-            self.env.user.has_group('reema_sampling.group_reema_sampling')
-            or self.env.user.has_group('base.group_system')
-        )
+        is_editor = self._check_is_sampling_user()
         for rec in self:
             rec.is_sampling_user = is_editor
+
+    def _check_is_sampling_user(self):
+        return (
+            self.env.user.has_group('reema_sampling.group_reema_sampling')
+            or self.env.user.has_group('base.group_erp_manager')
+            or self.env.user.has_group('base.group_system')
+        )
+
+    @api.model
+    def default_get(self, fields_list):
+        res = super().default_get(fields_list)
+        res['is_sampling_user'] = self._check_is_sampling_user()
+        return res
 
     # This 'create' method override is how we automate the reference numbering.
     # Before the record is saved to the database, we fetch the next sequence value.
@@ -132,15 +145,29 @@ class ReemaSamplingBlueprint(models.Model):
         for vals in vals_list:
             # Force the product type to 'consu' (Consumable) so it doesn't track inventory.
             vals['type'] = 'consu'
+            vals.setdefault('product_group', 'finished_good')
             if vals.get('reference', _('New')) == _('New'):
                 vals['reference'] = self.env['ir.sequence'].next_by_code('reema.sampling.blueprint') or _('New')
-        return super().create(vals_list)
+        return super(ReemaSamplingBlueprint, self.sudo()).create(vals_list)
 
     def write(self, vals):
         # Prevent changing the type away from 'consu'.
         if 'type' in vals and vals['type'] != 'consu':
             vals['type'] = 'consu'
-        return super().write(vals)
+        result = super().write(vals)
+        if 'final_sample_images' in vals:
+            self._link_sample_images_to_record()
+        return result
+
+    def _link_sample_images_to_record(self):
+        # Free-floating ir.attachment records (no res_model/res_id) are only
+        # readable by their creator. Link them to this record so any user who
+        # can read the blueprint can also see the images.
+        for rec in self:
+            rec.final_sample_images.sudo().filtered(lambda a: not a.res_model).write({
+                'res_model': self._name,
+                'res_id': rec.id,
+            })
 
     @api.model
     def _name_search(self, name='', domain=None, operator='ilike', limit=100, order=None):
@@ -199,21 +226,40 @@ class ReemaSamplingBlueprint(models.Model):
     def action_start(self):
         self.write({'state': 'in_progress'})
 
-    def action_sample_rejected(self):
-        self.write({'state': 'sample_rejected'})
+    def action_open_status_info(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Sample Status Reference',
+            'res_model': 'reema.sampling.status.info.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {},
+        }
+
+    def action_open_rejection_wizard(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Sample Rejection',
+            'res_model': 'reema.sampling.rejection.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_blueprint_id': self.id},
+        }
 
     def action_sample_approved(self):
         self.write({'state': 'sample_approved'})
-        # Notify Waleed to define the BOM for this blueprint
-        self.activity_schedule(
-            'mail.mail_activity_data_todo',
-            summary='Define BOM for approved sample',
-            note=f'Sample <b>{self.reference} – {self.name}</b> has been approved. '
-                 f'Please define the Bill of Materials so this design can be used in bulk production orders.',
-        )
-
-    def action_production_ready(self):
-        self.write({'state': 'production_ready'})
+        pm_group = self.env.ref('reema_mrp.group_reema_production_manager')
+        managers = pm_group.users
+        for blueprint in self:
+            for manager in managers:
+                blueprint.activity_schedule(
+                    'mail.mail_activity_data_todo',
+                    summary='Define BOM for approved sample',
+                    note=f'Sample <b>{blueprint.reference} – {blueprint.name}</b> has been approved. '
+                         f'Please define the Bill of Materials so this design can be used in bulk production orders.',
+                    user_id=manager.id,
+                )
 
     def action_completed(self):
         self.write({'state': 'completed'})
@@ -235,12 +281,11 @@ class ReemaSamplingBlueprint(models.Model):
     def action_step_back(self):
         """Admin-only: revert the sample one step back in the workflow."""
         PREVIOUS = {
-            'in_progress':      'draft',
-            'completed':        'in_progress',
-            'sample_approved':  'completed',
-            'sample_rejected':  'completed',
-            'production_ready': 'sample_approved',
-            'shipped':          'production_ready',
+            'in_progress':     'draft',
+            'completed':       'in_progress',
+            'shipped':         'completed',
+            'sample_approved': 'completed',
+            'sample_rejected': 'completed',
         }
         for rec in self:
             prev = PREVIOUS.get(rec.state)
@@ -263,8 +308,49 @@ class ReemaSamplingBlueprint(models.Model):
         self.write({'state': 'draft'})
 
     def action_print_sampling(self):
-        # Looks up the registered report action by its full XML name and triggers PDF generation.
-        return self.env.ref('reema_sampling.action_report_reema_sampling').report_action(self)
+        # Open the sample sheet as an HTML preview in a new browser tab; the user
+        # prints with the in-page Print button (or Ctrl+P) and closes the tab to return.
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/report/html/reema_sampling.report_reema_sampling_template/%s' % self.id,
+            'target': 'new',
+        }
+
+
+class ReemaSamplingStatusInfoWizard(models.TransientModel):
+    _name = 'reema.sampling.status.info.wizard'
+    _description = 'Sampling Status Reference'
+
+
+class ReemaSamplingRejectionWizard(models.TransientModel):
+    _name = 'reema.sampling.rejection.wizard'
+    _description = 'Sample Rejection Wizard'
+
+    blueprint_id = fields.Many2one(
+        'reema.sampling.blueprint', string='Sample', required=True, readonly=True
+    )
+    rejection_reason = fields.Text(string='Rejection Reason', required=True)
+    outcome = fields.Selection([
+        ('cancel', 'No Further Development — lock this sample permanently'),
+        ('remake', 'Revise & Remake — allow changes and restart development'),
+    ], string='What should happen next?', required=True)
+
+    def action_confirm(self):
+        self.ensure_one()
+        bp = self.blueprint_id
+        if self.outcome == 'cancel':
+            bp.write({'state': 'cancelled'})
+            bp.message_post(
+                body=f'<b>Sample Rejected — No Further Development</b><br/>'
+                     f'Reason: {self.rejection_reason}'
+            )
+        else:
+            bp.write({'state': 'in_progress'})
+            bp.message_post(
+                body=f'<b>Sample Rejected — Revise &amp; Remake</b><br/>'
+                     f'Reason: {self.rejection_reason}'
+            )
 
 
 class ReemaSamplingShipWizard(models.TransientModel):

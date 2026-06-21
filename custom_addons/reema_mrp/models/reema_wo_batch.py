@@ -34,6 +34,9 @@ class ReemaWoBatchEntry(models.Model):
     amount_earned = fields.Float(string='Amount (PKR)', compute='_compute_amount_earned', store=True, digits=(10, 2))
     is_billed = fields.Boolean(string='Billed', default=False, readonly=True, copy=False)
     bill_id = fields.Many2one('account.move', string='Bill', readonly=True, copy=False)
+    payment_excluded = fields.Boolean(string='Excluded from Payment',
+                                      default=False, readonly=True, copy=False)
+    exclusion_reason = fields.Char(string='Exclusion Reason')
 
     @api.depends('workorder_id.production_id')
     def _compute_reema_po_id(self):
@@ -53,20 +56,31 @@ class ReemaWoBatchEntry(models.Model):
             wo = entry.workorder_id
             entry.qty_balls = wo._units_to_balls(entry.qty) if wo else entry.qty
 
+    def _impressions_per_ball(self):
+        """Impressions/Ball for this batch — a design-level constant read from the
+        BOM, applied only at the printing work center. 0 otherwise."""
+        wo = self.workorder_id
+        if wo.workcenter_id.is_printing and wo.production_id.bom_id:
+            return wo.production_id.bom_id.impressions_per_ball or 0.0
+        return 0.0
+
     def _calc_amount(self):
+        if self.payment_excluded:
+            return 0.0
         rate = self.piece_rate_id.rate or 0.0
         op = self.workorder_id.operation_id
         if (op.pay_basis or 'hall') == 'ball':
             return rate * self.qty_balls
-        ipu = op.impressions_per_ball or 0.0
+        ipu = self._impressions_per_ball()
         if ipu:
             return rate * self.qty_balls * ipu
         return rate * self.qty
 
     @api.depends(
-        'piece_rate_id.rate', 'qty', 'qty_balls',
+        'piece_rate_id.rate', 'qty', 'qty_balls', 'payment_excluded',
         'workorder_id.operation_id.pay_basis',
-        'workorder_id.operation_id.impressions_per_ball',
+        'workorder_id.workcenter_id.is_printing',
+        'workorder_id.production_id.bom_id.impressions_per_ball',
     )
     def _compute_amount_earned(self):
         for entry in self:
@@ -195,6 +209,21 @@ class ReemaWoBatchEntry(models.Model):
     def action_supervisor_delete(self):
         self.unlink()
 
+    def action_exclude_from_payment(self):
+        billed = self.filtered('is_billed')
+        if billed:
+            raise UserError(
+                'The following entries are already billed and cannot be excluded here.\n'
+                'Remove them from their bill first.\n\n'
+                + '\n'.join(billed.mapped('name'))
+            )
+        self.write({'payment_excluded': True})
+
+    def action_include_in_payment(self):
+        if not self.env.user.has_group('base.group_system'):
+            raise UserError('Only an administrator can re-include an entry in payment.')
+        self.write({'payment_excluded': False})
+
     def action_create_contractor_bill(self):
         missing_contractor = self.filtered(lambda e: not e.contractor_id)
         if missing_contractor:
@@ -208,6 +237,14 @@ class ReemaWoBatchEntry(models.Model):
             raise UserError(
                 'The following entries are already billed:\n'
                 + '\n'.join(already_billed.mapped('name'))
+            )
+
+        excluded = self.filtered('payment_excluded')
+        if excluded:
+            raise UserError(
+                'The following entries are excluded from payment and cannot be billed.\n'
+                'Re-include them in payment first if they should be paid:\n\n'
+                + '\n'.join(excluded.mapped('name'))
             )
 
         contractors = self.mapped('contractor_id')
@@ -255,7 +292,7 @@ class ReemaWoBatchEntry(models.Model):
             op = entry.workorder_id.operation_id
             wc = entry.workorder_id.workcenter_id
             pay_basis = op.pay_basis or 'hall'
-            ipu = op.impressions_per_ball or 0.0
+            ipu = entry._impressions_per_ball()
             rate = entry.piece_rate_id.rate or 0.0
             if pay_basis == 'ball':
                 bill_qty = entry.qty_balls
@@ -406,8 +443,30 @@ class ReemaBatchEntryWizard(models.TransientModel):
     contractor_id = fields.Many2one('res.partner', string='Contractor', required=False,
                                     domain="[('id', 'in', available_contractor_ids)]")
     qty = fields.Float(string='Qty Completed Now', required=True)
+    # Logging unit drives which fields the modal shows (sheet/panel/ball).
+    hall_unit = fields.Selection(
+        related='workorder_id.workcenter_id.hall_unit', readonly=True)
+    panels_per_ball = fields.Integer(
+        string='Panels per Ball', compute='_compute_panels_per_ball')
+    # Panel halls only: balls equivalent, kept in sync with qty (panels) both ways.
+    qty_balls_input = fields.Float(string='Balls Completed')
     notes = fields.Char(string='Notes')
     qty_warning = fields.Char(string='Quantity Warning', compute='_compute_qty_warning')
+
+    @api.depends('workorder_id')
+    def _compute_panels_per_ball(self):
+        for wiz in self:
+            wiz.panels_per_ball = wiz.workorder_id._get_total_panels() if wiz.workorder_id else 0
+
+    @api.onchange('qty')
+    def _onchange_qty_to_balls(self):
+        if self.hall_unit == 'panel' and self.panels_per_ball:
+            self.qty_balls_input = self.qty / self.panels_per_ball
+
+    @api.onchange('qty_balls_input')
+    def _onchange_balls_to_qty(self):
+        if self.hall_unit == 'panel' and self.panels_per_ball:
+            self.qty = self.qty_balls_input * self.panels_per_ball
 
     @api.depends('qty', 'workorder_id.qty_batch_completed', 'workorder_id.hall_qty')
     def _compute_qty_warning(self):

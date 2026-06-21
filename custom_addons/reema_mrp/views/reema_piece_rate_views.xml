@@ -7,6 +7,10 @@
         <field name="model">reema.piece.rate</field>
         <field name="arch" type="xml">
             <list string="Piece Rates">
+                <header>
+                    <button name="action_print_piece_rate_report" string="Print"
+                            type="object" display="always" class="btn-secondary"/>
+                </header>
                 <field name="workcenter_id" string="Work Center"/>
                 <field name="work_type"     string="Type of Work"/>
                 <field name="description"   string="Description / Notes"/>
@@ -41,7 +45,23 @@
                         </group>
                     </group>
                 </sheet>
+                <chatter/>
             </form>
+        </field>
+    </record>
+
+    <!-- Search view with groupby option -->
+    <record id="reema_piece_rate_view_search" model="ir.ui.view">
+        <field name="name">reema.piece.rate.search</field>
+        <field name="model">reema.piece.rate</field>
+        <field name="arch" type="xml">
+            <search string="Piece Rates">
+                <field name="workcenter_id"/>
+                <field name="work_type"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_workcenter" string="Work Center" context="{'group_by': 'workcenter_id'}"/>
+                </group>
+            </search>
         </field>
     </record>
 
@@ -51,11 +71,23 @@
         <field name="res_model">reema.piece.rate</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="reema_piece_rate_view_list"/>
+        <field name="search_view_id" ref="reema_piece_rate_view_search"/>
+        <field name="context">{'search_default_group_by_workcenter': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No piece rates defined yet. Click New to add one.
             </p>
         </field>
+    </record>
+
+    <!-- Report action: HTML preview of all rates grouped by work center -->
+    <record id="action_report_piece_rate_list" model="ir.actions.report">
+        <field name="name">Piece Rate List</field>
+        <field name="model">reema.piece.rate</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_mrp.report_piece_rate_list</field>
+        <field name="report_file">reema_mrp.report_piece_rate_list</field>
+        <field name="print_report_name">'Piece Rates'</field>
     </record>
 
     <!-- Menu: Manufacturing → Configuration → Piece Rates -->

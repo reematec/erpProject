@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_report_reema_invoice_html" model="ir.actions.report">
+        <field name="name">Pro Forma Invoice</field>
+        <field name="model">reema.invoice</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_invoice.report_reema_invoice_html</field>
+        <field name="report_file">reema_invoice.report_reema_invoice_html</field>
+        <field name="print_report_name">'PI - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_reema_invoice_html">
+        <t t-call="web.html_container">
+            <style>
+                body.container { padding-left: 0 !important; padding-right: 0 !important; }
+                @media print {
+                    .pi_doc { page-break-after: always; }
+                    .pi_doc:last-child { page-break-after: auto; }
+                }
+                @page { margin: 12mm; }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page pi_doc">
+
+                        <!-- ── Title ──────────────────────────────────────── -->
+                        <div class="row mt-2 mb-3">
+                            <div class="col-12 text-center">
+                                <div style="font-size:17px; font-weight:700; text-transform:uppercase; letter-spacing:2px;">
+                                    Pro Forma Invoice
+                                </div>
+                                <div style="font-size:14px; font-weight:600; margin-top:2px;">
+                                    <span t-field="o.name"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- ── Addresses ──────────────────────────────────── -->
+                        <div class="row mb-3" style="font-size:13px; line-height:1.6;">
+                            <t t-set="comp" t-value="o.env.company"/>
+                            <div class="col-6">
+                                <strong>From:</strong>
+                                <div style="margin-top:6px;">
+                                    <span t-field="comp.name"/><br/>
+                                    <t t-if="comp.street"><span t-field="comp.street"/><br/></t>
+                                    <t t-if="comp.street2"><span t-field="comp.street2"/><br/></t>
+                                    <t t-if="comp.city"><span t-field="comp.city"/><t t-if="comp.country_id">, </t></t>
+                                    <t t-if="comp.country_id"><span t-field="comp.country_id"/></t>
+                                </div>
+                            </div>
+                            <t t-set="p" t-value="o.partner_id"/>
+                            <div class="col-6">
+                                <strong>Client:</strong>
+                                <div style="margin-top:6px;">
+                                    <span t-field="p.name"/><br/>
+                                    <t t-if="p.street"><span t-field="p.street"/><br/></t>
+                                    <t t-if="p.street2"><span t-field="p.street2"/><br/></t>
+                                    <t t-if="p.city"><span t-field="p.city"/><t t-if="p.country_id">, </t></t>
+                                    <t t-if="p.country_id"><span t-field="p.country_id"/></t>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Order / Shipping Details ───────────────────── -->
+                        <div class="row mb-2" style="font-size:13px;">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td style="width:45%;"><strong>PI Date</strong></td>
+                                        <td><span t-field="o.date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Client Order No</strong></td>
+                                        <td><span t-field="o.client_order_number"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Client Order Date</strong></td>
+                                        <td><span t-field="o.client_order_date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Payment Terms</strong></td>
+                                        <td><span t-field="o.payment_terms_id"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Shipping Method</strong></td>
+                                        <td><span t-field="o.transport_method"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Shipping Date</strong></td>
+                                        <td><span t-field="o.shipping_date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Incoterms</strong></td>
+                                        <td><span t-field="o.incoterm_id"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Incoterm Location</strong></td>
+                                        <td><span t-field="o.incoterm_location"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Destination</strong></td>
+                                        <td><span t-field="o.destination"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Country of Origin</strong></td>
+                                        <td><span t-field="o.country_of_origin"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- ── Line Items ─────────────────────────────────── -->
+                        <table class="table table-sm mt-2" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th style="width:14%;">Sample Code</th>
+                                    <th>Name</th>
+                                    <th class="text-end" style="width:8%;">Qty</th>
+                                    <th class="text-end" style="width:11%;">Unit Price</th>
+                                    <th class="text-end" style="width:12%;">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.line_ids" t-as="line">
+                                    <!-- Primary row -->
+                                    <tr style="border-bottom:0;">
+                                        <td style="border-bottom:0;"><span t-field="line.sample_code"/></td>
+                                        <td style="border-bottom:0;"><span t-field="line.sample_name"/></td>
+                                        <td class="text-end" style="border-bottom:0;"><span t-field="line.qty"/></td>
+                                        <td class="text-end" style="border-bottom:0;"><span t-field="line.price_unit"/></td>
+                                        <td class="text-end" style="border-bottom:0;"><span t-field="line.price_subtotal"/></td>
+                                    </tr>
+                                    <!-- Secondary row: reference / logistics details -->
+                                    <tr style="background:inherit;">
+                                        <td colspan="5" style="padding-top:0; padding-bottom:6px;">
+                                            <span style="font-size:11px; color:#555;">
+                                                <t t-if="line.description">
+                                                    <strong>Desc:</strong> <span t-field="line.description"/> &#160;
+                                                </t>
+                                                <t t-if="line.client_sku">
+                                                    <strong>SKU:</strong> <span t-field="line.client_sku"/> &#160;
+                                                </t>
+                                                <t t-if="line.size">
+                                                    <strong>Size:</strong> <span t-field="line.size"/> &#160;
+                                                </t>
+                                                <t t-if="line.sample_color">
+                                                    <strong>Color:</strong> <span t-field="line.sample_color"/> &#160;
+                                                </t>
+                                                <t t-if="line.hs_code">
+                                                    <strong>HS:</strong> <span t-field="line.hs_code"/> &#160;
+                                                </t>
+                                                <t t-if="line.ean">
+                                                    <strong>EAN:</strong> <span t-field="line.ean"/>
+                                                </t>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- ── Totals ─────────────────────────────────────── -->
+                        <div class="row">
+                            <div class="col-5 offset-7">
+                                <table class="table table-sm" style="font-size:13px;">
+                                    <tr>
+                                        <td><strong>Total Qty</strong></td>
+                                        <td class="text-end"><span t-field="o.total_qty"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Amount</strong></td>
+                                        <td class="text-end"><span t-field="o.total_amount"/></td>
+                                    </tr>
+                                    <t t-foreach="o.charge_ids" t-as="charge">
+                                        <tr>
+                                            <td><span t-field="charge.name"/></td>
+                                            <td class="text-end"><span t-field="charge.amount"/></td>
+                                        </tr>
+                                    </t>
+                                    <tr style="font-weight:700; border-top:2px solid #000;">
+                                        <td>Net Total Payable</td>
+                                        <td class="text-end"><span t-field="o.net_total_payable"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- ── Packing (left) + Bank (right) ─────────────── -->
+                        <div class="row mt-4" style="font-size:13px; line-height:1.6;">
+
+                            <div class="col-6" t-if="o.carton_qty or o.carton_size or o.total_cbm or o.gross_weight or o.net_weight">
+                                <strong>Packing Details</strong>
+                                <div style="margin-top:6px;">
+                                    <t t-if="o.carton_qty">No. of Cartons: <span t-field="o.carton_qty"/><br/></t>
+                                    <t t-if="o.carton_size">Carton Size: <span t-field="o.carton_size"/><br/></t>
+                                    <t t-if="o.total_cbm">Total CBM: <span t-field="o.total_cbm"/><br/></t>
+                                    <t t-if="o.gross_weight">Gross Weight: <span t-field="o.gross_weight"/> kg<br/></t>
+                                    <t t-if="o.net_weight">Net Weight: <span t-field="o.net_weight"/> kg</t>
+                                </div>
+                            </div>
+
+                            <div class="col-6" t-if="o.bank_name">
+                                <strong>Bank Details</strong>
+                                <div style="margin-top:6px;">
+                                    Bank: <span t-field="o.bank_name"/><br/>
+                                    <t t-if="o.bank_title">Account Title: <span t-field="o.bank_title"/><br/></t>
+                                    <t t-if="o.account_num">Account No: <span t-field="o.account_num"/><br/></t>
+                                    <t t-if="o.iban">IBAN: <span t-field="o.iban"/><br/></t>
+                                    <t t-if="o.swift">SWIFT/BIC: <span t-field="o.swift"/><br/></t>
+                                    <t t-if="o.bank_address">Address: <span t-field="o.bank_address"/></t>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

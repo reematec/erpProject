@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem
+        id="menu_reema_db_backup"
+        name="Database Backup"
+        parent="base.menu_administration"
+        action="reema_backup.action_reema_db_backup"
+        sequence="120"
+        groups="base.group_system"/>
+
+</odoo>

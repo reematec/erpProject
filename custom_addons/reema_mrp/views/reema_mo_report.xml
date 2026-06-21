@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Manufacturing Orders, mirroring the Piece Rate
+        report: report_type="qweb-html" (no PDF/wkhtmltopdf), no binding_model_id
+        (kept OUT of the cog Print menu). Triggered by action_print_mo(), which
+        opens /report/html/... in a new tab; the user prints with the browser.
+        Serves a single MO (form) or several selected MOs (list).
+    -->
+    <record id="action_report_mo" model="ir.actions.report">
+        <field name="name">Manufacturing Order</field>
+        <field name="model">mrp.production</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_mrp.report_mo</field>
+        <field name="report_file">reema_mrp.report_mo</field>
+        <field name="print_report_name">'MO - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_mo">
+        <t t-call="web.html_container">
+            <!-- Screen-only toolbar. NB: do NOT use Bootstrap's `d-print-none`
+                 here — in the report stylesheet it is display:none unconditionally
+                 (hidden even on screen). We use our own `o_screen_only` class with
+                 a real @media print rule. -->
+            <style>
+                @media print {
+                    .mo_doc { page-break-after: always; }
+                    .mo_doc:last-child { page-break-after: auto; }
+                }
+                @page { margin: 12mm; }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page mo_doc">
+
+                        <!-- Title: MO reference + product -->
+                        <div class="row mt-2 mb-2">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    <span t-field="o.name"/>
+                                    <br/>
+                                    <span t-field="o.product_id"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- Basic details -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Quantity</strong></td>
+                                        <td><span t-field="o.product_qty"/> <span t-field="o.product_uom_id"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>BOM</strong></td>
+                                        <td><span t-field="o.bom_id"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Construction</strong></td>
+                                        <td><span t-field="o.construction_type"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Ball Size</strong></td>
+                                        <td><span t-field="o.ball_size"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Status</strong></td>
+                                        <td><span t-field="o.state"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Responsible</strong></td>
+                                        <td><span t-field="o.responsible_name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Scheduled</strong></td>
+                                        <td><span t-field="o.date_start"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Components -->
+                        <h5 class="mt-3 mb-1">Components</h5>
+                        <table class="table table-sm table-striped" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Component</th>
+                                    <th class="text-end">To Consume</th>
+                                    <th>UOM</th>
+                                    <th class="text-end">Consumed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.move_raw_ids" t-as="m">
+                                    <t t-set="consumed_qty" t-value="consumed_map.get(o.id, {}).get(m.product_id.id, 0.0)"/>
+                                    <tr>
+                                        <td><span t-field="m.product_id"/></td>
+                                        <td class="text-end"><span t-out="('%.6f' % m.product_uom_qty).rstrip('0').rstrip('.')"/></td>
+                                        <td><span t-field="m.product_uom"/></td>
+                                        <td class="text-end"><span t-out="('%.6f' % consumed_qty).rstrip('0').rstrip('.')"/></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Work Orders -->
+                        <h5 class="mt-3 mb-1">Work Orders</h5>
+                        <table class="table table-sm table-striped" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Process</th>
+                                    <th>Work Center</th>
+                                    <th class="text-end">Target</th>
+                                    <th class="text-end">Completed</th>
+                                    <th class="text-end">Balls Done</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.workorder_ids" t-as="w">
+                                    <tr>
+                                        <td><span t-field="w.name"/></td>
+                                        <td><span t-field="w.workcenter_id"/></td>
+                                        <td class="text-end"><span t-out="('%.6f' % w.hall_qty).rstrip('0').rstrip('.')"/></td>
+                                        <td class="text-end"><span t-out="('%.6f' % w.qty_batch_completed).rstrip('0').rstrip('.')"/></td>
+                                        <td class="text-end"><span t-out="('%.6f' % w.qty_balls_completed).rstrip('0').rstrip('.')"/></td>
+                                        <td><span t-field="w.state"/></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>
