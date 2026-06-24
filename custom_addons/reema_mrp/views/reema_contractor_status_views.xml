@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_contractor_wo_status_list" model="ir.ui.view">
+        <field name="name">reema.contractor.wo.status.list</field>
+        <field name="model">reema.contractor.wo.status</field>
+        <field name="arch" type="xml">
+            <list string="Contractor Status"
+                  create="0" edit="0" delete="0"
+                  decoration-success="wo_state == 'done'"
+                  decoration-warning="wo_state == 'progress'"
+                  decoration-info="wo_state == 'ready'"
+                  decoration-muted="wo_state in ('pending', 'waiting', 'cancel')">
+
+                <field name="contractor_id" optional="show" string="Contractor"/>
+                <field name="workcenter_id" optional="show" string="Process"/>
+                <field name="mo_id" optional="show" string="Manufacturing Order"/>
+                <field name="wo_state" optional="show" string="WO Status" widget="badge"
+                       decoration-success="wo_state == 'done'"
+                       decoration-warning="wo_state == 'progress'"
+                       decoration-info="wo_state == 'ready'"
+                       decoration-muted="wo_state in ('pending', 'waiting')"
+                       decoration-danger="wo_state == 'cancel'"/>
+                <field name="qty_target" optional="show" string="Target"/>
+                <field name="qty_logged" optional="show" string="Logged"/>
+                <field name="hall_unit" optional="hide" string="Unit"/>
+                <field name="qty_balls_logged" optional="hide" string="Balls Logged" digits="[16,1]"/>
+                <field name="total_entries" optional="hide" string="Total Entries"/>
+                <field name="unbilled_entries" optional="show" string="Unbilled"
+                       decoration-warning="unbilled_entries &gt; 0"/>
+                <field name="is_ilo" optional="hide" string="ILO"/>
+                <field name="ilo_qty_dispatched" optional="show" string="ILO Dispatched"/>
+                <field name="ilo_qty_pending" optional="show" string="ILO Pending"
+                       decoration-warning="ilo_qty_pending &gt; 0"/>
+                <button name="action_open_mo" type="object"
+                        icon="fa-external-link" string="Open MO"
+                        title="Open Manufacturing Order"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_contractor_wo_status_search" model="ir.ui.view">
+        <field name="name">reema.contractor.wo.status.search</field>
+        <field name="model">reema.contractor.wo.status</field>
+        <field name="arch" type="xml">
+            <search string="Contractor Status">
+                <field name="contractor_id"/>
+                <field name="workcenter_id" string="Process"/>
+                <field name="mo_id" string="Manufacturing Order"/>
+                <separator/>
+                <filter string="In Progress" name="filter_in_progress"
+                        domain="[('wo_state', '=', 'progress')]"/>
+                <filter string="Ready" name="filter_ready"
+                        domain="[('wo_state', '=', 'ready')]"/>
+                <filter string="Has Work Logged" name="filter_has_entries"
+                        domain="[('total_entries', '&gt;', 0)]"/>
+                <filter string="Has Unbilled Entries" name="filter_unbilled"
+                        domain="[('unbilled_entries', '&gt;', 0)]"/>
+                <filter string="ILO Pending" name="filter_ilo_pending"
+                        domain="[('ilo_qty_pending', '&gt;', 0)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Contractor" name="group_contractor"
+                            context="{'group_by': 'contractor_id'}"/>
+                    <filter string="Process" name="group_process"
+                            context="{'group_by': 'workcenter_id'}"/>
+                    <filter string="WO Status" name="group_state"
+                            context="{'group_by': 'wo_state'}"/>
+                    <filter string="Manufacturing Order" name="group_mo"
+                            context="{'group_by': 'mo_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_contractor_wo_status" model="ir.actions.act_window">
+        <field name="name">Contractor Status</field>
+        <field name="res_model">reema.contractor.wo.status</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_contractor_wo_status_list"/>
+        <field name="search_view_id" ref="view_contractor_wo_status_search"/>
+        <field name="context">{'search_default_filter_in_progress': 0}</field>
+    </record>
+
+    <menuitem
+        id="reema_mrp_menu_contractor_status"
+        name="Contractor Status"
+        parent="mrp.menu_mrp_manufacturing"
+        action="action_contractor_wo_status"
+        groups="base.group_user"
+        sequence="5"/>
+
+</odoo>

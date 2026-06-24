@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+    <div t-name="reema_mrp.StockLedger" class="o_action">
+        <ControlPanel>
+            <t t-set-slot="layout-actions">
+                <div class="d-flex align-items-center gap-2">
+                    <label class="text-nowrap small mb-0">Opening Date:</label>
+                    <input type="date" class="form-control form-control-sm" style="width:auto"
+                           t-att-value="ledger.opening_date"
+                           t-on-change="onOpeningDateChange"/>
+                    <div class="btn-group" t-if="warehouses.length > 1">
+                        <Dropdown menuClass="o_filter_menu" items="warehouseItems">
+                            <button class="btn btn-secondary">
+                                <span class="fa fa-home me-1"/>
+                                <t t-out="activeWarehouseName"/>
+                            </button>
+                        </Dropdown>
+                    </div>
+                </div>
+            </t>
+        </ControlPanel>
+
+        <div class="o-content p-3 overflow-auto">
+            <div t-if="ledger.loading" class="text-center p-5 text-muted">
+                <span class="fa fa-spinner fa-spin me-2"/>Loading…
+            </div>
+            <t t-else="">
+                <!-- Compact header -->
+                <div class="d-flex align-items-baseline flex-wrap gap-3 mb-3 pb-2 border-bottom">
+                    <h5 class="mb-0" t-out="ledger.product_name"/>
+                    <span class="text-muted small">
+                        On Hand:
+                        <strong t-out="formatQty(ledger.on_hand)"/>
+                        <t t-if="ledger.uom_name">&#160;<t t-out="ledger.uom_name"/></t>
+                    </span>
+                    <span class="small">
+                        Forecasted:
+                        <strong t-attf-class="#{ledger.closing_balance &lt; 0 ? 'text-danger' : 'text-success'}"
+                                t-out="formatQty(ledger.closing_balance)"/>
+                        <t t-if="ledger.uom_name">&#160;<t t-out="ledger.uom_name"/></t>
+                    </span>
+                </div>
+
+                <!-- Ledger table -->
+                <table class="table table-sm table-hover table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:110px">Date</th>
+                            <th>Description</th>
+                            <th class="text-end" style="width:130px">
+                                In (+)<t t-if="ledger.uom_name"> (<t t-out="ledger.uom_name"/>)</t>
+                            </th>
+                            <th class="text-end" style="width:130px">
+                                Out (−)<t t-if="ledger.uom_name"> (<t t-out="ledger.uom_name"/>)</t>
+                            </th>
+                            <th class="text-end" style="width:140px">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Opening row (fixed reference; projected position at opening date) -->
+                        <tr class="table-secondary fw-bold">
+                            <td t-out="ledger.opening_date"/>
+                            <td>Opening Balance (as of opening date)</td>
+                            <td/>
+                            <td/>
+                            <td class="text-end" t-out="formatQty(ledger.opening_balance)"/>
+                        </tr>
+
+                        <!-- Move rows -->
+                        <t t-foreach="ledger.lines" t-as="line" t-key="line_index">
+                            <tr t-attf-class="#{rowClass(line.ledger_state)}">
+                                <td class="text-nowrap small text-muted" t-out="line.date"/>
+                                <td t-out="line.description"/>
+                                <td class="text-end text-success fw-semibold">
+                                    <t t-if="line.qty_in !== null and line.qty_in !== undefined"
+                                       t-out="formatQty(line.qty_in)"/>
+                                </td>
+                                <td class="text-end text-danger fw-semibold">
+                                    <t t-if="line.qty_out !== null and line.qty_out !== undefined"
+                                       t-out="formatQty(line.qty_out)"/>
+                                </td>
+                                <td t-attf-class="text-end fw-semibold #{line.balance &lt; 0 ? 'text-danger' : ''}"
+                                    t-out="formatQty(line.balance)"/>
+                            </tr>
+                        </t>
+
+                        <!-- Empty state -->
+                        <tr t-if="ledger.lines.length === 0">
+                            <td colspan="5" class="text-center text-muted py-4">
+                                No active stock movements found for this product.
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <!-- Closing row (fixed reference, Forecasted) -->
+                        <tr class="table-dark fw-bold">
+                            <td>—</td>
+                            <td>Forecasted (Closing)</td>
+                            <td/>
+                            <td/>
+                            <td t-attf-class="text-end #{ledger.closing_balance &lt; 0 ? 'text-warning' : ''}"
+                                t-out="formatQty(ledger.closing_balance)"/>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <!-- Legend -->
+                <div class="d-flex flex-wrap gap-3 mt-2 small text-muted">
+                    <span><span class="text-muted me-1">Grey</span>Done — completed actual movement</span>
+                    <span><span class="badge bg-info text-dark me-1">Blue</span>Reserved — stock allocated to this order</span>
+                    <span><span class="badge bg-warning text-dark me-1">Yellow</span>Demand or Partly Reserved — not fully allocated yet</span>
+                </div>
+            </t>
+        </div>
+    </div>
+</templates>

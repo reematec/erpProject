@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for the Products list (Reema Report Standard:
+        report_type qweb-html, NOT bound to the cog Print menu, opened in a new
+        tab via the list's Print button which passes the live domain + groupby).
+    -->
+    <record id="action_report_products" model="ir.actions.report">
+        <field name="name">Products</field>
+        <field name="model">product.template</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_mrp.report_products</field>
+        <field name="report_file">reema_mrp.report_products</field>
+    </record>
+
+    <!-- One products table (reused for the ungrouped case and per group). -->
+    <template id="report_products_table">
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr class="table-dark">
+                    <th>Reference</th>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th class="text-end">On Hand</th>
+                    <th class="text-end">Forecasted</th>
+                    <th>Unit</th>
+                </tr>
+            </thead>
+            <tbody>
+                <t t-foreach="records" t-as="p">
+                    <tr>
+                        <td><t t-esc="p.default_code or '—'"/></td>
+                        <td><t t-esc="p.name"/></td>
+                        <td><t t-esc="p.categ_id.display_name or '—'"/></td>
+                        <td class="text-end">
+                            <t t-out="('%.6f' % p.qty_available).rstrip('0').rstrip('.')"/>
+                        </td>
+                        <td class="text-end">
+                            <t t-out="('%.6f' % p.virtual_available).rstrip('0').rstrip('.')"/>
+                        </td>
+                        <td><t t-esc="p.uom_id.name"/></td>
+                    </tr>
+                </t>
+            </tbody>
+        </table>
+    </template>
+
+    <template id="report_products">
+        <t t-call="web.html_container">
+            <style>
+                @media print {
+                    .products_group { page-break-inside: avoid; }
+                }
+                @page { margin: 12mm; }
+            </style>
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div class="row mb-3">
+                        <div class="col-12 text-center">
+                            <h3 class="mb-0">Products</h3>
+                        </div>
+                    </div>
+
+                    <t t-if="not docs">
+                        <p class="text-center text-muted">No products match the current filter.</p>
+                    </t>
+                    <t t-elif="groupby_active">
+                        <t t-foreach="groups" t-as="grp">
+                            <div class="products_group">
+                                <h5 class="mt-3 mb-1"><t t-esc="grp['label']"/></h5>
+                                <t t-call="reema_mrp.report_products_table">
+                                    <t t-set="records" t-value="grp['records']"/>
+                                </t>
+                            </div>
+                        </t>
+                    </t>
+                    <t t-else="">
+                        <t t-call="reema_mrp.report_products_table">
+                            <t t-set="records" t-value="docs"/>
+                        </t>
+                    </t>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

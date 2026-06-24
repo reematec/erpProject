@@ -252,12 +252,43 @@ class ReemaSamplingBlueprint(models.Model):
         pm_group = self.env.ref('reema_mrp.group_reema_production_manager')
         managers = pm_group.users
         for blueprint in self:
+            bom = False
+            if blueprint.bom_count == 0:
+                bom = self.env['mrp.bom'].create({
+                    'product_tmpl_id': blueprint.product_tmpl_id.id,
+                    'product_uom_id': blueprint.product_tmpl_id.uom_id.id,
+                    'type': 'normal',
+                    'bom_line_ids': [
+                        (0, 0, {
+                            'product_id': line.product_id.id,
+                            'product_qty': 1.0,
+                            'product_uom_id': line.product_id.uom_id.id,
+                        })
+                        for line in blueprint.material_line_ids
+                    ],
+                })
+
+            if bom:
+                summary = 'Review and complete BOM'
+                note = (
+                    f'Sample <b>{blueprint.reference} – {blueprint.name}</b> has been approved. '
+                    f'A draft Bill of Materials (<b>{bom.reema_reference}</b>) has been automatically created. '
+                    f'Please review components, set correct quantities, define hall operations, '
+                    f'then click <b>Mark Ready</b> before production orders can be raised.'
+                )
+            else:
+                summary = 'Verify BOM is Ready'
+                note = (
+                    f'Sample <b>{blueprint.reference} – {blueprint.name}</b> has been approved again. '
+                    f'A BOM already exists for this sample — ensure it is marked <b>Ready</b> '
+                    f'before production can proceed.'
+                )
+
             for manager in managers:
                 blueprint.activity_schedule(
                     'mail.mail_activity_data_todo',
-                    summary='Define BOM for approved sample',
-                    note=f'Sample <b>{blueprint.reference} – {blueprint.name}</b> has been approved. '
-                         f'Please define the Bill of Materials so this design can be used in bulk production orders.',
+                    summary=summary,
+                    note=note,
                     user_id=manager.id,
                 )
 

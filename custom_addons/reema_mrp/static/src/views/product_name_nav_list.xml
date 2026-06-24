@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+
+    <!-- Add a "Print" button to the Products list control panel. It prints the
+         report reflecting the current filter + grouping (see onPrintProducts). -->
+    <t t-name="reema_mrp.ProductsListButtons" t-inherit="web.ListView.Buttons" t-inherit-mode="primary">
+        <xpath expr="//div[hasclass('o_list_buttons')]" position="inside">
+            <button type="button" class="btn btn-secondary o_reema_print_products"
+                    t-on-click="onPrintProducts">
+                <i class="fa fa-print me-1"/>Print
+            </button>
+        </xpath>
+    </t>
+
+</templates>

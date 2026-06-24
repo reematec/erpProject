@@ -11,35 +11,40 @@
                             string="Confirm"
                             type="object"
                             class="oe_highlight"
-                            invisible="state != 'draft'"/>
+                            invisible="state != 'draft'"
+                            confirm="Are you sure you want to confirm this Production Order?"
+                            confirm-label="Yes, Confirm"
+                            cancel-label="Go Back"/>
                     <button name="action_create_mos"
                             string="Create MOs"
                             type="object"
-                            invisible="state != 'confirmed'"/>
+                            invisible="state != 'confirmed'"
+                            confirm="This will create Manufacturing Orders for all lines with a ready BOM. Continue?"
+                            confirm-label="Yes, Create MOs"
+                            cancel-label="Go Back"/>
                     <button name="action_done"
                             string="Mark Done"
                             type="object"
-                            invisible="state != 'confirmed'"/>
-                    <button name="action_delete_draft"
-                            string="Delete PO"
-                            type="object"
-                            groups="reema_mrp.group_reema_production_manager"
-                            invisible="state != 'draft'"
-                            confirm="This will permanently delete this Production Order and the invoice will revert to no PO generated. Are you sure?"
-                            confirm-label="Yes, Delete It"
+                            invisible="state != 'confirmed'"
+                            confirm="Mark this Production Order as Done? This is required before the invoice can be shipped."
+                            confirm-label="Yes, Mark Done"
                             cancel-label="Go Back"/>
-                    <button name="action_cancel"
+<button name="action_cancel"
                             string="Cancel Order"
                             type="object"
                             groups="reema_mrp.group_reema_production_manager"
                             invisible="state in ('draft', 'done', 'cancelled')"
-                            confirm="This will cancel the Production Order. Are you sure?"
+                            confirm="To cancel this Production Order, all linked Manufacturing Orders must already be cancelled. To cancel an MO, all material issuance authorizations against it must be withdrawn first. Have you completed these steps?"
                             confirm-label="Yes, Cancel It"
                             cancel-label="Go Back"/>
                     <button name="action_reset_draft"
                             string="Reset to Draft"
                             type="object"
                             invisible="state != 'cancelled'"/>
+                    <button name="action_open_po_status_info"
+                            type="object"
+                            icon="fa-info-circle"
+                            groups="base.group_user"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,confirmed,done"/>
                 </header>
@@ -73,7 +78,7 @@
                                     <field name="sample_id"
                                            widget="many2one"
                                            readonly="1"
-                                           options="{'no_create': True, 'no_edit': True}"/>
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                                     <field name="product_tmpl_id" column_invisible="True"/>
                                     <field name="size" readonly="1"/>
                                     <field name="qty" readonly="mo_id"/>
@@ -144,6 +149,47 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <!-- PO Status Info Wizard -->
+    <record id="view_reema_po_status_info_wizard_form" model="ir.ui.view">
+        <field name="name">reema.po.status.info.wizard.form</field>
+        <field name="model">reema.po.status.info.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Production Order Status Reference">
+                <sheet>
+                    <table class="table table-sm table-bordered" style="font-size:13px;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:140px">Status</th>
+                                <th>What it means &amp; available actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge text-bg-secondary">Draft</span></td>
+                                <td>Auto-created when the Pro Forma Invoice is accepted. BOMs may not be assigned yet. No MOs exist. Actions: <strong>Confirm</strong> (when ready), <strong>Delete PO</strong> (PM only, no MOs linked).</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-warning text-dark">Confirmed</span></td>
+                                <td>Production Manager reviewed and confirmed the order. Actions: <strong>Create MOs</strong> (requires Ready BOMs with components and hall sequence), <strong>Mark Done</strong>, <strong>Cancel Order</strong> (PM only — all linked MOs must be cancelled first).</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-success">Done</span></td>
+                                <td>All production is complete. Required before the Pro Forma Invoice can be marked as <em>Shipped</em>. No further actions on the PO.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-danger">Cancelled</span></td>
+                                <td>Order was abandoned. All linked MOs must be cancelled before this state is reached. Action: <strong>Reset to Draft</strong> to reopen for corrections.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </sheet>
+                <footer>
+                    <button string="Close" class="btn-primary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
     <menuitem id="reema_mrp_menu_production_orders"
               name="Production Orders"
               parent="mrp.menu_mrp_manufacturing"
@@ -166,6 +212,7 @@
                 <button name="action_view_production_orders"
                         string="View PO"
                         type="object"
+                        groups="base.group_erp_manager"
                         invisible="production_order_count == 0"/>
             </xpath>
             <xpath expr="//header/button[@name='action_reset_to_pending']" position="attributes">
@@ -173,7 +220,7 @@
             </xpath>
             <!-- Mark as Shipped: only visible when PO exists and all MOs are done -->
             <xpath expr="//header/button[@name='action_close']" position="attributes">
-                <attribute name="invisible">state not in ('accepted', 'rejected') or not is_production_complete</attribute>
+                <attribute name="invisible">state not in ('accepted', 'rejected')</attribute>
             </xpath>
         </field>
     </record>

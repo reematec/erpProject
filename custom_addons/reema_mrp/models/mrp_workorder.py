@@ -43,7 +43,8 @@ class MrpWorkorder(models.Model):
             wo.qty_batch_completed = sum(wo.batch_entry_ids.mapped('qty'))
 
     @api.depends('qty_production', 'operation_id.balls_per_unit',
-                 'workcenter_id.hall_unit')
+                 'workcenter_id.hall_unit',
+                 'production_id.reema_po_line_ids.sample_id.total_panels')
     def _compute_hall_qty(self):
         for wo in self:
             wo.hall_qty = wo._balls_to_units(wo.qty_production)

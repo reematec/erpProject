@@ -102,6 +102,19 @@ class ReemaProductionOrder(models.Model):
                 'No lines to process. Either all MOs are already created, '
                 'or remaining lines have no BOM assigned yet.'
             )
+        # Block if any BOM is still in Draft status.
+        draft_boms = pending.filtered(lambda l: l.bom_id.bom_status == 'draft')
+        if draft_boms:
+            names = '\n'.join(
+                f'  • {l.bom_id.reema_reference} ({l.sample_id.name})'
+                for l in draft_boms
+            )
+            raise UserError(
+                f'The following BOMs are still in Draft status and cannot be used '
+                f'to create Manufacturing Orders:\n\n{names}\n\n'
+                f'Open each BOM, complete components and operations, '
+                f'then click "Mark Ready".'
+            )
         # Block if any BOM component is missing a Consuming Operation.
         # Without this, per-hall material cost and WIP attribution cannot work.
         for line in pending:
@@ -147,6 +160,9 @@ class ReemaProductionOrder(models.Model):
                 'date_deadline': fields.Datetime.to_datetime(self.date_planned) if self.date_planned else False,
             })
             line.mo_id = mo
+            mo.workorder_ids.filtered(
+                lambda w: w.workcenter_id.hall_unit == 'panel'
+            )._compute_hall_qty()
             created_mos |= mo
         return {
             'type': 'ir.actions.act_window',
@@ -165,6 +181,16 @@ class ReemaProductionOrder(models.Model):
             'res_model': 'mrp.production',
             'view_mode': 'list,form',
             'domain': [('id', 'in', mo_ids)],
+        }
+
+    def action_open_po_status_info(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Production Order Status Reference',
+            'res_model': 'reema.po.status.info.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {},
         }
 
     # ── Procurement visibility ────────────────────────────────────────────
@@ -331,7 +357,8 @@ class ReemaProductionOrderLine(models.Model):
     product_tmpl_id = fields.Many2one('product.template', related='sample_id.product_tmpl_id')
     size = fields.Char(string='Size')
     qty = fields.Float(string='Quantity', default=1.0)
-    bom_id = fields.Many2one('mrp.bom', string='Bill of Materials')
+    bom_id = fields.Many2one('mrp.bom', string='Bill of Materials',
+                             domain=[('bom_status', '=', 'ready')])
     bom_reference = fields.Char(related='bom_id.reema_reference', string='BOM', readonly=True)
     mo_id = fields.Many2one('mrp.production', string='Manufacturing Order', readonly=True)
     mo_state = fields.Selection(related='mo_id.state', string='MO Status', readonly=True)
@@ -417,40 +444,29 @@ class ReemaInvoiceProductionExt(models.Model):
                 )
             rec.has_active_production_order = bool(active)
 
-    def action_close(self):
-        for rec in self:
-            active_pos = rec.production_order_ids.filtered(lambda po: po.state != 'cancelled')
-            if active_pos:
-                not_done = active_pos.filtered(lambda po: po.state != 'done')
-                if not_done:
-                    po_names = ', '.join(not_done.mapped('name'))
-                    raise UserError(
-                        f"Cannot mark {rec.name} as Shipped.\n\n"
-                        f"The following Production Orders are not yet completed:\n"
-                        f"{po_names}\n\n"
-                        f"Mark all Production Orders as Done before shipping."
-                    )
-        return super().action_close()
 
     def action_accept(self):
         result = super().action_accept()
         pm_group = self.env.ref('reema_mrp.group_reema_production_manager')
         for rec in self:
+            rec._auto_create_production_order()
             for manager in pm_group.users:
                 rec.activity_schedule(
                     'mail.mail_activity_data_todo',
-                    summary='Finalize BOM & create Production Orders',
+                    summary='Finalize BOM & assign MOs',
                     note=(
-                        f'Pro Forma Invoice <b>{rec.name}</b> has been accepted by the client. '
-                        f'Please finalize the Bill of Materials for each sample and create the '
-                        f'Production Orders to proceed with manufacturing.'
+                        f'Pro Forma Invoice <b>{rec.name}</b> has been accepted. '
+                        f'A Production Order has been automatically created. '
+                        f'Please finalize the Bill of Materials for each sample and create '
+                        f'Manufacturing Orders to proceed with production.'
                     ),
                     user_id=manager.id,
                 )
         return result
 
-    def action_create_production_order(self):
+    def _auto_create_production_order(self):
         self.ensure_one()
+        self = self.sudo()
         lines = []
         for inv_line in self.line_ids:
             if not inv_line.sample_id:
@@ -465,11 +481,16 @@ class ReemaInvoiceProductionExt(models.Model):
                 'qty': inv_line.qty,
                 'bom_id': bom.id if bom else False,
             }))
-        po = self.env['reema.production.order'].create({
+        self.env['reema.production.order'].create({
             'invoice_id': self.id,
             'date_planned': self.shipping_date or fields.Date.context_today(self),
             'line_ids': lines,
         })
+
+    def action_create_production_order(self):
+        self.ensure_one()
+        self._auto_create_production_order()
+        po = self.production_order_ids[:1]
         return {
             'type': 'ir.actions.act_window',
             'name': 'Production Order',
@@ -563,6 +584,13 @@ class MrpBomReemaExt(models.Model):
              'design-level constant. Applied at the printing work center, where '
              'pay = rate × qty_balls × impressions_per_ball.')
 
+    bom_status = fields.Selection([
+        ('draft', 'Draft'),
+        ('ready', 'Ready'),
+    ], string='Status', default='draft', required=True, tracking=True,
+       help='Draft: auto-created from sample approval, not yet reviewed by PM. '
+            'Ready: reviewed, can be used in Manufacturing Orders.')
+
     # Defaults tuned to our flow (Miscellaneous tab is admin-only in the view).
     ready_to_produce = fields.Selection(default='asap')   # When components for 1st operation are available
     consumption = fields.Selection(default='warning')     # Allowed with warning
@@ -617,6 +645,27 @@ class MrpBomReemaExt(models.Model):
     def _compute_display_name(self):
         for bom in self:
             bom.display_name = bom.reema_reference or '/'
+
+    def action_mark_ready(self):
+        self.ensure_one()
+        if not self.bom_line_ids:
+            raise UserError(
+                f'BOM {self.reema_reference} has no components. '
+                f'Add at least one component before marking as Ready.'
+            )
+        bad_qty = self.bom_line_ids.filtered(lambda l: l.product_qty <= 0)
+        if bad_qty:
+            names = ', '.join(bad_qty.mapped('product_id.display_name'))
+            raise UserError(
+                f'All component quantities must be greater than zero.\n'
+                f'Fix quantities for: {names}'
+            )
+        if not self.operation_ids:
+            raise UserError(
+                f'BOM {self.reema_reference} has no operations defined. '
+                f'Add hall operations before marking as Ready.'
+            )
+        self.bom_status = 'ready'
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -685,15 +734,16 @@ class MrpRoutingWorkcenterReema(models.Model):
         string='Piece Rate',
         domain="[('workcenter_id', '=', workcenter_id)]",
     )
-    pay_basis = fields.Selection([
-        ('hall', 'Per Hall Unit'),
-        ('ball', 'Per Ball'),
-    ], string='Pay Basis', default='ball', required=True,
-        help='Per Hall Unit: rate × qty logged (printing halls additionally multiply by the '
-             "BOM's Impressions / Ball); Per Ball: rate × qty_balls.")
-
+    piece_rate_value = fields.Float(
+        related='piece_rate_id.rate', string='Rate (PKR)',
+        digits=(10, 2), readonly=True, store=False)
     def action_delete_operation(self):
         self.unlink()
+
+
+class ReemaPOStatusInfoWizard(models.TransientModel):
+    _name = 'reema.po.status.info.wizard'
+    _description = 'Production Order Status Reference'
 
 
 class StockPickingTypeReema(models.Model):

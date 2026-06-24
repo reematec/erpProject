@@ -25,6 +25,23 @@
                    tighten it to reclaim vertical space. */
                 .header { padding-top: 4mm !important; }
                 .footer > .o_footer_content { padding-bottom: 4mm !important; }
+                /* The header decorative band (.o_folder_header_container) is
+                   position-absolute start-0 w-100, so it spans the full page area
+                   ignoring padding. The report body sits INSIDE the
+                   .o_body_html.container horizontal padding (Odoo's 0 11mm + the
+                   Bootstrap gutter) and its responsive max-width, so on paper it
+                   starts further in than the header band and wastes space. Drop
+                   that horizontal padding / max-width on print so the body starts
+                   at the SAME left/right position as the header band; the actual
+                   paper margin comes from the report's @page margin. */
+                @media print {
+                    .o_body_html.container {
+                        max-width: 100% !important;
+                        width: 100% !important;
+                        padding-left: 0 !important;
+                        padding-right: 0 !important;
+                    }
+                }
                 /* Compact logo + readable (but smaller) company info. */
                 .o_company_logo_big { max-height: 100px !important; max-width: 100px !important; width: auto !important; margin-bottom: 2px !important; }
                 .o_folder_company_info { font-size: 12.5px !important; margin: 0 !important; padding: 0 !important; }

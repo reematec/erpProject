@@ -166,7 +166,17 @@ class ReemaPurchaseOrder(models.Model):
             rec.write({'state': 'draft'})
 
     def action_print_po(self):
-        return self.env.ref('reema_purchase.report_purchase_order').report_action(self)
+        # Open the PO HTML preview in a new browser tab (works for a single
+        # order from the form, or several selected orders from the list). The
+        # user prints with Ctrl+P and closes the tab.
+        if not self:
+            return False
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/report/html/reema_purchase.report_purchase_order_template/%s'
+                   % ','.join(str(i) for i in self.ids),
+            'target': 'new',
+        }
 
     def action_view_gate_passes(self):
         return {

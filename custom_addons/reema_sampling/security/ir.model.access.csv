@@ -15,7 +15,3 @@ access_reema_sampling_status_info_wizard_user,reema.sampling.status.info.wizard 
 access_reema_sampling_status_info_wizard_manager,reema.sampling.status.info.wizard manager,model_reema_sampling_status_info_wizard,base.group_erp_manager,1,1,1,1
 access_reema_sampling_rejection_wizard_user,reema.sampling.rejection.wizard user,model_reema_sampling_rejection_wizard,reema_sampling.group_reema_sampling,1,1,1,1
 access_reema_sampling_rejection_wizard_manager,reema.sampling.rejection.wizard manager,model_reema_sampling_rejection_wizard,base.group_erp_manager,1,1,1,1
-access_reema_sampling_blueprint_readonly,reema.sampling.blueprint readonly,model_reema_sampling_blueprint,base.group_user,1,0,0,0
-access_reema_sampling_material_line_readonly,reema.sampling.material.line readonly,model_reema_sampling_material_line,base.group_user,1,0,0,0
-access_reema_sampling_size_line_readonly,reema.sampling.size.line readonly,model_reema_sampling_size_line,base.group_user,1,0,0,0
-access_reema_sampling_knife_line_readonly,reema.sampling.knife.line readonly,model_reema_sampling_knife_line,base.group_user,1,0,0,0

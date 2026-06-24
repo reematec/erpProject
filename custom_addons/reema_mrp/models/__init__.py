@@ -13,3 +13,6 @@ from . import reema_consumable_issuance
 from . import res_partner
 from . import res_users
 from . import reema_ilo
+from . import reema_stock_ledger
+from . import reema_products_report
+from . import reema_contractor_status

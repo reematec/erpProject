@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Product list: only the Product Name navigates to the form, not the
+         whole row. Implemented via a custom js_class (see
+         static/src/views/product_name_nav_list.js). -->
+    <record id="product_template_tree_name_nav" model="ir.ui.view">
+        <field name="name">product.template.list.name.nav</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_tree_view"/>
+        <field name="arch" type="xml">
+            <list position="attributes">
+                <attribute name="js_class">product_name_nav_list</attribute>
+            </list>
+        </field>
+    </record>
+
+    <!-- Add a "Negative Forecasted Quantity" filter to the Manufacturing >
+         Products search. The MRP products action uses its own primary search
+         view (mrp.mrp_product_template_search_view), so the stock module's
+         equivalent filter does not appear there; add it explicitly. -->
+    <record id="product_template_search_negative_forecast" model="ir.ui.view">
+        <field name="name">product.template.search.negative.forecast</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="mrp.mrp_product_template_search_view"/>
+        <field name="arch" type="xml">
+            <filter name="components" position="after">
+                <separator/>
+                <filter string="Negative Forecasted Quantity" name="negative_forecast"
+                        domain="[('virtual_available', '&lt;', 0)]"/>
+            </filter>
+        </field>
+    </record>
+
+</odoo>

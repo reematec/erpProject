@@ -18,6 +18,11 @@
         'report/po_report.xml',
         'report/grn_report.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'reema_purchase/static/src/views/po_list_view.js',
+        ],
+    },
     'installable': True,
     'application': True,
     'license': 'LGPL-3',

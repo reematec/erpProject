@@ -2,36 +2,6 @@ from odoo import models, fields, api
 from odoo.exceptions import UserError
 
 
-class ReemaIloPieceRate(models.Model):
-    _name = 'reema.ilo.piece.rate'
-    _description = 'ILO Piece Rate'
-    _order = 'contractor_id, construction_type, ball_size'
-
-    contractor_id = fields.Many2one(
-        'res.partner', string='Contractor', required=True,
-        domain="[('is_contractor', '=', True)]",
-        options={'no_create': True, 'no_edit': True},
-    )
-    ball_size = fields.Selection(
-        [('3', 'Size 3'), ('4', 'Size 4'), ('5', 'Size 5')],
-        string='Ball Size', required=True,
-    )
-    construction_type = fields.Selection(
-        [('hs', 'HS'), ('hyb', 'HYB'), ('ms', 'MS'), ('thb', 'THB')],
-        string='Construction Type', required=True,
-    )
-    rate = fields.Float(string='Rate per Ball (PKR)', required=True, digits=(10, 2))
-    bladder_deduction = fields.Float(
-        string='Bladder Deduction (PKR)',
-        digits=(10, 2),
-        help='Fixed PKR deduction per no-bladder ball. Leave 0 to always enter manually.',
-    )
-
-    _sql_constraints = [
-        ('unique_ilo_rate', 'unique(contractor_id, ball_size, construction_type)',
-         'A piece rate for this contractor / size / type combination already exists.'),
-    ]
-
 
 class ReemaIloDispatch(models.Model):
     _name = 'reema.ilo.dispatch'
@@ -159,15 +129,11 @@ class ReemaIloReceipt(models.Model):
     qty_no_bladder = fields.Integer(string='Stitched (No Bladder)')
     qty_damaged = fields.Integer(string='Damaged / Unusable')
     piece_rate_id = fields.Many2one(
-        'reema.ilo.piece.rate', string='Piece Rate',
-        domain="[('contractor_id', '=', contractor_id), ('ball_size', '=', ball_size), ('construction_type', '=', construction_type)]",
+        'reema.piece.rate', string='Piece Rate',
+        domain="[('workcenter_id.is_ilo', '=', True)]",
         options={'no_create': True, 'no_edit': True},
     )
     rate_full = fields.Float(string='Rate per Ball (PKR)', digits=(10, 2))
-    deduction_type = fields.Selection(
-        [('fixed', 'Fixed (from rate card)'), ('manual', 'Manual (enter amount)')],
-        string='No-Bladder Deduction', default='fixed',
-    )
     deduction_per_ball = fields.Float(string='Deduction per No-Bladder Ball (PKR)', digits=(10, 2))
     notes = fields.Text(string='Notes')
     state = fields.Selection(
@@ -180,19 +146,22 @@ class ReemaIloReceipt(models.Model):
     repair_deduction = fields.Float(string='Repair Deductions', compute='_compute_amounts', store=True, digits=(10, 2))
     amount_due = fields.Float(string='Amount Due (PKR)', compute='_compute_amounts', store=True, digits=(10, 2))
 
+    @api.onchange('dispatch_id')
+    def _onchange_dispatch_id(self):
+        if not self.dispatch_id:
+            return
+        wo = self.env['mrp.workorder'].search([
+            ('production_id', '=', self.dispatch_id.mo_id.id),
+            ('workcenter_id.is_ilo', '=', True),
+        ], limit=1)
+        if wo and wo.operation_id.piece_rate_id:
+            self.piece_rate_id = wo.operation_id.piece_rate_id
+            self.rate_full = wo.operation_id.piece_rate_id.rate
+
     @api.onchange('piece_rate_id')
     def _onchange_piece_rate_id(self):
         if self.piece_rate_id:
             self.rate_full = self.piece_rate_id.rate
-            if self.deduction_type == 'fixed':
-                self.deduction_per_ball = self.piece_rate_id.bladder_deduction
-
-    @api.onchange('deduction_type')
-    def _onchange_deduction_type(self):
-        if self.deduction_type == 'fixed' and self.piece_rate_id:
-            self.deduction_per_ball = self.piece_rate_id.bladder_deduction
-        elif self.deduction_type == 'manual':
-            self.deduction_per_ball = 0.0
 
     @api.depends('qty_full', 'qty_no_bladder', 'rate_full', 'deduction_per_ball', 'repair_charge_ids.total_deduction')
     def _compute_amounts(self):

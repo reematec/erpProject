@@ -20,7 +20,6 @@
         'web.assets_backend': [
             'reema_sampling/static/src/components/secure_preview/secure_preview.js',
             'reema_sampling/static/src/components/secure_preview/secure_preview.xml',
-            'reema_sampling/static/src/components/pending_bom_list.js',
         ],
     },
     'installable': True,

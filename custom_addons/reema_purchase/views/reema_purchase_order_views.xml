@@ -22,7 +22,7 @@
                             groups="reema_purchase.group_reema_owner"
                             invisible="state != 'confirmed' or not needs_approval"
                             confirm="Approve this Purchase Order? It will become active."/>
-                    <button name="action_print_po" string="Print / PDF"
+                    <button name="action_print_po" string="Print"
                             type="object" class="btn-secondary"/>
                     <button name="action_cancel" string="Cancel PO"
                             type="object" class="btn-danger"
@@ -134,10 +134,16 @@
         <field name="name">reema.purchase.order.list</field>
         <field name="model">reema.purchase.order</field>
         <field name="arch" type="xml">
-            <list string="Purchase Orders" decoration-info="state == 'draft'"
+            <list string="Purchase Orders" js_class="reema_po_list"
+                  decoration-info="state == 'draft'"
                   decoration-warning="state == 'submitted'"
-                  decoration-success="state in ('confirmed', 'approved')"
+                  decoration-primary="state == 'confirmed'"
+                  decoration-success="state == 'approved'"
                   decoration-muted="state == 'cancelled'">
+                <header>
+                    <button name="action_print_po" string="Print Selected"
+                            type="object" display="always" class="btn-secondary"/>
+                </header>
                 <field name="name"/>
                 <field name="date"/>
                 <field name="partner_id" domain="[('supplier_rank', '>', 0), ('is_contractor', '=', False)]" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
@@ -151,7 +157,8 @@
                 <field name="state" widget="badge" optional="show"
                        decoration-info="state == 'draft'"
                        decoration-warning="state == 'submitted'"
-                       decoration-success="state in ('confirmed', 'approved')"
+                       decoration-primary="state == 'confirmed'"
+                       decoration-success="state == 'approved'"
                        decoration-danger="state == 'cancelled'"/>
             </list>
         </field>

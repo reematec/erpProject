@@ -101,7 +101,7 @@
                                             <td><span t-esc="op.name"/></td>
                                             <td><span t-field="op.workcenter_id"/></td>
                                             <td class="text-end"><span t-out="('%.6f' % op.balls_per_unit).rstrip('0').rstrip('.')"/></td>
-                                            <td><span t-field="op.pay_basis"/></td>
+                                            <td><span t-field="op.workcenter_id.pay_basis"/></td>
                                             <td><span t-field="op.piece_rate_id"/></td>
                                         </tr>
                                     </t>

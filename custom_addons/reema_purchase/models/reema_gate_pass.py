@@ -47,7 +47,9 @@ class ReemaGatePass(models.Model):
 
     def _compute_grn_count(self):
         for rec in self:
-            rec.grn_count = len(rec.grn_ids)
+            rec.grn_count = self.env['reema.grn'].sudo().search_count(
+                [('gate_pass_id', '=', rec.id)]
+            )
 
     @api.depends('line_ids.received_qty')
     def _compute_total_arrived_qty(self):

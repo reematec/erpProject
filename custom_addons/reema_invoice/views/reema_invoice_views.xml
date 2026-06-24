@@ -46,7 +46,7 @@
                             cancel-label="Go Back"/>
                     <button name="action_sent"           string="Mark as Sent" type="object"
                             class="oe_highlight" invisible="state != 'pending'"/>
-                    <button name="action_accept"         string="Accept"       type="object"
+                    <button name="action_open_accept_wizard" string="Accept" type="object"
                             class="oe_highlight" invisible="state != 'sent'"/>
                     <button name="action_reject"         string="Reject"       type="object"
                             invisible="state != 'sent'"/>
@@ -73,6 +73,7 @@
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_move" type="object"
                                 class="oe_stat_button" icon="fa-book"
+                                groups="base.group_erp_manager"
                                 invisible="not move_id">
                             <div class="o_stat_info">
                                 <span class="o_stat_text">Journal Entry</span>
@@ -122,7 +123,7 @@
                                 <list editable="bottom" no_open="True">
                                     <field name="sample_id"
                                            domain="[('customer_id', '=', parent.partner_id)]"
-                                           options="{'no_create': True, 'no_edit': True}" string="Name"/>
+                                           options="{'no_create': True, 'no_edit': True, 'no_open': True}" string="Name"/>
                                     <field name="sample_code"  string="Sample Code"/>
                                     <field name="description"  string="Description"/>
                                     <field name="client_sku"   string="Client SKU"/>
@@ -580,6 +581,38 @@
               action="action_reema_invoice_packing"
               groups="reema_invoice.group_reema_packing_user"
               sequence="20"/>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         ACCEPT CONFIRMATION WIZARD
+    ════════════════════════════════════════════════════════════════════════ -->
+    <record id="view_reema_invoice_accept_wizard_form" model="ir.ui.view">
+        <field name="name">reema.invoice.accept.wizard.form</field>
+        <field name="model">reema.invoice.accept.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Accept Invoice">
+                <sheet>
+                    <field name="invoice_id" invisible="1"/>
+                    <p style="font-size:15px; font-weight:600;">
+                        Are you sure you want to accept this invoice?
+                    </p>
+                    <p>Accepting confirms the client has placed the order. The following will happen <strong>immediately</strong>:</p>
+                    <ul>
+                        <li>A <strong>receivable journal entry</strong> will be posted to accounting.</li>
+                        <li>A <strong>Production Order</strong> will be automatically created for the factory.</li>
+                        <li>The <strong>Production Manager</strong> will be notified to begin manufacturing.</li>
+                    </ul>
+                    <p class="text-danger">
+                        This cannot be undone without first cancelling the Production Order and reversing the journal entry.
+                        Only accept if the client has confirmed the order.
+                    </p>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" string="Yes, Accept Order" type="object" class="btn-primary"/>
+                    <button string="Go Back" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          PI STATUS INFO WIZARD — opened by the ⓘ button in the form header

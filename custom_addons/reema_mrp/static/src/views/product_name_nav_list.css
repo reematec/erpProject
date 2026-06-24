@@ -1,0 +1,25 @@
+/* Product list with figure-driven navigation: signal which cells are clickable
+   (Product Name, On Hand, Forecasted) and make the rest of the row inert. */
+.o_reema_name_nav .o_data_row {
+    cursor: default;
+}
+
+/* Product Name acts as a link. */
+.o_reema_name_nav .o_data_row td.o_data_cell[name="name"] {
+    cursor: pointer;
+    color: var(--bs-link-color, #714B67);
+}
+.o_reema_name_nav .o_data_row td.o_data_cell[name="name"]:hover {
+    text-decoration: underline;
+}
+
+/* On Hand / Forecasted figures navigate too. Keep their decorations (red for
+   negative, bold) intact — only add the pointer + hover underline as the cue. */
+.o_reema_name_nav .o_data_row td.o_data_cell[name="qty_available"],
+.o_reema_name_nav .o_data_row td.o_data_cell[name="virtual_available"] {
+    cursor: pointer;
+}
+.o_reema_name_nav .o_data_row td.o_data_cell[name="qty_available"]:hover,
+.o_reema_name_nav .o_data_row td.o_data_cell[name="virtual_available"]:hover {
+    text-decoration: underline;
+}

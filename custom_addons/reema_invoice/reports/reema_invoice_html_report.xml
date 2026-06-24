@@ -13,7 +13,6 @@
     <template id="report_reema_invoice_html">
         <t t-call="web.html_container">
             <style>
-                body.container { padding-left: 0 !important; padding-right: 0 !important; }
                 @media print {
                     .pi_doc { page-break-after: always; }
                     .pi_doc:last-child { page-break-after: auto; }
@@ -27,19 +26,15 @@
                         <!-- ── Title ──────────────────────────────────────── -->
                         <div class="row mt-2 mb-3">
                             <div class="col-12 text-center">
-                                <div style="font-size:17px; font-weight:700; text-transform:uppercase; letter-spacing:2px;">
-                                    Pro Forma Invoice
-                                </div>
-                                <div style="font-size:14px; font-weight:600; margin-top:2px;">
-                                    <span t-field="o.name"/>
-                                </div>
+                                <h3 class="mb-0 text-uppercase">Pro Forma Invoice</h3>
+                                <h5 class="mb-0"><span t-field="o.name"/></h5>
                             </div>
                         </div>
 
                         <hr style="margin-top:4px;"/>
 
                         <!-- ── Addresses ──────────────────────────────────── -->
-                        <div class="row mb-3" style="font-size:13px; line-height:1.6;">
+                        <div class="row mb-3" style="line-height:1.6;">
                             <t t-set="comp" t-value="o.env.company"/>
                             <div class="col-6">
                                 <strong>From:</strong>
@@ -65,7 +60,7 @@
                         </div>
 
                         <!-- ── Order / Shipping Details ───────────────────── -->
-                        <div class="row mb-2" style="font-size:13px;">
+                        <div class="row mb-2">
                             <div class="col-6">
                                 <table class="table table-sm table-borderless">
                                     <tr>
@@ -117,7 +112,7 @@
                         </div>
 
                         <!-- ── Line Items ─────────────────────────────────── -->
-                        <table class="table table-sm mt-2" style="font-size:12px;">
+                        <table class="table table-sm mt-2">
                             <thead>
                                 <tr class="table-dark">
                                     <th style="width:14%;">Sample Code</th>
@@ -140,7 +135,7 @@
                                     <!-- Secondary row: reference / logistics details -->
                                     <tr style="background:inherit;">
                                         <td colspan="5" style="padding-top:0; padding-bottom:6px;">
-                                            <span style="font-size:11px; color:#555;">
+                                            <small class="text-muted">
                                                 <t t-if="line.description">
                                                     <strong>Desc:</strong> <span t-field="line.description"/> &#160;
                                                 </t>
@@ -159,7 +154,7 @@
                                                 <t t-if="line.ean">
                                                     <strong>EAN:</strong> <span t-field="line.ean"/>
                                                 </t>
-                                            </span>
+                                            </small>
                                         </td>
                                     </tr>
                                 </t>
@@ -169,7 +164,7 @@
                         <!-- ── Totals ─────────────────────────────────────── -->
                         <div class="row">
                             <div class="col-5 offset-7">
-                                <table class="table table-sm" style="font-size:13px;">
+                                <table class="table table-sm">
                                     <tr>
                                         <td><strong>Total Qty</strong></td>
                                         <td class="text-end"><span t-field="o.total_qty"/></td>
@@ -193,7 +188,7 @@
                         </div>
 
                         <!-- ── Packing (left) + Bank (right) ─────────────── -->
-                        <div class="row mt-4" style="font-size:13px; line-height:1.6;">
+                        <div class="row mt-4" style="line-height:1.6;">
 
                             <div class="col-6" t-if="o.carton_qty or o.carton_size or o.total_cbm or o.gross_weight or o.net_weight">
                                 <strong>Packing Details</strong>

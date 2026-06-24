@@ -267,6 +267,7 @@ class ReemaInvoice(models.Model):
 
     def _create_accounting_entry(self):
         self.ensure_one()
+        self = self.sudo()
         company = self.env.company
         company_currency = company.currency_id
         invoice_currency = self.currency_id
@@ -286,10 +287,20 @@ class ReemaInvoice(models.Model):
         pkr_total = invoice_currency._convert(
             self.net_total_payable, company_currency, company, date
         )
+        rate = pkr_total / self.net_total_payable if self.net_total_payable else 0.0
+        terms = self.payment_terms_id.name or ''
+
+        # Receivable line: PI | FC amount @ rate | Payment Terms
+        if is_foreign:
+            recv_desc = f"{self.name} | {invoice_currency.name} {self.net_total_payable:,.2f} @ {rate:,.4f}"
+        else:
+            recv_desc = f"{self.name} | {company_currency.name} {pkr_total:,.2f}"
+        if terms:
+            recv_desc += f" | {terms}"
 
         move_lines = [(0, 0, {
             'account_id': receivable_account.id,
-            'name': self.name,
+            'name': recv_desc,
             'debit': pkr_total,
             'credit': 0.0,
             'currency_id': invoice_currency.id if is_foreign else False,
@@ -308,20 +319,43 @@ class ReemaInvoice(models.Model):
             pkr_line = invoice_currency._convert(
                 line.price_subtotal, company_currency, company, date
             )
+            type_name = line.sample_id.product_type_id.name
             if account.id not in account_totals:
-                account_totals[account.id] = {'pkr': 0.0, 'fc': 0.0}
+                account_totals[account.id] = {'pkr': 0.0, 'fc': 0.0, 'type_name': type_name}
             account_totals[account.id]['pkr'] += pkr_line
             account_totals[account.id]['fc'] += line.price_subtotal
 
         for account_id, amounts in account_totals.items():
+            if is_foreign:
+                credit_desc = (
+                    f"{self.name} | {amounts['type_name']} | "
+                    f"{invoice_currency.name} {amounts['fc']:,.2f}"
+                )
+            else:
+                credit_desc = f"{self.name} | {amounts['type_name']} | {company_currency.name} {amounts['pkr']:,.2f}"
             move_lines.append((0, 0, {
                 'account_id': account_id,
-                'name': self.name,
+                'name': credit_desc,
                 'debit': 0.0,
                 'credit': amounts['pkr'],
                 'currency_id': invoice_currency.id if is_foreign else False,
                 'amount_currency': -amounts['fc'] if is_foreign else 0.0,
             }))
+
+        # Narration — full summary visible on the journal entry form
+        narration = [
+            f"Pro Forma Invoice : {self.name}",
+            f"Customer          : {self.partner_id.name}",
+            f"PI Date           : {self.date}",
+        ]
+        if self.client_order_number:
+            narration.append(f"Client Order No.  : {self.client_order_number}")
+        narration.append(f"Invoice Total     : {invoice_currency.name} {self.net_total_payable:,.2f}")
+        if is_foreign:
+            narration += [
+                f"Exchange Rate     : 1 {invoice_currency.name} = {rate:,.4f} {company_currency.name}",
+                f"{company_currency.name} Equivalent  : {company_currency.name} {pkr_total:,.2f}",
+            ]
 
         journal = self.env['account.journal'].search(
             [('type', '=', 'sale'), ('company_id', '=', company.id)], limit=1
@@ -334,6 +368,7 @@ class ReemaInvoice(models.Model):
             'journal_id': journal.id,
             'date': date,
             'ref': self.name,
+            'narration': '\n'.join(narration),
             'line_ids': move_lines,
         })
         move.action_post()
@@ -364,6 +399,18 @@ class ReemaInvoice(models.Model):
             'view_mode': 'form',
             'target': 'new',
             'context': {},
+        }
+
+    def action_open_accept_wizard(self):
+        self.ensure_one()
+        wizard = self.env['reema.invoice.accept.wizard'].create({'invoice_id': self.id})
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Accept Invoice',
+            'res_model': 'reema.invoice.accept.wizard',
+            'view_mode': 'form',
+            'res_id': wizard.id,
+            'target': 'new',
         }
 
 
@@ -490,6 +537,17 @@ class AccountIncotermsReema(models.Model):
     def _compute_display_name(self):
         for rec in self:
             rec.display_name = rec.code or ''
+
+
+class ReemaInvoiceAcceptWizard(models.TransientModel):
+    _name = 'reema.invoice.accept.wizard'
+    _description = 'Accept Invoice Confirmation'
+
+    invoice_id = fields.Many2one('reema.invoice', required=True, ondelete='cascade')
+
+    def action_confirm(self):
+        self.invoice_id.action_accept()
+        return {'type': 'ir.actions.act_window_close'}
 
 
 class ReemaInvoiceStatusInfoWizard(models.TransientModel):

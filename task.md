@@ -9,6 +9,25 @@
 
 ## Current Tasks
 
+[ ] Admin overview — Shipped invoices with open production — logged June 23 2026
+    - Background: "Mark Done" on a Production Order is now decoupled from shipping.
+      An invoice can be marked as Shipped even if the linked PO is still Confirmed
+      or the MOs are still in progress. This is intentional (shipping documents can
+      be delayed) but creates a blind spot — no one can easily see which orders have
+      been shipped but whose production is not yet closed.
+    - Required: a view (list or dashboard) visible to admin/production manager that
+      shows all invoices in 'closed' (Shipped) state where at least one linked
+      Production Order is NOT in 'done' or 'cancelled' state.
+    - Suggested implementation: a server-side computed list view on reema.invoice
+      filtered by state='closed' and has_active_production_order=True, OR a
+      dedicated SQL view / reporting model for performance.
+    - Should show: Invoice number, Customer, Shipping Date, PO reference, PO state,
+      MO count still open — so admin can follow up with the production team.
+    - Access: visible only to base.group_erp_manager / group_reema_production_manager.
+    - Files likely involved:
+        reema_mrp/models/reema_production_order.py (computed field or new model)
+        reema_mrp/views/reema_production_order_views.xml (new list view + menu item)
+
 [ ] Work Order Start/Pause/Finish button visibility bug (MO form, Work Orders tab) — logged June 16 2026
     - Reported: after clicking Play (Start), the row still shows the Play button even
       though the state badge correctly says "In Progress" — confusing, looks like it

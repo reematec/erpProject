@@ -6,6 +6,7 @@ class MrpProduction(models.Model):
     _inherit = 'mrp.production'
 
     responsible_name = fields.Char(related='user_id.name', string='Responsible', readonly=True)
+    reema_po_line_ids = fields.One2many('reema.production.order.line', 'mo_id')
 
     construction_type = fields.Selection([
         ('hs', 'Hand Stitched (HS)'),
@@ -126,6 +127,21 @@ class MrpProduction(models.Model):
         # qty_producing should start at 0 and climb only when packing batches are logged.
         self.write({'qty_producing': 0.0})
         return res
+
+    def action_open_status_info(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'MO Status Reference',
+            'res_model': 'reema.mo.status.info.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {},
+        }
+
+
+class ReemaMoStatusInfoWizard(models.TransientModel):
+    _name = 'reema.mo.status.info.wizard'
+    _description = 'MO Status Reference'
 
 
 class StockMoveReema(models.Model):

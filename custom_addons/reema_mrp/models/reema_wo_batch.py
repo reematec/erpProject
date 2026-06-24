@@ -68,8 +68,8 @@ class ReemaWoBatchEntry(models.Model):
         if self.payment_excluded:
             return 0.0
         rate = self.piece_rate_id.rate or 0.0
-        op = self.workorder_id.operation_id
-        if (op.pay_basis or 'hall') == 'ball':
+        wc = self.workorder_id.workcenter_id
+        if (wc.pay_basis or 'ball') == 'ball':
             return rate * self.qty_balls
         ipu = self._impressions_per_ball()
         if ipu:
@@ -78,7 +78,7 @@ class ReemaWoBatchEntry(models.Model):
 
     @api.depends(
         'piece_rate_id.rate', 'qty', 'qty_balls', 'payment_excluded',
-        'workorder_id.operation_id.pay_basis',
+        'workorder_id.workcenter_id.pay_basis',
         'workorder_id.workcenter_id.is_printing',
         'workorder_id.production_id.bom_id.impressions_per_ball',
     )
@@ -289,9 +289,8 @@ class ReemaWoBatchEntry(models.Model):
 
         lines = []
         for entry in self.sorted('name'):
-            op = entry.workorder_id.operation_id
             wc = entry.workorder_id.workcenter_id
-            pay_basis = op.pay_basis or 'hall'
+            pay_basis = wc.pay_basis or 'ball'
             ipu = entry._impressions_per_ball()
             rate = entry.piece_rate_id.rate or 0.0
             if pay_basis == 'ball':

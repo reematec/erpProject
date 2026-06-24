@@ -18,6 +18,10 @@ access_reema_grn_line_manager,reema.grn.line manager,model_reema_grn_line,reema_
 access_reema_grn_inspection_store,reema.grn.inspection store,model_reema_grn_inspection,reema_mrp.group_reema_store,1,1,1,0
 access_reema_grn_inspection_manager,reema.grn.inspection manager,model_reema_grn_inspection,reema_purchase.group_reema_purchase_manager,1,1,1,1
 access_reema_bill_matching_accountant,reema.bill.matching accountant,model_reema_bill_matching,account.group_account_invoice,1,1,1,0
+access_reema_grn_accountant,reema.grn accountant read,model_reema_grn,account.group_account_invoice,1,0,0,0
+access_reema_grn_line_accountant,reema.grn.line accountant read,model_reema_grn_line,account.group_account_invoice,1,0,0,0
+access_reema_gate_pass_accountant,reema.gate.pass accountant read,model_reema_gate_pass,account.group_account_invoice,1,0,0,0
+access_reema_gate_pass_line_accountant,reema.gate.pass.line accountant read,model_reema_gate_pass_line,account.group_account_invoice,1,0,0,0
 access_reema_bill_matching_manager,reema.bill.matching manager,model_reema_bill_matching,account.group_account_manager,1,1,1,1
 access_reema_product_spec_user,reema.product.spec user,model_reema_product_spec,base.group_user,1,0,0,0
 access_reema_product_spec_manager,reema.product.spec manager,model_reema_product_spec,reema_purchase.group_reema_purchase_manager,1,1,1,1

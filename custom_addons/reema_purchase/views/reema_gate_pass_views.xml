@@ -24,6 +24,7 @@
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_grn" type="object"
                                 class="oe_stat_button" icon="fa-clipboard-check"
+                                groups="reema_mrp.group_reema_store,reema_purchase.group_reema_purchase_manager,account.group_account_invoice"
                                 invisible="grn_count == 0">
                             <field name="grn_count" widget="statinfo" string="GRNs"/>
                         </button>

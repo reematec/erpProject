@@ -210,6 +210,16 @@
             <xpath expr="//header/button[@name='action_cancel']" position="replace"/>
             <xpath expr="//header/field[@name='show_lock']" position="before">
                 <field name="has_active_issuance" invisible="1"/>
+                <button name="action_open_status_info" type="object"
+                        icon="fa-info-circle"
+                        class="btn-secondary btn-sm"
+                        title="MO Status Reference"/>
+            </xpath>
+            <!-- Confirm MO: require explicit confirmation before activating work orders -->
+            <xpath expr="//button[@name='action_confirm']" position="attributes">
+                <attribute name="confirm">This will confirm the Manufacturing Order and activate all work orders for production. Are you sure?</attribute>
+                <attribute name="confirm-label">Yes, Confirm MO</attribute>
+                <attribute name="cancel-label">Go Back</attribute>
             </xpath>
             <xpath expr="//header/button[@name='button_unbuild']" position="after">
                 <button name="action_cancel" type="object" string="Cancel MO"
@@ -361,11 +371,16 @@
         <field name="model">mrp.bom</field>
         <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
         <field name="arch" type="xml">
-            <!-- Header with a Print button: opens an HTML preview in a new tab. -->
+            <!-- Header: Mark Ready button + Print + status bar -->
             <xpath expr="//sheet" position="before">
                 <header>
+                    <button name="action_mark_ready" string="Mark Ready" type="object"
+                            class="btn-primary"
+                            invisible="bom_status == 'ready'"/>
                     <button name="action_print_bom" string="Print"
                             type="object" class="btn-secondary"/>
+                    <field name="bom_status" widget="statusbar"
+                           statusbar_visible="draft,ready" readonly="1"/>
                 </header>
             </xpath>
             <!-- Hide BoM Overview smart button — not used in our flow -->
@@ -398,6 +413,15 @@
             <xpath expr="//sheet/group[1]" position="before">
                 <div class="oe_title">
                     <h1><field name="reema_reference" readonly="1"/></h1>
+                </div>
+                <!-- Draft notice: shown until PM marks the BOM ready -->
+                <div class="alert alert-info mb-3" role="alert"
+                     invisible="bom_status != 'draft'">
+                    <field name="bom_status" invisible="1"/>
+                    <strong>Draft BOM.</strong>
+                    This BOM was auto-created from sample approval.
+                    Review components, set correct quantities, define hall operations,
+                    then click <strong>Mark Ready</strong> before it can be used in Manufacturing Orders.
                 </div>
                 <!-- Lock warning: shown when a confirmed MO is using this BOM -->
                 <div class="alert alert-warning mb-3" role="alert"
@@ -483,7 +507,7 @@
         </field>
     </record>
 
-    <!-- BOM List: show reema_reference as first column -->
+    <!-- BOM List: show reema_reference as first column + status badge -->
     <record id="mrp_bom_reema_list" model="ir.ui.view">
         <field name="name">mrp.bom.reema.list</field>
         <field name="model">mrp.bom</field>
@@ -493,6 +517,9 @@
                 <field name="sample_layout_file" widget="image"
                        options="{'size': [40, 40]}" string="Layout" optional="show"/>
                 <field name="reema_reference" string="BOM Ref"/>
+                <field name="bom_status" widget="badge"
+                       decoration-warning="bom_status == 'draft'"
+                       decoration-success="bom_status == 'ready'"/>
             </xpath>
         </field>
     </record>
@@ -518,9 +545,10 @@
             </xpath>
             <xpath expr="//field[@name='workcenter_id']" position="after">
                 <field name="balls_per_unit" widget="trim_float"/>
-                <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
+                <field name="piece_rate_value" column_invisible="1"/>
+                <field name="piece_rate_id" widget="piece_rate_m2o"
+                       options="{'no_create': True, 'no_edit': True}"
                        domain="[('workcenter_id', '=', workcenter_id)]"/>
-                <field name="pay_basis"/>
             </xpath>
             <!-- Hide Duration Computation and Duration columns — not relevant for floor ops -->
             <xpath expr="//field[@name='time_mode']" position="attributes">
@@ -559,7 +587,6 @@
                 <field name="balls_per_unit" widget="trim_float"/>
                 <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
                        domain="[('workcenter_id', '=', workcenter_id)]"/>
-                <field name="pay_basis"/>
             </xpath>
             <!-- Blocked by: only allow selecting existing operations, no create/edit -->
             <xpath expr="//field[@name='blocked_by_operation_ids']" position="attributes">
@@ -587,6 +614,7 @@
                        help="Enable if this work center represents the ILO (hand stitching) external step. Completion will be gated on ILO receipt confirmation."/>
                 <field name="is_printing"/>
                 <field name="hall_unit"/>
+                <field name="pay_basis"/>
                 <field name="sfg_product_id"
                        domain="[('product_group', '=', 'sfg')]"
                        options="{'no_create': True, 'no_edit': True}"/>
@@ -643,6 +671,7 @@
                 <field name="location_id" optional="show"
                        options="{'no_create': True, 'no_edit': True}"/>
                 <field name="hall_unit" optional="show"/>
+                <field name="pay_basis" optional="show"/>
                 <field name="workforce_type" optional="show"/>
                 <field name="sfg_product_id" optional="hide"
                        options="{'no_create': True, 'no_edit': True}"/>
@@ -734,12 +763,9 @@
             </xpath>
             <xpath expr="//field[@name='list_price']" position="replace"/>
             <xpath expr="//field[@name='standard_price']" position="replace"/>
-            <!-- Stock move history — opens all receipts/issues for this product -->
-            <xpath expr="//field[@name='virtual_available']" position="after">
-                <button name="action_view_stock_move_lines" type="object"
-                        icon="fa-exchange" title="Stock Moves"
-                        groups="stock.group_stock_user"/>
-            </xpath>
+            <!-- Stock Moves / Forecast navigation now lives on the On Hand and
+                 Forecasted figures themselves (see product_name_nav_list.js), so
+                 the redundant row icons were removed. -->
         </field>
     </record>
 
@@ -852,6 +878,67 @@
                        decoration-warning="state == 'progress'"
                        decoration-info="state in ('confirmed','to_close')"/>
             </list>
+        </field>
+    </record>
+
+    <!-- BOM Search: add Draft/Ready status filters -->
+    <record id="mrp_bom_reema_search" model="ir.ui.view">
+        <field name="name">mrp.bom.reema.search</field>
+        <field name="model">mrp.bom</field>
+        <field name="inherit_id" ref="mrp.view_mrp_bom_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search/filter[1]" position="before">
+                <filter string="Draft" name="filter_draft"
+                        domain="[('bom_status', '=', 'draft')]"/>
+                <filter string="Ready" name="filter_ready"
+                        domain="[('bom_status', '=', 'ready')]"/>
+                <separator/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- MO STATUS INFO WIZARD — opened by the ⓘ button in the MO form header -->
+    <record id="view_reema_mo_status_info_wizard_form" model="ir.ui.view">
+        <field name="name">reema.mo.status.info.wizard.form</field>
+        <field name="model">reema.mo.status.info.wizard</field>
+        <field name="arch" type="xml">
+            <form string="MO Status Reference">
+                <sheet>
+                    <table class="table table-sm table-bordered" style="font-size:13px;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:140px">Status</th>
+                                <th>What it means &amp; key effects</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge text-bg-secondary">Draft</span></td>
+                                <td>MO has been created but not yet confirmed. Fields are still editable. Work orders are not active yet.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-info">Confirmed</span></td>
+                                <td>MO is confirmed. Work orders are now active. The Store Keeper can now issue raw materials via Material Issuance. Hall supervisors can begin logging batch progress once materials are issued.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-warning text-dark">In Progress</span></td>
+                                <td>Production is underway. At least one work order has been started. Batch logs are being recorded across halls.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-success">Done</span></td>
+                                <td>All work orders are completed. MO is closed. <strong>Final status.</strong> No further changes allowed.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-danger">Cancelled</span></td>
+                                <td>MO was cancelled. All work orders are also cancelled. No production was recorded under this MO.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </sheet>
+                <footer>
+                    <button string="Close" class="btn-primary" special="cancel"/>
+                </footer>
+            </form>
         </field>
     </record>
 
