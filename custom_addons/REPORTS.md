@@ -92,13 +92,18 @@ Register in `models/__init__.py`.
 - **Branding** comes from `web.external_layout` (the shared folder layout +
   `external_layout_folder_reema` in `reema_mrp/views/report_layout_inherit.xml`).
   Never re-implement the company header/logo inline.
-- **Font size**: use the **default report font** — do **not** set explicit
-  `font-size` on the body or tables. Base is `1rem` (16px); Products and Piece
-  Rate set none and are the reference look. Setting `12/13px` makes a report
-  render visibly smaller than the others.
-- **Title block**: use `<h3>` (and `<h5>` for the sub-reference), `<hr/>` separators — not inline font sizes.
-- **Detail / key-value tables**: `table table-sm table-borderless`, `<strong>` label in left col (~45% width).
-- **Data tables**: `table table-sm table-striped`; header `<thead><tr class="table-dark">`; numeric columns `class="text-end"` (Bootstrap 5 — **never** `text-right`).
+- **Font size — SMALLER than default, per the reference reports** (MO / Piece
+  Rate are the canonical look, follow them exactly):
+  - **Title block**: `<div style="font-size:15px; font-weight:700;">` — record
+    reference on the first line, the key entity (product / supplier) on a second
+    line via `<br/>`, then `<hr style="margin-top:4px;"/>`.
+  - **Detail / key-value tables**: `style="font-size:13px;"`.
+  - **Data tables**: `style="font-size:12px;"`.
+  - Do **not** leave tables at the 1rem/16px default — that renders visibly
+    LARGER than the other reports and is the #1 recurring complaint.
+- **Section headers**: `<h5 class="mt-3 mb-1">` above each data table.
+- **Detail / key-value tables**: `table table-sm table-borderless` + `font-size:13px`, `<strong>` label in left col (`style="width:45%;"`).
+- **Data tables**: `table table-sm table-striped` + `font-size:12px`; header `<thead><tr class="table-dark">`; numeric columns `class="text-end"` (Bootstrap 5 — **never** `text-right`).
 - **Secondary / footnote text**: `<small class="text-muted">`.
 - **Floats**: trim trailing zeros → `('%.6f' % val).rstrip('0').rstrip('.')`.
 - **Values**: `t-field` for stored fields (auto-formats); `t-esc`/`t-out` for computed values.

@@ -11,6 +11,10 @@ access_reema_gate_pass_line_gate,reema.gate.pass.line gate,model_reema_gate_pass
 access_reema_gate_pass_line_manager,reema.gate.pass.line manager,model_reema_gate_pass_line,reema_purchase.group_reema_purchase_manager,1,1,1,1
 access_reema_gate_pass_line_attr_gate,reema.gate.pass.line.attribute gate,model_reema_gate_pass_line_attribute,reema_purchase.group_reema_gate,1,1,1,0
 access_reema_gate_pass_line_attr_manager,reema.gate.pass.line.attribute manager,model_reema_gate_pass_line_attribute,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_po_store,reema.purchase.order store read,model_reema_purchase_order,reema_mrp.group_reema_store,1,0,0,0
+access_reema_po_line_store,reema.purchase.order.line store read,model_reema_purchase_order_line,reema_mrp.group_reema_store,1,0,0,0
+access_reema_gate_pass_store,reema.gate.pass store read,model_reema_gate_pass,reema_mrp.group_reema_store,1,0,0,0
+access_reema_gate_pass_line_store,reema.gate.pass.line store read,model_reema_gate_pass_line,reema_mrp.group_reema_store,1,0,0,0
 access_reema_grn_store,reema.grn store,model_reema_grn,reema_mrp.group_reema_store,1,1,1,0
 access_reema_grn_manager,reema.grn manager,model_reema_grn,reema_purchase.group_reema_purchase_manager,1,1,1,1
 access_reema_grn_line_store,reema.grn.line store,model_reema_grn_line,reema_mrp.group_reema_store,1,1,1,0
@@ -27,3 +31,8 @@ access_reema_product_spec_user,reema.product.spec user,model_reema_product_spec,
 access_reema_product_spec_manager,reema.product.spec manager,model_reema_product_spec,reema_purchase.group_reema_purchase_manager,1,1,1,1
 access_reema_product_inspection_check_user,reema.product.inspection.check user,model_reema_product_inspection_check,base.group_user,1,0,0,0
 access_reema_product_inspection_check_manager,reema.product.inspection.check manager,model_reema_product_inspection_check,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_ilo_dispatch_gate,reema.ilo.dispatch gate,reema_mrp.model_reema_ilo_dispatch,reema_purchase.group_reema_gate,1,1,0,0
+access_reema_ilo_outward_pass_gate,reema.ilo.outward.pass gate,model_reema_ilo_outward_pass,reema_purchase.group_reema_gate,1,1,1,0
+access_reema_ilo_outward_pass_manager,reema.ilo.outward.pass manager,model_reema_ilo_outward_pass,reema_purchase.group_reema_purchase_manager,1,1,1,1
+access_reema_ilo_outward_pass_line_gate,reema.ilo.outward.pass.line gate,model_reema_ilo_outward_pass_line,reema_purchase.group_reema_gate,1,1,1,0
+access_reema_ilo_outward_pass_line_manager,reema.ilo.outward.pass.line manager,model_reema_ilo_outward_pass_line,reema_purchase.group_reema_purchase_manager,1,1,1,1

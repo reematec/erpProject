@@ -13,7 +13,7 @@
     <record id="group_reema_gate" model="res.groups">
         <field name="name">Gate Security Staff</field>
         <field name="category_id" ref="reema_mrp.module_category_reema_operations"/>
-        <field name="comment">Can create and confirm Inward Gate Passes when materials arrive.</field>
+        <field name="comment">Can create and confirm Inward Gate Passes when materials arrive, and confirm ILO Outward Passes when materials leave for hand-stitching contractors.</field>
         <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
     </record>
 

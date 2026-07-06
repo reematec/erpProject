@@ -13,7 +13,7 @@ class ReemaGRN(models.Model):
         default=lambda self: _('New'), tracking=True,
     )
     date = fields.Date(
-        string='Date', default=fields.Date.context_today,
+        string='Date',
         required=True, tracking=True,
     )
     gate_pass_id = fields.Many2one(
@@ -45,6 +45,9 @@ class ReemaGRN(models.Model):
     move_id = fields.Many2one(
         'account.move', string='Interim Journal Entry', readonly=True,
     )
+    has_journal_entry = fields.Boolean(
+        compute='_compute_has_journal_entry', store=True, compute_sudo=True,
+    )
 
     total_accepted_value = fields.Float(
         string='Total Accepted Value (PKR)',
@@ -54,13 +57,23 @@ class ReemaGRN(models.Model):
         string='Total Accepted Qty',
         compute='_compute_total_qty', store=True,
     )
+    total_received_qty = fields.Float(
+        string='Total Received Qty',
+        compute='_compute_total_qty', store=True,
+    )
+    total_rejected_qty = fields.Float(
+        string='Total Rejected Qty',
+        compute='_compute_total_qty', store=True,
+    )
 
     # ── Compute ──────────────────────────────────────────────────────────
 
-    @api.depends('line_ids.accepted_qty')
+    @api.depends('line_ids.accepted_qty', 'line_ids.received_qty', 'line_ids.rejected_qty')
     def _compute_total_qty(self):
         for rec in self:
             rec.total_accepted_qty = sum(rec.line_ids.mapped('accepted_qty'))
+            rec.total_received_qty = sum(rec.line_ids.mapped('received_qty'))
+            rec.total_rejected_qty = sum(rec.line_ids.mapped('rejected_qty'))
 
     @api.depends('gate_pass_id')
     def _compute_po_id(self):
@@ -81,6 +94,11 @@ class ReemaGRN(models.Model):
                 line.accepted_qty * line.price_unit for line in rec.line_ids
             )
 
+    @api.depends('move_id')
+    def _compute_has_journal_entry(self):
+        for rec in self:
+            rec.has_journal_entry = bool(rec.move_id)
+
     # ── CRUD ─────────────────────────────────────────────────────────────
 
     @api.model_create_multi
@@ -89,6 +107,11 @@ class ReemaGRN(models.Model):
             if vals.get('name', _('New')) == _('New'):
                 vals['name'] = self.env['ir.sequence'].next_by_code('reema.grn') or _('New')
         return super().create(vals_list)
+
+    @api.onchange('gate_pass_id', 'po_id', 'partner_id', 'received_by')
+    def _onchange_auto_date(self):
+        if not self.date:
+            self.date = fields.Date.context_today(self)
 
     @api.onchange('po_id')
     def _onchange_po_id(self):
@@ -174,6 +197,8 @@ class ReemaGRN(models.Model):
         dest_location = warehouse.lot_stock_id
 
         for rec in self:
+            if rec.name == _('New'):
+                raise UserError(_('Please save the record first before verifying the GRN.'))
             if not rec.line_ids:
                 raise UserError(_('GRN must have at least one line.'))
             if not rec.partner_id:
@@ -209,19 +234,70 @@ class ReemaGRN(models.Model):
                 move.move_line_ids.write({'picked': True})
                 move._action_done()
                 created_moves |= move
-            svl = self.env['stock.valuation.layer'].search(
+            svl = self.env['stock.valuation.layer'].sudo().search(
                 [('stock_move_id', 'in', created_moves.ids)], limit=1
             )
-            rec.write({
+            move_id = svl.account_move_id.id if svl and svl.account_move_id else False
+            if not move_id and created_moves:
+                move_id = self._create_interim_journal_entry(rec)
+            rec.with_context(mail_notrack=True).write({
                 'state': 'verified',
-                'move_id': svl.account_move_id.id if svl and svl.account_move_id else False,
+                'move_id': move_id or False,
             })
-            rec.message_post(
-                body=_('GRN verified by %s. Stock and accounting updated.') % self.env.user.name
+            rec.sudo().message_post(
+                body=_('GRN verified by %s. Stock and accounting updated.') % self.env.user.name,
+                subtype_xmlid='mail.mt_note',
             )
 
+    def _create_interim_journal_entry(self, rec):
+        journal = self.env['account.journal'].sudo().search(
+            [('code', '=', 'STK'), ('company_id', '=', self.env.company.id)], limit=1
+        )
+        if not journal:
+            return False
+        lines = []
+        for line in rec.line_ids:
+            if not line.product_id or line.accepted_qty <= 0:
+                continue
+            categ = line.product_id.categ_id
+            stock_account = categ.property_stock_valuation_account_id
+            input_account = categ.property_stock_account_input_categ_id
+            if not stock_account or not input_account:
+                continue
+            amount = line.accepted_qty * line.price_unit
+            label = line.product_id.display_name
+            lines += [
+                (0, 0, {'account_id': stock_account.id, 'name': label,
+                        'debit': amount, 'credit': 0.0}),
+                (0, 0, {'account_id': input_account.id, 'name': label,
+                        'debit': 0.0, 'credit': amount}),
+            ]
+        if not lines:
+            return False
+        move = self.env['account.move'].sudo().create({
+            'move_type': 'entry',
+            'journal_id': journal.id,
+            'date': rec.date or fields.Date.context_today(self),
+            'ref': rec.name,
+            'line_ids': lines,
+        })
+        move.sudo().action_post()
+        return move.id
+
+    def action_view_journal_entry(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Interim Journal Entry'),
+            'res_model': 'account.move',
+            'view_mode': 'form',
+            'res_id': self.move_id.id,
+        }
+
     def action_print_grn(self):
-        url = '/report/pdf/reema_purchase.report_grn_template/%s' % self.id
+        # Open the GRN as an HTML preview in a new browser tab. The user prints
+        # with Ctrl+P and closes the tab (no PDF/wkhtmltopdf round-trip).
+        url = '/report/html/reema_purchase.report_grn_template/%s' % self.id
         return {
             'type': 'ir.actions.act_url',
             'url': url,

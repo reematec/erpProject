@@ -97,7 +97,7 @@
                                     <field name="sequence" widget="handle"/>
                                     <field name="product_id"
                                            options="{'no_create': True, 'no_edit': True, 'no_open': True}"
-                                           domain="[('product_tmpl_id.product_group', '=', 'raw_material')]"
+                                           domain="[('product_tmpl_id.product_group', 'in', ['raw_material', 'packaging'])]"
                                            required="1"/>
                                     <field name="name"/>
                                     <field name="product_qty"/>
@@ -144,10 +144,11 @@
                     <button name="action_print_po" string="Print Selected"
                             type="object" display="always" class="btn-secondary"/>
                 </header>
-                <field name="name"/>
-                <field name="date"/>
-                <field name="partner_id" domain="[('supplier_rank', '>', 0), ('is_contractor', '=', False)]" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                <field name="product_summary" readonly="1"/>
+                <field name="name" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="partner_id" domain="[('supplier_rank', '>', 0), ('is_contractor', '=', False)]" options="{'no_create': True, 'no_edit': True, 'no_open': True}" optional="show"/>
+                <field name="product_summary" readonly="1" optional="show"/>
+                <field name="total_qty" string="Qty" optional="show"/>
                 <field name="date_expected" optional="show"/>
                 <field name="buyer_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}" optional="hide"/>
                 <field name="amount_total" optional="hide"/>

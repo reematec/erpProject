@@ -13,7 +13,7 @@ class ReemaGatePass(models.Model):
         default=lambda self: _('New'), tracking=True,
     )
     date = fields.Datetime(
-        string='Arrival Date & Time', default=fields.Datetime.now,
+        string='Arrival Date & Time',
         required=True, tracking=True,
     )
     po_id = fields.Many2one(
@@ -71,13 +71,10 @@ class ReemaGatePass(models.Model):
                 vals['name'] = self.env['ir.sequence'].next_by_code('reema.gate.pass') or _('New')
         return super().create(vals_list)
 
-    def write(self, vals):
-        if 'name' not in vals:
-            for rec in self:
-                if rec.name == _('New'):
-                    vals = dict(vals, name=self.env['ir.sequence'].next_by_code('reema.gate.pass') or _('New'))
-                    break
-        return super().write(vals)
+    @api.onchange('vehicle_no', 'driver_name', 'partner_id', 'po_id', 'security_guard', 'carrier')
+    def _onchange_auto_arrival_time(self):
+        if not self.date:
+            self.date = fields.Datetime.now()
 
     @api.onchange('po_id')
     def _onchange_po_id(self):
@@ -117,17 +114,23 @@ class ReemaGatePass(models.Model):
 
     def action_reset_to_draft(self):
         for rec in self:
-            rec.write({'state': 'draft'})
-            rec.message_post(body=_('Inward Gate Pass reversed to Arrived by %s.') % self.env.user.name)
+            rec.with_context(mail_notrack=True).write({'state': 'draft'})
+            rec.sudo().message_post(
+                body=_('Inward Gate Pass reversed to Arrived by %s.') % self.env.user.name,
+                subtype_xmlid='mail.mt_note',
+            )
 
     def action_confirm(self):
         for rec in self:
+            if rec.name == _('New'):
+                raise UserError(_('Please save the record first before forwarding to store.'))
             if not rec.line_ids:
                 raise UserError(_('Please record at least one item before forwarding.'))
-            if rec.name == _('New'):
-                rec.name = self.env['ir.sequence'].next_by_code('reema.gate.pass') or _('New')
-            rec.write({'state': 'confirmed'})
-            rec.message_post(body=_('Inward Gate Pass confirmed and forwarded to store by %s.') % self.env.user.name)
+            rec.with_context(mail_notrack=True).write({'state': 'confirmed'})
+            rec.sudo().message_post(
+                body=_('Inward Gate Pass confirmed and forwarded to store by %s.') % self.env.user.name,
+                subtype_xmlid='mail.mt_note',
+            )
 
     def action_view_grn(self):
         return {

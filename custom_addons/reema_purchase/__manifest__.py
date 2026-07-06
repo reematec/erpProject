@@ -12,6 +12,7 @@
         'views/product_views.xml',
         'views/reema_purchase_order_views.xml',
         'views/reema_gate_pass_views.xml',
+        'views/reema_ilo_outward_pass_views.xml',
         'views/reema_grn_views.xml',
         'views/reema_bill_matching_views.xml',
         'views/menu_views.xml',
@@ -21,6 +22,7 @@
     'assets': {
         'web.assets_backend': [
             'reema_purchase/static/src/views/po_list_view.js',
+            'reema_purchase/static/src/js/gate_pass_form.js',
         ],
     },
     'installable': True,

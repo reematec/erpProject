@@ -116,7 +116,7 @@ class ReemaProductionOrder(models.Model):
                 f'then click "Mark Ready".'
             )
         # Block if any BOM component is missing a Consuming Operation.
-        # Without this, per-hall material cost and WIP attribution cannot work.
+        # Without this, per-hall material backflush cannot work.
         for line in pending:
             missing_ops = line.bom_id.bom_line_ids.filtered(lambda bl: not bl.operation_id)
             if missing_ops:
@@ -151,14 +151,19 @@ class ReemaProductionOrder(models.Model):
                     f'Blueprint "{line.sample_id.name}" BOM has no product variant. '
                     f'Please ensure the BOM product is properly configured.'
                 )
-            mo = self.env['mrp.production'].create({
+            mo_vals = {
                 'product_id': product.id,
                 'product_qty': line.qty,
                 'bom_id': line.bom_id.id,
                 'ball_size': line.size or '',
                 'origin': self.name,
                 'date_deadline': fields.Datetime.to_datetime(self.date_planned) if self.date_planned else False,
-            })
+            }
+            # Carry the construction type over from the sample so the MO doesn't
+            # silently fall back to the field's default ('hyb') for every order.
+            if line.sample_id.construction_type:
+                mo_vals['construction_type'] = line.sample_id.construction_type
+            mo = self.env['mrp.production'].create(mo_vals)
             line.mo_id = mo
             mo.workorder_ids.filtered(
                 lambda w: w.workcenter_id.hall_unit == 'panel'
@@ -737,6 +742,7 @@ class MrpRoutingWorkcenterReema(models.Model):
     piece_rate_value = fields.Float(
         related='piece_rate_id.rate', string='Rate (PKR)',
         digits=(10, 2), readonly=True, store=False)
+
     def action_delete_operation(self):
         self.unlink()
 
@@ -751,8 +757,8 @@ class StockPickingTypeReema(models.Model):
 
     @api.model
     def fix_mo_sequence_prefix(self):
-        """Change the default WH/MO/ prefix on Manufacturing picking types to MO/YEAR/ format."""
+        """Change the default WH/MO/ prefix on Manufacturing picking types to MO/YY/ format."""
         manuf_types = self.search([('code', '=', 'mrp_operation')])
         for pt in manuf_types:
-            if pt.sequence_id and pt.sequence_id.prefix in ('WH/MO/', 'WH/MO/%(year)s/'):
-                pt.sequence_id.write({'prefix': 'MO/%(year)s/', 'padding': 5})
+            if pt.sequence_id and pt.sequence_id.prefix in ('WH/MO/', 'WH/MO/%(year)s/', 'MO/%(year)s/'):
+                pt.sequence_id.write({'prefix': 'MO/%(y)s/', 'padding': 5})

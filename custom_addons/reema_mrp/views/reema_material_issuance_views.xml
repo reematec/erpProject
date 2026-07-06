@@ -5,17 +5,17 @@
         <field name="name">reema.material.issuance.form</field>
         <field name="model">reema.material.issuance</field>
         <field name="arch" type="xml">
-            <form string="Material Issuance Authorization">
+            <form string="Material Issuance Authorization" create="0">
                 <header>
                     <button name="action_issue_wizard"
                             string="Issue Materials"
                             type="object"
                             class="oe_highlight"
-                            invisible="state not in ('authorized', 'partial')"/>
+                            invisible="state == 'cancelled'"/>
                     <button name="action_return_wizard"
                             string="Return Materials"
                             type="object"
-                            invisible="state not in ('partial', 'fully_issued')"/>
+                            invisible="state not in ('partial', 'fully_issued', 'over_issued')"/>
                     <button name="action_print"
                             string="Print Slip"
                             type="object"
@@ -38,6 +38,8 @@
                     </div>
                     <group>
                         <group string="Authorized Material">
+                            <field name="production_order_id" readonly="1"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                             <field name="production_id" readonly="1"
                                    options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                             <field name="product_id" readonly="1"
@@ -62,15 +64,16 @@
                                 <list create="0" delete="0" editable="bottom"
                                       decoration-muted="is_reversal">
                                     <field name="is_reversal" column_invisible="1"/>
-                                    <field name="date" readonly="1"/>
-                                    <field name="issued_qty" readonly="1"/>
-                                    <field name="product_uom_id" string="UOM" readonly="1"/>
-                                    <field name="destination_location_id" readonly="1"/>
-                                    <field name="contractor_id" readonly="1"/>
-                                    <field name="carried_by" readonly="1"/>
-                                    <field name="issued_by" readonly="1"/>
-                                    <field name="notes" optional="show" readonly="1"/>
-                                    <field name="move_id" optional="hide" readonly="1"/>
+                                    <field name="name" string="Ref" readonly="1" optional="show"/>
+                                    <field name="date" readonly="1" optional="show"/>
+                                    <field name="issued_qty" string="Qty" readonly="1" optional="show"/>
+                                    <field name="product_uom_id" string="UOM" readonly="1" optional="show"/>
+                                    <field name="destination_location_id" readonly="1" optional="show"/>
+                                    <field name="contractor_id" readonly="1" optional="show"/>
+                                    <field name="carried_by" readonly="1" optional="show"/>
+                                    <field name="issued_by" readonly="1" optional="show"/>
+                                    <field name="notes" readonly="1" optional="show"/>
+                                    <field name="move_id" readonly="1" optional="hide"/>
                                     <button name="action_reverse_issue_line"
                                             type="object"
                                             icon="fa-undo"
@@ -85,14 +88,15 @@
                                 <list create="0" delete="0" editable="bottom"
                                       decoration-muted="is_reversal">
                                     <field name="is_reversal" column_invisible="1"/>
-                                    <field name="date" readonly="1"/>
-                                    <field name="returned_qty" readonly="1"/>
-                                    <field name="product_uom_id" string="UOM" readonly="1"/>
-                                    <field name="return_from_location_id" readonly="1"/>
-                                    <field name="fault_description" readonly="1"/>
-                                    <field name="returned_by" readonly="1"/>
-                                    <field name="notes" optional="show" readonly="1"/>
-                                    <field name="move_id" optional="hide" readonly="1"/>
+                                    <field name="name" string="Ref" readonly="1" optional="show"/>
+                                    <field name="date" readonly="1" optional="show"/>
+                                    <field name="returned_qty" string="Qty" readonly="1" optional="show"/>
+                                    <field name="product_uom_id" string="UOM" readonly="1" optional="show"/>
+                                    <field name="return_from_location_id" readonly="1" optional="show"/>
+                                    <field name="fault_description" readonly="1" optional="show"/>
+                                    <field name="returned_by" readonly="1" optional="show"/>
+                                    <field name="notes" readonly="1" optional="show"/>
+                                    <field name="move_id" readonly="1" optional="hide"/>
                                     <button name="action_reverse_return_line"
                                             type="object"
                                             icon="fa-undo"
@@ -118,23 +122,24 @@
         <field name="name">reema.material.issuance.list</field>
         <field name="model">reema.material.issuance</field>
         <field name="arch" type="xml">
-            <list>
-                <field name="name"/>
-                <field name="production_name"/>
-                <field name="product_id"/>
-                <field name="authorized_qty"/>
-                <field name="product_uom_id" string="UOM"/>
-                <field name="total_issued_qty"/>
-                <field name="total_returned_qty" optional="show"/>
-                <field name="net_issued_qty" optional="show"/>
-                <field name="remaining_qty"/>
-                <field name="authorized_by" optional="show"/>
-                <field name="date_authorized"/>
-                <field name="state" widget="badge"
+            <list create="0" decoration-danger="state == 'cancelled'" decoration-warning="state == 'over_issued'">
+                <field name="name" optional="show"/>
+                <field name="production_name" optional="show"/>
+                <field name="product_id" optional="show"/>
+                <field name="authorized_qty" string="Qty" widget="zero_dash_float" optional="show"/>
+                <field name="product_uom_id" string="UOM" optional="show"/>
+                <field name="total_issued_qty" string="Issued" widget="zero_dash_float" optional="show"/>
+                <field name="total_returned_qty" string="Returned" widget="zero_dash_float" optional="show"/>
+                <field name="net_issued_qty" string="Net" widget="zero_dash_float" optional="show"/>
+                <field name="remaining_qty" widget="zero_dash_float" optional="show"/>
+                <field name="authorized_by" string="Auth By" optional="show"/>
+                <field name="date_authorized" string="Auth Date" optional="show"/>
+                <field name="state" string="Status" widget="badge"
                        decoration-info="state == 'authorized'"
                        decoration-warning="state == 'partial'"
                        decoration-success="state == 'fully_issued'"
-                       decoration-danger="state == 'cancelled'"/>
+                       decoration-danger="state in ('cancelled', 'over_issued')"
+                       optional="show"/>
             </list>
         </field>
     </record>
@@ -157,17 +162,22 @@
         <field name="arch" type="xml">
             <form string="Issue Materials">
                 <group string="Authorized Material (cannot be changed)">
-                    <field name="product_id" readonly="1"/>
-                    <field name="product_uom_id" readonly="1" string="UOM"/>
+                    <field name="product_id" readonly="1" options="{'no_open': True}"/>
+                    <field name="product_uom_id" readonly="1" string="UOM" options="{'no_open': True}"/>
                     <field name="authorized_qty" readonly="1"/>
                     <field name="remaining_qty" readonly="1"/>
                 </group>
+                <field name="over_qty" invisible="1"/>
+                <div class="alert alert-danger fw-bold mb-2" invisible="over_qty &lt;= 0">
+                    &#9888; You are issuing beyond the authorized quantity. Please double-check before confirming.
+                </div>
                 <group string="Issuance Details">
                     <field name="issued_qty" autofocus="1"/>
                     <field name="destination_location_id"
-                           options="{'no_create': True, 'no_edit': True}"/>
-                    <field name="available_contractor_ids" invisible="1"/>
+                           readonly="1"
+                           options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                     <field name="contractor_id"
+                           domain="[('id', 'in', context.get('allowed_contractor_ids', []))]"
                            options="{'no_create': True, 'no_edit': True}"
                            help="Value appears after assigning the contractor in MO &gt; WOs"/>
                     <field name="carried_by"
@@ -218,6 +228,12 @@
         <field name="name">Material Issuances</field>
         <field name="res_model">reema.material.issuance</field>
         <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Hide the default "Inventory Overview" dashboard menu so clicking
+         Inventory no longer opens the picking-type kanban overview. -->
+    <record id="stock.stock_picking_type_menu" model="ir.ui.menu">
+        <field name="active" eval="False"/>
     </record>
 
     <!-- Parent menu under Inventory -->
@@ -291,6 +307,7 @@
                         <list string="Component Authorizations" create="0" delete="0"
                               decoration-warning="state in ('authorized', 'partial')"
                               decoration-success="state == 'fully_issued'"
+                              decoration-danger="state == 'over_issued'"
                               decoration-muted="state == 'cancelled'">
                             <field name="name" string="Reference"/>
                             <field name="product_id" string="Component"/>
@@ -302,7 +319,7 @@
                                    decoration-info="state == 'authorized'"
                                    decoration-warning="state == 'partial'"
                                    decoration-success="state == 'fully_issued'"
-                                   decoration-danger="state == 'cancelled'"
+                                   decoration-danger="state in ('cancelled', 'over_issued')"
                                    string="Status"/>
                             <button name="action_open_issuance"
                                     type="object"
@@ -361,11 +378,9 @@
     <record id="action_report_material_issuance" model="ir.actions.report">
         <field name="name">Material Issuance Slip</field>
         <field name="model">reema.material.issuance</field>
-        <field name="report_type">qweb-pdf</field>
+        <field name="report_type">qweb-html</field>
         <field name="report_name">reema_mrp.report_material_issuance_slip</field>
         <field name="report_file">reema_mrp.report_material_issuance_slip</field>
         <field name="print_report_name">'Issuance Slip - %s' % (object.name)</field>
-        <field name="binding_model_id" ref="model_reema_material_issuance"/>
-        <field name="binding_type">report</field>
     </record>
 </odoo>

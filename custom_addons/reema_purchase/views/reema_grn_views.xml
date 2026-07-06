@@ -18,16 +18,34 @@
                            statusbar_visible="draft,verified"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_journal_entry" type="object"
+                                class="oe_stat_button" icon="fa-book"
+                                invisible="not has_journal_entry"
+                                groups="reema_purchase.group_reema_purchase_manager">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Interim</span>
+                                <span class="o_stat_text">Journal Entry</span>
+                            </div>
+                        </button>
+                    </div>
+
                     <div class="oe_title">
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
 
                     <div class="alert alert-success" role="alert"
                          invisible="state != 'verified'">
-                        <strong>Material Logged:</strong> Stock increased and interim entry
-                        <field name="move_id" readonly="1" nolabel="1"
-                               options="{'no_create': True, 'no_edit': True, 'no_open': True}"
-                               invisible="not move_id"/> posted.
+                        <strong>Material Logged:</strong> Stock increased and interim journal entry posted.
+                        <span groups="reema_purchase.group_reema_purchase_manager">
+                            Value: <field name="total_accepted_value" readonly="1" nolabel="1"/> PKR.
+                        </span>
+                    </div>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="state != 'verified' or total_accepted_value != 0"
+                         groups="reema_purchase.group_reema_purchase_manager">
+                        <strong>Warning:</strong> Accepted value is PKR 0 — no unit prices were set on the lines. The interim journal entry was posted at zero value and will need a manual correction.
                     </div>
 
                     <group>
@@ -112,18 +130,24 @@
             <list string="GRNs"
                   decoration-info="state == 'draft'"
                   decoration-success="state == 'verified'">
-                <field name="name"/>
-                <field name="date"/>
-                <field name="partner_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                <field name="total_accepted_qty" string="Total Qty"/>
+                <field name="name" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="partner_id" optional="show"
+                       options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                 <field name="po_id" optional="show"
                        options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                 <field name="gate_pass_id" optional="show"
                        options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
-                <field name="received_by" optional="hide"
-                       options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="total_received_qty" string="Received" optional="show"
+                       widget="zero_dash_float"/>
+                <field name="total_accepted_qty" string="Accepted" optional="show"
+                       widget="zero_dash_float"/>
+                <field name="total_rejected_qty" string="Rejected" optional="show"
+                       widget="zero_dash_float"/>
                 <field name="total_accepted_value" string="Value (PKR)" optional="show"
                        groups="reema_purchase.group_reema_purchase_manager"/>
+                <field name="received_by" optional="hide"
+                       options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                 <field name="state" widget="badge" optional="show"
                        decoration-info="state == 'draft'"
                        decoration-success="state == 'verified'"/>

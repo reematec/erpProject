@@ -92,6 +92,13 @@
               sequence="10"
               groups="reema_purchase.group_reema_gate"/>
 
+    <menuitem id="menu_reema_ilo_outward_gate"
+              name="ILO Outward Passes"
+              parent="menu_reema_security_root"
+              action="action_reema_ilo_outward_pass"
+              sequence="20"
+              groups="reema_purchase.group_reema_gate"/>
+
     <!-- ══════════════════════════════════════════════════════════════════
          ACCOUNTING > PAYABLES — Bill Matching (3-Way)
     ══════════════════════════════════════════════════════════════════════ -->

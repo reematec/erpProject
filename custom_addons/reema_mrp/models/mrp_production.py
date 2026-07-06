@@ -23,9 +23,31 @@ class MrpProduction(models.Model):
         ('premium', 'Premium/Pro')
     ], string='Complexity', default='standard')
 
+    # The sampling blueprint for this MO's product. Shown in the form (labelled
+    # "Product") instead of the raw product_id so clicking it opens the sample
+    # sheet rather than the plain product form — mirrors mrp.bom.sample_id.
+    sample_id = fields.Many2one(
+        'reema.sampling.blueprint', string='Sample', compute='_compute_sample_id')
+
+    @api.depends('product_id')
+    def _compute_sample_id(self):
+        Blueprint = self.env['reema.sampling.blueprint']
+        for mo in self:
+            mo.sample_id = Blueprint.search(
+                [('product_tmpl_id', '=', mo.product_id.product_tmpl_id.id)], limit=1
+            ) if mo.product_id else False
+
     ilo_dispatch_count = fields.Integer(compute='_compute_ilo_dispatch_count', string='ILO Dispatches')
+    ilo_repair_qty_balls = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='ILO Repair Balls')
+    ilo_scrap_qty = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='ILO Scrapped Balls')
 
     has_active_issuance = fields.Boolean(compute='_compute_has_active_issuance')
+
+    extra_material_issuance = fields.Selection([
+        ('flexible', 'Allowed'),
+        ('warning', 'Allowed with Warning'),
+        ('strict', 'Blocked'),
+    ], string='Extra Material Issuance', default='warning', required=True)
 
     def _compute_has_active_issuance(self):
         for rec in self:
@@ -33,39 +55,18 @@ class MrpProduction(models.Model):
                 rec.issuance_ids.filtered(lambda i: i.state != 'cancelled')
             )
 
-    # WIP Evaluation — material cost (AVCO × net issued) + labor cost (batch piece rates)
-    wip_material_cost = fields.Float(string='Material Cost (PKR)', compute='_compute_wip_costs', digits=(16, 2))
-    wip_labor_cost = fields.Float(string='Labor Cost (PKR)', compute='_compute_wip_costs', digits=(16, 2))
-    wip_total_cost = fields.Float(string='Total WIP (PKR)', compute='_compute_wip_costs', digits=(16, 2))
-    wip_balls_in_process = fields.Float(string='Balls In Process', compute='_compute_wip_costs', digits=(16, 2))
-
-    def _compute_wip_costs(self):
-        Issuance = self.env['reema.material.issuance']
-        for rec in self:
-            if rec.state in ('done', 'cancel'):
-                rec.wip_material_cost = 0.0
-                rec.wip_labor_cost = 0.0
-                rec.wip_total_cost = 0.0
-                rec.wip_balls_in_process = 0.0
-                continue
-            # Material: net issued qty × current AVCO standard_price per product
-            issuances = Issuance.search([('production_id', '=', rec.id)])
-            material_cost = sum(
-                iss.net_issued_qty * iss.product_id.standard_price
-                for iss in issuances
-            )
-            # Labor: sum of all batch entry piece-rate amounts across all halls
-            labor_cost = sum(rec.workorder_ids.mapped('wip_labor_cost'))
-            # Balls: furthest-progressed hall's ball-equivalent output
-            balls = max(rec.workorder_ids.mapped('qty_balls_completed'), default=0.0)
-            rec.wip_material_cost = max(material_cost, 0.0)
-            rec.wip_labor_cost = labor_cost
-            rec.wip_total_cost = rec.wip_material_cost + labor_cost
-            rec.wip_balls_in_process = balls
-
     def _compute_ilo_dispatch_count(self):
         for rec in self:
             rec.ilo_dispatch_count = self.env['reema.ilo.dispatch'].search_count([('mo_id', '=', rec.id)])
+
+    def _compute_ilo_repair_scrap_qty(self):
+        Dispatch = self.env['reema.ilo.dispatch']
+        Scrap = self.env['reema.ilo.qc.scrap']
+        for rec in self:
+            rec.ilo_repair_qty_balls = sum(Dispatch.search([
+                ('mo_id', '=', rec.id), ('dispatch_type', '=', 'repair'),
+            ]).mapped('qty_balls'))
+            rec.ilo_scrap_qty = sum(Scrap.search([('mo_id', '=', rec.id)]).mapped('qty'))
 
     def action_view_ilo_dispatches(self):
         self.ensure_one()
@@ -76,6 +77,26 @@ class MrpProduction(models.Model):
             'view_mode': 'list,form',
             'domain': [('mo_id', '=', self.id)],
             'context': {'default_mo_id': self.id},
+        }
+
+    def action_view_ilo_repairs(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'ILO Repair Dispatches',
+            'res_model': 'reema.ilo.dispatch',
+            'view_mode': 'list,form',
+            'domain': [('mo_id', '=', self.id), ('dispatch_type', '=', 'repair')],
+        }
+
+    def action_view_ilo_scrap(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'ILO QC Scrap',
+            'res_model': 'reema.ilo.qc.scrap',
+            'view_mode': 'list',
+            'domain': [('mo_id', '=', self.id)],
         }
 
     def action_print_mo(self):
@@ -147,6 +168,12 @@ class ReemaMoStatusInfoWizard(models.TransientModel):
 class StockMoveReema(models.Model):
     _inherit = 'stock.move'
 
+    reema_batch_entry_id = fields.Many2one(
+        'reema.wo.batch.entry', string='Batch Entry', readonly=True, index=True,
+        help='Set on backflush moves created from a batch progress entry. '
+             'Used to link the move back to its batch without relying on the '
+             'origin text, which breaks if MO/batch numbering is ever reformatted.')
+
     backflush_qty = fields.Float(
         string='Consumed', digits=(16, 6),
         compute='_compute_backflush_qty',
@@ -164,23 +191,21 @@ class StockMoveReema(models.Model):
                 move.backflush_qty = 0.0
 
         for mo, moves in by_mo.items():
-            # Build the exact set of valid origins from EXISTING batch entries.
-            # This excludes orphan backflush moves whose batch was later deleted.
+            # Existing batch entries for this MO — orphan moves (from batches
+            # later deleted) are excluded since their entry no longer exists.
             batches = self.env['reema.wo.batch.entry'].search([
                 ('workorder_id.production_id', '=', mo.id)
             ])
-            valid_origins = [
-                f'{mo.name} / {b.workorder_id.name} / {b.name}'
-                for b in batches
-            ]
-            if not valid_origins:
+            if not batches:
                 for m in moves:
                     m.backflush_qty = 0.0
                 continue
 
             # Sum all valid backflush moves for this MO, grouped by product.
+            # Linked via the FK, not a reconstructed origin string — the latter
+            # breaks silently if MO/WO/batch numbering is ever reformatted.
             backflush_moves = self.env['stock.move'].search([
-                ('origin', 'in', valid_origins),
+                ('reema_batch_entry_id', 'in', batches.ids),
                 ('state', 'not in', ['draft', 'cancel']),
             ])
             by_product = {}
@@ -190,3 +215,13 @@ class StockMoveReema(models.Model):
                 )
             for m in moves:
                 m.backflush_qty = by_product.get(m.product_id.id, 0.0)
+
+    def _action_assign(self, force_qty=False):
+        # Hard guarantee: MO component (raw-material) moves are NEVER reserved,
+        # regardless of the Manufacturing operation type's reservation method.
+        # Even if someone flips it back to "At Confirmation", these moves are
+        # filtered out before reservation runs. Material availability is governed
+        # by on-hand stock and the custom store-issuance flow, not Odoo's
+        # reserve-at-confirm mechanism.
+        movable = self.filtered(lambda m: not m.raw_material_production_id)
+        return super(StockMoveReema, movable)._action_assign(force_qty=force_qty)

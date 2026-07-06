@@ -33,6 +33,7 @@ class ReemaMaterialIssuance(models.Model):
         ('authorized', 'Authorized'),
         ('partial', 'Partially Issued'),
         ('fully_issued', 'Fully Issued'),
+        ('over_issued', 'Over Issued'),
         ('cancelled', 'Cancelled'),
     ], string='Status', default='authorized', required=True, tracking=True)
     authorized_by = fields.Many2one('res.users', string='Authorized By', readonly=True)
@@ -42,6 +43,10 @@ class ReemaMaterialIssuance(models.Model):
                                string='Issue Log')
     return_line_ids = fields.One2many('reema.material.return.line', 'issuance_id',
                                       string='Return Log')
+    production_order_id = fields.Many2one(
+        'reema.production.order', string='Production Order',
+        compute='_compute_production_order_id', store=True,
+    )
     has_any_issue = fields.Boolean(compute='_compute_has_any_issue')
     can_withdraw = fields.Boolean(compute='_compute_can_withdraw')
 
@@ -68,6 +73,12 @@ class ReemaMaterialIssuance(models.Model):
         for rec in self:
             rec.can_withdraw = is_manager or is_admin or (user == rec.authorized_by)
 
+    @api.depends('production_id')
+    def _compute_production_order_id(self):
+        for rec in self:
+            line = rec.production_id.sudo().reema_po_line_ids[:1]
+            rec.production_order_id = line.order_id if line else False
+
     @api.constrains('production_id', 'state')
     def _check_production_id_required(self):
         for rec in self:
@@ -92,6 +103,8 @@ class ReemaMaterialIssuance(models.Model):
             net = rec.net_issued_qty
             if net <= 0:
                 rec.state = 'authorized'
+            elif net > rec.authorized_qty + 0.001:
+                rec.state = 'over_issued'
             elif net < rec.authorized_qty - 0.001:
                 rec.state = 'partial'
             else:
@@ -122,13 +135,31 @@ class ReemaMaterialIssuance(models.Model):
 
     def action_issue_wizard(self):
         self.ensure_one()
-        if self.state not in ('authorized', 'partial'):
-            raise UserError('This authorization has already been fully issued or cancelled.')
+        extra = self.production_id.extra_material_issuance or 'warning'
+        if self.state == 'cancelled':
+            raise UserError('This authorization has been cancelled and cannot be issued against.')
+        if self.state in ('fully_issued', 'over_issued') and extra == 'strict':
+            raise UserError('This authorization has already been fully issued. Extra issuance is not allowed for this Manufacturing Order.')
+        # The component is consumed at a specific operation/work center. Match
+        # the work order(s) for that operation so the destination hall and
+        # contractor list reflect THAT hall only — not every WO of the MO.
+        operation = self.raw_move_id.operation_id
+        workorders = self.production_id.sudo().workorder_ids
+        matched = workorders.filtered(lambda w: w.operation_id == operation) if operation else workorders
+        if not matched:
+            matched = workorders
         dest_location_id = False
-        for wo in self.production_id.sudo().workorder_ids:
-            if wo.workcenter_id.location_id:
+        contractor_ids = []
+        for wo in matched:
+            if wo.workcenter_id.location_id and not dest_location_id:
                 dest_location_id = wo.workcenter_id.location_id.id
-                break
+            contractor_ids += wo.contractor_ids.ids
+        if not dest_location_id:
+            raise UserError(
+                "Cannot issue materials: no Hall Location is configured on any "
+                "work center of this Manufacturing Order. Please set a Hall "
+                "Location on the work center first."
+            )
         wizard = self.env['reema.material.issue.wizard'].create({
             'issuance_id': self.id,
             'issued_qty': max(self.remaining_qty, 0),
@@ -141,11 +172,12 @@ class ReemaMaterialIssuance(models.Model):
             'res_id': wizard.id,
             'view_mode': 'form',
             'target': 'new',
+            'context': {'allowed_contractor_ids': contractor_ids},
         }
 
     def action_return_wizard(self):
         self.ensure_one()
-        if self.state not in ('partial', 'fully_issued'):
+        if self.state not in ('partial', 'fully_issued', 'over_issued'):
             raise UserError('No issued quantity to return.')
         last_dest = self.line_ids[:1].destination_location_id.id if self.line_ids else False
         wizard = self.env['reema.material.return.wizard'].create({
@@ -172,13 +204,27 @@ class ReemaMaterialIssuance(models.Model):
         }
 
     def action_print(self):
-        return self.env.ref('reema_mrp.action_report_material_issuance').report_action(self)
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/report/html/reema_mrp.report_material_issuance_slip/%s' % ','.join(str(i) for i in self.ids),
+            'target': 'new',
+        }
 
 
 class ReemaMaterialIssuanceLine(models.Model):
     _name = 'reema.material.issuance.line'
     _description = 'Material Issue Log Entry'
     _order = 'date desc'
+
+    name = fields.Char(string='Reference', readonly=True, copy=False, default='New')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('name', 'New') == 'New':
+                vals['name'] = self.env['ir.sequence'].next_by_code(
+                    'reema.material.issuance.line') or 'New'
+        return super().create(vals_list)
 
     issuance_id = fields.Many2one('reema.material.issuance', string='Issuance',
                                   required=True, ondelete='cascade')
@@ -253,6 +299,16 @@ class ReemaMaterialReturnLine(models.Model):
     _name = 'reema.material.return.line'
     _description = 'Material Return Entry'
     _order = 'date desc'
+
+    name = fields.Char(string='Reference', readonly=True, copy=False, default='New')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('name', 'New') == 'New':
+                vals['name'] = self.env['ir.sequence'].next_by_code(
+                    'reema.material.return.line') or 'New'
+        return super().create(vals_list)
 
     issuance_id = fields.Many2one('reema.material.issuance', string='Issuance',
                                   required=True, ondelete='cascade')
@@ -383,15 +439,39 @@ class ReemaMaterialReturnWizard(models.TransientModel):
             'notes': self.notes,
         })
 
-        issuance._message_log(body=Markup(
-            f'<b>Material returned to store</b><br/>'
+        was_over_issued = issuance.state == 'over_issued'
+
+        return_body = Markup(
+            f'<b>Material returned to store</b> — {issuance.name}<br/>'
+            f'Product: <b>{issuance.product_id.display_name}</b><br/>'
             f'Qty: <b>{self.returned_qty:.3f} {issuance.product_uom_id.name}</b><br/>'
+            f'MO: {issuance.production_id.name} | '
             f'Returned from: {self.return_from_location_id.name}<br/>'
             f'Reason: {self.fault_description}<br/>'
-            f'<b>Returned by: {self.env.user.name}</b>'
-        ))
+            f'Returned by: {self.env.user.name}'
+        )
+        issuance._message_log(body=return_body)
+        issuance.production_id._message_log(body=return_body)
 
         issuance._recompute_state()
+
+        if was_over_issued:
+            manager_group = self.env.ref('reema_mrp.group_reema_production_manager', raise_if_not_found=False)
+            admin_group = self.env.ref('base.group_system', raise_if_not_found=False)
+            notify_users = (manager_group.users if manager_group else self.env['res.users'])
+            notify_users |= (admin_group.users if admin_group else self.env['res.users'])
+            notify_users -= self.env.user
+            notify_partners = notify_users.mapped('partner_id')
+            if notify_partners:
+                issuance.sudo().with_context(
+                    mail_notify_force_send=False,
+                    mail_auto_delete=False,
+                ).message_post(
+                    body=return_body,
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_note',
+                    partner_ids=notify_partners.ids,
+                )
 
 
 class ReemaMaterialIssueWizard(models.TransientModel):
@@ -412,22 +492,17 @@ class ReemaMaterialIssueWizard(models.TransientModel):
         'stock.location', string='Issue To (Hall)',
         domain="[('usage', '=', 'internal')]"
     )
-    available_contractor_ids = fields.Many2many(
-        'res.partner',
-        compute='_compute_available_contractors'
-    )
     contractor_id = fields.Many2one(
         'res.partner', string='Contractor',
-        domain="[('id', 'in', available_contractor_ids)]"
     )
     carried_by = fields.Char(string='Carried By')
     notes = fields.Char(string='Notes')
+    over_qty = fields.Float(compute='_compute_over_qty')
 
-    @api.depends('issuance_id')
-    def _compute_available_contractors(self):
-        for wiz in self:
-            contractors = wiz.issuance_id.production_id.sudo().workorder_ids.mapped('contractor_ids')
-            wiz.available_contractor_ids = contractors
+    @api.depends('issued_qty', 'remaining_qty')
+    def _compute_over_qty(self):
+        for rec in self:
+            rec.over_qty = max(rec.issued_qty - rec.remaining_qty, 0.0)
 
     @api.onchange('contractor_id')
     def _onchange_contractor_id(self):
@@ -444,16 +519,57 @@ class ReemaMaterialIssueWizard(models.TransientModel):
         if not self.contractor_id:
             raise UserError('Please select a contractor.')
         if self.issued_qty > issuance.remaining_qty + 0.001:
-            raise UserError(
-                f'Cannot issue {self.issued_qty:.3f} {issuance.product_uom_id.name}.\n\n'
-                f'Remaining authorized quantity: {issuance.remaining_qty:.3f}.'
-            )
+            mode = issuance.production_id.extra_material_issuance or 'warning'
+            if mode == 'strict':
+                raise UserError(
+                    f'Cannot issue {self.issued_qty:.3f} {issuance.product_uom_id.name}.\n\n'
+                    f'Remaining authorized quantity: {issuance.remaining_qty:.3f}.\n'
+                    f'Extra material issuance is blocked for this Manufacturing Order.'
+                )
+            elif mode == 'warning':
+                extra = self.issued_qty - issuance.remaining_qty
+                warning_body = Markup(
+                    f'<b>Extra material issued</b> — {issuance.name}<br/>'
+                    f'Product: <b>{issuance.product_id.display_name}</b><br/>'
+                    f'Issued: <b>{self.issued_qty:.3f} {issuance.product_uom_id.name}</b> '
+                    f'(exceeds authorized by <b>{extra:.3f} {issuance.product_uom_id.name}</b>)<br/>'
+                    f'MO: {issuance.production_id.name} | '
+                    f'Authorized: {issuance.authorized_qty:.3f} | '
+                    f'Remaining before this issue: {issuance.remaining_qty:.3f}<br/>'
+                    f'Issued by: {self.env.user.name}'
+                )
+                # Log to both RMI and MO chatters
+                issuance._message_log(body=warning_body)
+                issuance.production_id._message_log(body=warning_body)
+                # Inbox notification to production managers + system admins
+                manager_group = self.env.ref('reema_mrp.group_reema_production_manager', raise_if_not_found=False)
+                admin_group = self.env.ref('base.group_system', raise_if_not_found=False)
+                notify_users = (manager_group.users if manager_group else self.env['res.users'])
+                notify_users |= (admin_group.users if admin_group else self.env['res.users'])
+                # exclude the person who just issued (no point notifying yourself)
+                notify_users -= self.env.user
+                notify_partners = notify_users.mapped('partner_id')
+                if notify_partners:
+                    issuance.sudo().with_context(
+                        mail_notify_force_send=False,
+                        mail_auto_delete=False,
+                    ).message_post(
+                        body=warning_body,
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                        partner_ids=notify_partners.ids,
+                    )
+            # flexible: silent, no chatter post
         source_location = issuance.production_id.location_src_id
         quants = self.env['stock.quant'].search([
             ('product_id', '=', issuance.product_id.id),
             ('location_id', 'child_of', source_location.id),
         ])
-        available_qty = sum(q.quantity - q.reserved_quantity for q in quants)
+        # Check against ON-HAND quantity, not unreserved. The stock reserved
+        # here is the MO's own component demand (standard MRP reservation on
+        # confirmation) — the very requirement this issuance fulfills. Counting
+        # it as unavailable would make the issuance fight its own MO.
+        available_qty = sum(q.quantity for q in quants)
         if self.issued_qty > available_qty + 0.001:
             raise UserError(
                 f'Insufficient stock for {issuance.product_id.name}.\n\n'
@@ -501,6 +617,7 @@ class StockMoveReemaExt(models.Model):
     _inherit = 'stock.move'
 
     has_issuance = fields.Boolean(compute='_compute_has_issuance', string='Has Issuance')
+    move_net_issued_qty = fields.Float(compute='_compute_move_net_issued_qty', string='Issued')
 
     def _compute_has_issuance(self):
         if not self.ids:
@@ -515,12 +632,28 @@ class StockMoveReemaExt(models.Model):
         for move in self:
             move.has_issuance = move.id in issued_move_ids
 
+    def _compute_move_net_issued_qty(self):
+        if not self.ids:
+            for move in self:
+                move.move_net_issued_qty = 0.0
+            return
+        issuances = self.env['reema.material.issuance'].search([
+            ('raw_move_id', 'in', self.ids),
+            ('state', '!=', 'cancelled'),
+        ])
+        net_by_move = {}
+        for iss in issuances:
+            mid = iss.raw_move_id.id
+            net_by_move[mid] = net_by_move.get(mid, 0.0) + iss.net_issued_qty
+        for move in self:
+            move.move_net_issued_qty = net_by_move.get(move.id, 0.0)
+
     def action_authorize_issuance(self):
         """Authorize button — create issuance silently and stay on the MO page."""
         self.ensure_one()
         if not self.raw_material_production_id:
             raise UserError('This move is not linked to a Manufacturing Order component.')
-        if self.raw_material_production_id.state != 'confirmed':
+        if self.raw_material_production_id.state not in ('confirmed', 'progress', 'to_close'):
             raise UserError(
                 "The Manufacturing Order must be confirmed before creating a material issuance authorization."
             )

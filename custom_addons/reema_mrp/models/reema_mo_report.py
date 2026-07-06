@@ -12,8 +12,10 @@ class ReportManufacturingOrder(models.AbstractModel):
     def _get_report_values(self, docids, data=None):
         docs = self.env['mrp.production'].browse(docids)
         # Build consumed qty per (mo, product) from backflush moves.
-        # Backflush creates independent stock.move records (not updating move_raw_ids)
-        # linked only via origin = '{mo.name} / {wo.name} / {batch.name}'.
+        # Backflush creates independent stock.move records (not updating
+        # move_raw_ids), linked back via reema_batch_entry_id — not a
+        # reconstructed origin string, which breaks if MO/batch numbering
+        # is ever reformatted.
         consumed_map = {}
         for mo in docs:
             # Use only moves from EXISTING batch entries — orphan moves
@@ -21,14 +23,10 @@ class ReportManufacturingOrder(models.AbstractModel):
             batches = self.env['reema.wo.batch.entry'].search([
                 ('workorder_id.production_id', '=', mo.id)
             ])
-            valid_origins = [
-                f'{mo.name} / {b.workorder_id.name} / {b.name}'
-                for b in batches
-            ]
             by_product = {}
-            if valid_origins:
+            if batches:
                 moves = self.env['stock.move'].search([
-                    ('origin', 'in', valid_origins),
+                    ('reema_batch_entry_id', 'in', batches.ids),
                     ('state', 'not in', ['draft', 'cancel']),
                 ])
                 for m in moves:

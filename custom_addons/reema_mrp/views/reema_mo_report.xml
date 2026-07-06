@@ -89,7 +89,9 @@
                             <thead>
                                 <tr class="table-dark">
                                     <th>Component</th>
+                                    <th>Operation</th>
                                     <th class="text-end">To Consume</th>
+                                    <th class="text-end">Issued</th>
                                     <th>UOM</th>
                                     <th class="text-end">Consumed</th>
                                 </tr>
@@ -99,7 +101,9 @@
                                     <t t-set="consumed_qty" t-value="consumed_map.get(o.id, {}).get(m.product_id.id, 0.0)"/>
                                     <tr>
                                         <td><span t-field="m.product_id"/></td>
+                                        <td><span t-field="m.operation_id"/></td>
                                         <td class="text-end"><span t-out="('%.6f' % m.product_uom_qty).rstrip('0').rstrip('.')"/></td>
+                                        <td class="text-end"><span t-out="('%.6f' % m.move_net_issued_qty).rstrip('0').rstrip('.')"/></td>
                                         <td><span t-field="m.product_uom"/></td>
                                         <td class="text-end"><span t-out="('%.6f' % consumed_qty).rstrip('0').rstrip('.')"/></td>
                                     </tr>

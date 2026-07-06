@@ -1,6 +1,6 @@
 {
     'name': 'Reema Group MRP',
-    'version': '2.1',
+    'version': '2.5',
     'category': 'Manufacturing',
     'summary': 'Integrated MRP flow for Football Production (Reema Group Logic)',
     'description': """

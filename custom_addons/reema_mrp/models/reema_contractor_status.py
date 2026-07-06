@@ -34,6 +34,16 @@ class ReemaContractorWoStatus(models.Model):
     ilo_qty_dispatched = fields.Integer(string='ILO Dispatched', readonly=True)
     ilo_qty_pending = fields.Integer(string='ILO Pending', readonly=True)
 
+    def _search(self, domain, offset=0, limit=None, order=None):
+        has_filter = any(
+            isinstance(leaf, (list, tuple)) and len(leaf) >= 1
+            and leaf[0] in ('contractor_id', 'id')
+            for leaf in domain
+        )
+        if not has_filter:
+            domain = [('id', '=', 0)]
+        return super()._search(domain, offset=offset, limit=limit, order=order)
+
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute("""
@@ -75,13 +85,27 @@ class ReemaContractorWoStatus(models.Model):
                      AND be.contractor_id  = rel.partner_id
                 LEFT JOIN (
                     SELECT
-                        mo_id,
-                        contractor_id,
-                        SUM(qty_panels)  AS qty_dispatched,
-                        SUM(qty_pending) AS qty_pending
-                    FROM reema_ilo_dispatch
-                    WHERE state IN ('dispatched', 'closed')
-                    GROUP BY mo_id, contractor_id
+                        dispatched.mo_id,
+                        dispatched.contractor_id,
+                        dispatched.qty_dispatched,
+                        dispatched.qty_dispatched - COALESCE(recv.qty_received, 0) AS qty_pending
+                    FROM (
+                        SELECT mo_id, contractor_id, SUM(qty_balls) AS qty_dispatched
+                        FROM reema_ilo_dispatch
+                        WHERE state IN ('dispatched', 'sent', 'closed')
+                        GROUP BY mo_id, contractor_id
+                    ) dispatched
+                    LEFT JOIN (
+                        SELECT
+                            rwo.production_id AS mo_id,
+                            wbe.contractor_id,
+                            SUM(wbe.qty)       AS qty_received
+                        FROM reema_wo_batch_entry wbe
+                        JOIN mrp_workorder rwo ON rwo.id = wbe.workorder_id
+                        JOIN mrp_workcenter rwc ON rwc.id = rwo.workcenter_id
+                        WHERE rwc.is_ball_receive_point = TRUE
+                        GROUP BY rwo.production_id, wbe.contractor_id
+                    ) recv ON recv.mo_id = dispatched.mo_id AND recv.contractor_id = dispatched.contractor_id
                 ) ilo ON ilo.mo_id        = wo.production_id
                      AND ilo.contractor_id = rel.partner_id
                      AND wc.is_ilo         = TRUE

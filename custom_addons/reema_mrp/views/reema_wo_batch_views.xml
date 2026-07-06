@@ -8,7 +8,8 @@
             <form string="Log Batch Progress">
                 <group>
                     <group string="Work Order">
-                        <field name="workorder_id" readonly="1"/>
+                        <field name="workorder_id" invisible="1"/>
+                        <field name="workorder_name" readonly="1"/>
                         <field name="workcenter_name" readonly="1"/>
                         <field name="workcenter_id" invisible="1"/>
                     </group>
@@ -39,13 +40,100 @@
                            invisible="hall_unit != 'panel'"/>
                     <field name="panels_per_ball" string="Panels per Ball" readonly="1"
                            invisible="hall_unit != 'panel'"/>
-                    <field name="piece_rate_id" options="{'no_create': True, 'no_edit': True}"
+                    <field name="piece_rate_value" string="Rate (PKR)" readonly="1"
                            invisible="workforce_type == 'employee'"/>
                     <field name="notes" placeholder="Optional: e.g. 'Morning shift batch'"/>
                 </group>
                 <div class="alert alert-warning mb-0 mt-2" role="alert" invisible="not qty_warning">
                     <field name="qty_warning" readonly="1" nolabel="1"/>
                 </div>
+                <footer>
+                    <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Log ILO Balls Received wizard -->
+    <record id="view_reema_ilo_receive_wizard_form" model="ir.ui.view">
+        <field name="name">reema.ilo.receive.wizard.form</field>
+        <field name="model">reema.ilo.receive.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Log ILO Balls Received">
+                <group>
+                    <group string="Work Order">
+                        <field name="workorder_id" invisible="1"/>
+                        <field name="mo_id" invisible="1"/>
+                        <field name="workorder_name" readonly="1"/>
+                        <field name="workcenter_name" readonly="1"/>
+                    </group>
+                    <group string="Contractor">
+                        <field name="available_contractor_ids" invisible="1"/>
+                        <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                        <field name="stitching_open" invisible="1"/>
+                        <field name="repair_open" invisible="1"/>
+                        <field name="stitching_balance_display" string="Stitching Balance" readonly="1"
+                               invisible="not stitching_open"/>
+                        <field name="repair_balance_display" string="Repair Balance" readonly="1"
+                               invisible="not repair_open"/>
+                    </group>
+                </group>
+                <group>
+                    <field name="receipt_purpose"
+                           invisible="not (stitching_open and repair_open)"
+                           required="stitching_open and repair_open"/>
+                    <field name="available_original_contractor_ids" invisible="1"/>
+                    <field name="original_contractor_id"
+                           invisible="receipt_purpose != 'repair'"
+                           required="receipt_purpose == 'repair'"
+                           options="{'no_create': True, 'no_edit': True}"/>
+                    <field name="qty" string="Quantity Received" autofocus="1"/>
+                </group>
+                <field name="notes" placeholder="Optional notes..."/>
+                <footer>
+                    <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Initial QC wizard -->
+    <record id="view_reema_ilo_qc_wizard_form" model="ir.ui.view">
+        <field name="name">reema.ilo.qc.wizard.form</field>
+        <field name="model">reema.ilo.qc.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Initial QC">
+                <group>
+                    <group string="Work Order">
+                        <field name="workorder_id" invisible="1"/>
+                        <field name="mo_id" invisible="1"/>
+                        <field name="workorder_name" readonly="1"/>
+                        <field name="workcenter_name" readonly="1"/>
+                        <field name="construction_type" invisible="1"/>
+                    </group>
+                    <group string="Contractor">
+                        <field name="available_contractor_ids" invisible="1"/>
+                        <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                        <field name="pending_qty" string="Pending Inspection" readonly="1"/>
+                    </group>
+                </group>
+                <group>
+                    <group string="Inspection Result">
+                        <field name="qty_pass" string="Pass Qty" autofocus="1"/>
+                        <field name="qty_fail" string="Fail Qty (Repair)"
+                               invisible="construction_type != 'hs'"/>
+                        <field name="qty_scrap" string="Scrap / Write-off Qty"/>
+                        <field name="scrap_defect_type" invisible="qty_scrap == 0"
+                               required="qty_scrap != 0"/>
+                    </group>
+                    <group string="Repair Dispatch">
+                        <field name="repair_defect_type" required="qty_fail != 0"/>
+                        <field name="repair_contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                    </group>
+                </group>
+                <field name="notes" placeholder="Optional notes..."/>
                 <footer>
                     <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
@@ -79,12 +167,17 @@
                 <field name="date" string="Date" optional="show"/>
                 <field name="logged_by" string="Logged By" optional="hide"/>
                 <field name="contractor_id" string="Contractor" optional="show"/>
+                <field name="original_contractor_id" string="Original Contractor" optional="hide"/>
+                <field name="ilo_dispatch_type" string="ILO Flow" optional="hide"/>
                 <field name="reema_po_id" string="PO" optional="show"/>
                 <field name="mo_id" string="MO" optional="show"/>
                 <field name="process_name" string="Process" optional="show"/>
                 <field name="qty" string="Qty" optional="show"/>
                 <field name="qty_balls" string="Balls" optional="show"/>
-                <field name="piece_rate_value" string="Rate" optional="show"/>
+                <field name="piece_rate_id" string="Rate" optional="show"
+                       options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="piece_rate_value" string="Rate (PKR)" optional="hide"
+                       widget="zero_dash_float"/>
                 <field name="amount_earned" string="Amount" sum="Total" optional="show"/>
                 <field name="is_billed" string="Billed" widget="boolean_toggle" readonly="1" optional="show"/>
                 <field name="payment_excluded" string="Excluded" widget="boolean_toggle" readonly="1" optional="show"/>
@@ -104,14 +197,20 @@
             <form string="Batch Log" create="false">
                 <sheet>
                     <field name="workforce_type" invisible="1"/>
+                    <field name="ilo_dispatch_type" invisible="1"/>
+                    <field name="is_initial_qc_entry" invisible="1"/>
                     <group>
                         <group string="Work Order">
-                            <field name="workorder_id" readonly="1"/>
+                            <field name="workorder_id" readonly="1" options="{'no_open': True}"/>
+                            <field name="mo_id" string="Manufacturing Order" readonly="1"/>
                             <field name="date" readonly="1"/>
                             <field name="logged_by" readonly="1"/>
                         </group>
-                        <group string="Contractor" invisible="workforce_type == 'employee'">
-                            <field name="contractor_id" readonly="1"/>
+                        <group string="Contractor"
+                               invisible="workforce_type == 'employee' and not ilo_dispatch_type and not is_initial_qc_entry">
+                            <field name="contractor_id" readonly="1" options="{'no_open': True}"/>
+                            <field name="original_contractor_id" readonly="1" invisible="not ilo_dispatch_type"/>
+                            <field name="qc_received_qty" readonly="1" invisible="not is_initial_qc_entry"/>
                         </group>
                     </group>
                     <group>
@@ -119,15 +218,30 @@
                             <field name="qty" readonly="1"/>
                             <field name="qty_balls" readonly="1"/>
                         </group>
-                        <group string="Piece Rate" invisible="workforce_type == 'employee'">
-                            <field name="piece_rate_id" readonly="1"/>
+                        <group string="Piece Rate"
+                               invisible="workforce_type == 'employee' and not ilo_dispatch_type and not is_initial_qc_entry">
+                            <field name="piece_rate_id" readonly="1" options="{'no_open': True}"/>
+                            <field name="piece_rate_value" string="Rate (PKR)" readonly="1"/>
                             <field name="amount_earned" readonly="1"/>
+                        </group>
+                    </group>
+                    <group invisible="not is_initial_qc_entry">
+                        <group string="Inspection Result">
+                            <field name="qc_pass_qty" readonly="1"/>
+                            <field name="qc_repair_qty" readonly="1"/>
+                            <field name="qc_scrap_qty" readonly="1"/>
+                            <field name="qc_scrap_defect_types" readonly="1" invisible="not qc_scrap_qty"/>
+                        </group>
+                        <group string="Repair Dispatch" invisible="not qc_repair_qty">
+                            <field name="qc_repair_defect_types" readonly="1"/>
+                            <field name="qc_repair_contractor_ids" readonly="1" widget="many2many_tags"/>
                         </group>
                     </group>
                     <group>
                         <field name="notes" readonly="1"/>
                     </group>
-                    <group string="Payment" invisible="workforce_type == 'employee'">
+                    <group string="Payment"
+                           invisible="workforce_type == 'employee' and not ilo_dispatch_type and not is_initial_qc_entry">
                         <field name="payment_excluded" readonly="1"/>
                         <field name="exclusion_reason" invisible="not payment_excluded"/>
                     </group>
@@ -175,7 +289,21 @@
         <field name="res_model">reema.wo.batch.entry</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="reema_batch_entry_view_search"/>
+        <!-- ILO Issuance/Receive entries are provisional ledger records, not payable
+             lines — only Initial QC carries the real payable qty/rate for ILO work.
+             Full detail for Issuance/Receive still lives under ILO Dispatches. -->
+        <field name="domain">[('workorder_id.workcenter_id.is_ilo', '=', False), ('workorder_id.workcenter_id.is_ball_receive_point', '=', False)]</field>
         <field name="context">{'search_default_unbilled': 1}</field>
+        <!-- Pinned explicitly: reema.wo.batch.entry now has more than one primary
+             list view (see ILO Received), and Odoo's default-view fallback picks
+             between same-priority views alphabetically by name — leaving this
+             action to fall back silently is fragile. Pin both views so it can
+             never be hijacked by a future view added for this model. -->
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('reema_batch_entry_view_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('reema_batch_entry_view_form')}),
+        ]"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No batch entries found.

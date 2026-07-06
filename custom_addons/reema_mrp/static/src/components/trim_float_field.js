@@ -47,3 +47,16 @@ registry.category("fields").add("trim_mrp_should_consume", {
     ...mrpShouldConsumeOwl,
     component: TrimMrpShouldConsume,
 });
+
+// Float field that shows "-" instead of "0.00" when the value is zero.
+export class ZeroDashFloatField extends TrimFloatField {
+    get formattedValue() {
+        if (this.value === 0) return "-";
+        return super.formattedValue;
+    }
+}
+
+registry.category("fields").add("zero_dash_float", {
+    ...floatField,
+    component: ZeroDashFloatField,
+});

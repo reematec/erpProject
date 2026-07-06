@@ -37,6 +37,94 @@ class ReemaWoBatchEntry(models.Model):
     payment_excluded = fields.Boolean(string='Excluded from Payment',
                                       default=False, readonly=True, copy=False)
     exclusion_reason = fields.Char(string='Exclusion Reason')
+    original_contractor_id = fields.Many2one(
+        'res.partner', string='Original Contractor',
+        help='ILO-only: contractor who ultimately gets production credit/deduction. '
+             'May differ from Contractor when this entry logs a repair return '
+             'physically brought back by a different contractor.',
+    )
+    ilo_dispatch_type = fields.Selection(
+        [('stitching', 'Stitching'), ('repair', 'Repair')],
+        string='ILO Flow Type',
+    )
+    is_initial_qc_entry = fields.Boolean(compute='_compute_qc_summary')
+    qc_received_qty = fields.Integer(
+        string='Pending Inspection', compute='_compute_qc_summary',
+        help='ILO Initial QC only: total balls ever logged in at Ball Receive for '
+             'this contractor on this MO.',
+    )
+    qc_pass_qty = fields.Integer(
+        string='Pass Qty', compute='_compute_qc_summary',
+        help='ILO Initial QC only: total balls passed at Initial QC for this '
+             'contractor on this MO, across all QC decisions.',
+    )
+    qc_repair_qty = fields.Integer(
+        string='Fail Qty (Repair)', compute='_compute_qc_summary',
+        help='ILO Initial QC only: total balls sent to repair for this contractor on this MO.',
+    )
+    qc_repair_defect_types = fields.Char(
+        string='Repair Defect Type', compute='_compute_qc_summary',
+        help='ILO Initial QC only: defect reason(s) recorded on the repair dispatch(es).',
+    )
+    qc_repair_contractor_ids = fields.Many2many(
+        'res.partner', compute='_compute_qc_summary', string='Repair Contractor',
+        help='ILO Initial QC only: who repair work for this contractor on this MO was issued to.',
+    )
+    qc_scrap_qty = fields.Integer(
+        string='Scrap / Write-off Qty', compute='_compute_qc_summary',
+        help='ILO Initial QC only: total balls scrapped for this contractor on this MO.',
+    )
+    qc_scrap_defect_types = fields.Char(
+        string='Scrap / Write-off Reason', compute='_compute_qc_summary',
+        help='ILO Initial QC only: defect reason(s) recorded on the scrap record(s).',
+    )
+
+    def _compute_qc_summary(self):
+        Dispatch = self.env['reema.ilo.dispatch']
+        Scrap = self.env['reema.ilo.qc.scrap']
+        BatchEntry = self.env['reema.wo.batch.entry']
+        defect_labels = dict(Scrap._fields['defect_type'].selection)
+        for entry in self:
+            wc = entry.workorder_id.workcenter_id
+            if not wc.is_initial_qc or not entry.mo_id or not entry.contractor_id:
+                entry.is_initial_qc_entry = False
+                entry.qc_received_qty = 0
+                entry.qc_pass_qty = 0
+                entry.qc_repair_qty = 0
+                entry.qc_scrap_qty = 0
+                entry.qc_repair_contractor_ids = False
+                entry.qc_repair_defect_types = False
+                entry.qc_scrap_defect_types = False
+                continue
+            entry.is_initial_qc_entry = True
+            mo_id = entry.mo_id.id
+            contractor_id = entry.contractor_id.id
+            entry.qc_received_qty = sum(BatchEntry.search([
+                ('workorder_id.production_id', '=', mo_id),
+                ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
+                ('original_contractor_id', '=', contractor_id),
+            ]).mapped('qty'))
+            entry.qc_pass_qty = sum(BatchEntry.search([
+                ('workorder_id.production_id', '=', mo_id),
+                ('workorder_id.workcenter_id.is_initial_qc', '=', True),
+                ('contractor_id', '=', contractor_id),
+            ]).mapped('qty'))
+            repair_dispatches = Dispatch.search([
+                ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
+                ('original_contractor_id', '=', contractor_id),
+            ])
+            entry.qc_repair_qty = sum(repair_dispatches.mapped('qty_balls'))
+            entry.qc_repair_contractor_ids = repair_dispatches.mapped('contractor_id')
+            entry.qc_repair_defect_types = ', '.join(sorted({
+                defect_labels.get(d, d) for d in repair_dispatches.mapped('defect_type') if d
+            }))
+            scrap_records = Scrap.search([
+                ('mo_id', '=', mo_id), ('contractor_id', '=', contractor_id),
+            ])
+            entry.qc_scrap_qty = sum(scrap_records.mapped('qty'))
+            entry.qc_scrap_defect_types = ', '.join(sorted({
+                defect_labels.get(d, d) for d in scrap_records.mapped('defect_type') if d
+            }))
 
     @api.depends('workorder_id.production_id')
     def _compute_reema_po_id(self):
@@ -146,6 +234,17 @@ class ReemaWoBatchEntry(models.Model):
             ])
             for log in open_logs:
                 log.date_end = log.date_start
+            # date_start/date_finished are computed from leave_id (the Gantt/capacity
+            # planning record) — if this WO was ever planned, that leave still exists.
+            # Raw-SQL-ing date_finished to NULL below without clearing leave_id first
+            # leaves date_finished and leave_id.date_to out of sync, which later trips
+            # Odoo's own "cannot unplan a single Work Order" guard the next time
+            # anything recomputes these fields. Go through the ORM here so the leave
+            # is actually cleared (and its now-orphaned record removed).
+            if wo.leave_id:
+                leave = wo.leave_id
+                wo.leave_id = False
+                leave.unlink()
             if not wo.batch_entry_ids:
                 self.env.cr.execute(
                     "UPDATE mrp_workorder SET state='pending', qty_produced=0, date_finished=NULL WHERE id=%s",
@@ -384,6 +483,7 @@ class ReemaWoBatchEntry(models.Model):
                 'location_id': source_loc.id,
                 'location_dest_id': prod_loc.id,
                 'origin': f'{mo.name} / {wo.name} / {self.name}',
+                'reema_batch_entry_id': self.id,
                 'company_id': wo.company_id.id,
             })
             move._action_confirm()
@@ -426,6 +526,7 @@ class ReemaBatchEntryWizard(models.TransientModel):
 
     workorder_id = fields.Many2one('mrp.workorder', string='Work Order',
                                    required=True, readonly=True)
+    workorder_name = fields.Char(related='workorder_id.name', string='Work Order', readonly=True)
     workcenter_name = fields.Char(related='workorder_id.workcenter_id.name',
                                   string='Hall', readonly=True)
     workcenter_id = fields.Many2one(related='workorder_id.workcenter_id', readonly=True)
@@ -482,6 +583,12 @@ class ReemaBatchEntryWizard(models.TransientModel):
         string='Piece Rate',
         readonly=True,
     )
+    piece_rate_value = fields.Float(
+        related='workorder_id.operation_id.piece_rate_id.rate',
+        string='Rate (PKR)',
+        readonly=True,
+        digits=(10, 2),
+    )
 
     def action_confirm(self):
         self.ensure_one()
@@ -523,7 +630,349 @@ class ReemaBatchEntryWizard(models.TransientModel):
                 raise UserError('Please select a contractor before saving.')
             vals['contractor_id'] = self.contractor_id.id
             vals['piece_rate_id'] = wo.operation_id.piece_rate_id.id or False
-        self.env['reema.wo.batch.entry'].create(vals)
+        if wo.workcenter_id.is_ilo:
+            # ILO Issuance quantity is provisional — the real payable amount is
+            # only known once balls are logged back in at the ILO receiving step.
+            vals['payment_excluded'] = True
+            vals['exclusion_reason'] = 'ILO — real payment recorded at Stitching Center Receive'
+        # Block logging if BOM components for this operation haven't been physically issued.
+        if wo.operation_id:
+            required_moves = wo.production_id.move_raw_ids.filtered(
+                lambda m: m.operation_id == wo.operation_id and m.state not in ('done', 'cancel')
+            )
+            unissued = [
+                move.product_id.display_name
+                for move in required_moves
+                if not wo.production_id.issuance_ids.filtered(
+                    lambda i: i.raw_move_id == move
+                    and i.state in ('partial', 'fully_issued', 'over_issued')
+                )
+            ]
+            if unissued:
+                raise UserError(
+                    'Cannot log this work order — the following materials have not been issued to this hall:\n'
+                    + '\n'.join(f'• {n}' for n in unissued)
+                )
+        entry = self.env['reema.wo.batch.entry'].create(vals)
+        if wo.workcenter_id.is_ilo and self.contractor_id:
+            self.env['reema.ilo.dispatch'].create({
+                'mo_id': wo.production_id.id,
+                'contractor_id': self.contractor_id.id,
+                'ball_size': wo.production_id.ball_size,
+                'construction_type': wo.production_id.construction_type,
+                'qty_balls': int(round(entry.qty_balls)),
+                'rate': self.piece_rate_value,
+                'dispatched_by': self.env.user.id,
+                'batch_entry_id': entry.id,
+            })
+
+
+class ReemaIloReceiveWizard(models.TransientModel):
+    _name = 'reema.ilo.receive.wizard'
+    _description = 'Log ILO Balls Received'
+
+    workorder_id = fields.Many2one('mrp.workorder', string='Work Order',
+                                   required=True, readonly=True)
+    workorder_name = fields.Char(related='workorder_id.name', string='Work Order', readonly=True)
+    mo_id = fields.Many2one(related='workorder_id.production_id', string='Manufacturing Order', readonly=True)
+    workcenter_name = fields.Char(related='workorder_id.workcenter_id.name', string='Hall', readonly=True)
+    available_contractor_ids = fields.Many2many(
+        'res.partner', compute='_compute_available_contractor_ids',
+        string='ILO Contractors',
+        help='Contractors who have dispatches for this MO — Ball Receive is an '
+             'employee task, contractor identity always traces back to who was '
+             'dispatched to at Stitching Center Issuance.',
+    )
+    contractor_id = fields.Many2one('res.partner', string='Contractor', required=True,
+                                    domain="[('id', 'in', available_contractor_ids)]")
+    stitching_balance_display = fields.Float(string='Stitching Balance Outstanding', compute='_compute_balances')
+    repair_balance_display = fields.Float(string='Repair Balance Outstanding', compute='_compute_balances')
+    qty = fields.Integer(string='Quantity Received')
+    notes = fields.Char(string='Notes')
+    stitching_open = fields.Boolean(compute='_compute_flow_flags')
+    repair_open = fields.Boolean(compute='_compute_flow_flags')
+    receipt_purpose = fields.Selection(
+        [('stitching', 'Own Stitching Return'), ('repair', 'Repair Return')],
+        string='Receipt Purpose',
+        help='Only needs to be picked when this contractor has both an open stitching '
+             'dispatch and an open repair dispatch on this MO at the same time.',
+    )
+    original_contractor_id = fields.Many2one(
+        'res.partner', string='Original Contractor',
+        domain="[('id', 'in', available_original_contractor_ids)]",
+        help='Whose production these balls credit. Auto-filled to the contractor '
+             'themselves for a stitching return; for a repair return, auto-filled '
+             'from the repair dispatch unless more than one original contractor is '
+             'mixed into this contractor\'s open repair work on this MO.',
+    )
+    available_original_contractor_ids = fields.Many2many(
+        'res.partner', compute='_compute_available_original_contractor_ids',
+        string='Available Original Contractors',
+        help='Contractors whose balls were dispatched to this contractor for repair '
+             'on this MO — restricts Original Contractor to only real repair links '
+             'instead of every partner.',
+    )
+
+    @api.depends('workorder_id')
+    def _compute_available_contractor_ids(self):
+        for wiz in self:
+            wiz.available_contractor_ids = self.env['reema.ilo.dispatch']._ilo_contractors_for_mo(
+                wiz.workorder_id.production_id.id
+            )
+
+    @api.depends('contractor_id', 'workorder_id')
+    def _compute_available_original_contractor_ids(self):
+        for wiz in self:
+            if wiz.contractor_id and wiz.workorder_id.production_id:
+                wiz.available_original_contractor_ids = self.env['reema.ilo.dispatch'].search([
+                    ('mo_id', '=', wiz.workorder_id.production_id.id),
+                    ('contractor_id', '=', wiz.contractor_id.id),
+                    ('dispatch_type', '=', 'repair'),
+                ]).mapped('original_contractor_id')
+            else:
+                wiz.available_original_contractor_ids = False
+
+    @api.depends('contractor_id', 'workorder_id')
+    def _compute_balances(self):
+        Dispatch = self.env['reema.ilo.dispatch']
+        for wiz in self:
+            if wiz.contractor_id and wiz.workorder_id.production_id:
+                mo_id = wiz.workorder_id.production_id.id
+                wiz.stitching_balance_display = Dispatch._ilo_ledger_balance_by_type(
+                    mo_id, wiz.contractor_id.id, 'stitching'
+                )
+                wiz.repair_balance_display = Dispatch._ilo_ledger_balance_by_type(
+                    mo_id, wiz.contractor_id.id, 'repair'
+                )
+            else:
+                wiz.stitching_balance_display = 0.0
+                wiz.repair_balance_display = 0.0
+
+    @api.depends('contractor_id', 'workorder_id')
+    def _compute_flow_flags(self):
+        for wiz in self:
+            dispatches = self.env['reema.ilo.dispatch']
+            if wiz.contractor_id and wiz.workorder_id.production_id:
+                dispatches = self.env['reema.ilo.dispatch'].search([
+                    ('mo_id', '=', wiz.workorder_id.production_id.id),
+                    ('contractor_id', '=', wiz.contractor_id.id),
+                ])
+            wiz.stitching_open = bool(dispatches.filtered(lambda d: d.dispatch_type == 'stitching'))
+            wiz.repair_open = bool(dispatches.filtered(lambda d: d.dispatch_type == 'repair'))
+
+    @api.onchange('contractor_id')
+    def _onchange_contractor_default_purpose(self):
+        if self.stitching_open and not self.repair_open:
+            self.receipt_purpose = 'stitching'
+        elif self.repair_open and not self.stitching_open:
+            self.receipt_purpose = 'repair'
+        else:
+            self.receipt_purpose = False
+
+    @api.onchange('receipt_purpose', 'contractor_id')
+    def _onchange_purpose_default_original(self):
+        if not self.contractor_id:
+            self.original_contractor_id = False
+        elif self.receipt_purpose == 'stitching':
+            self.original_contractor_id = self.contractor_id
+        elif self.receipt_purpose == 'repair':
+            candidates = self.available_original_contractor_ids
+            self.original_contractor_id = candidates[0] if len(candidates) == 1 else False
+        else:
+            self.original_contractor_id = False
+
+    def action_confirm(self):
+        self.ensure_one()
+        if not self.contractor_id:
+            raise UserError('Please select a contractor.')
+        if self.qty <= 0:
+            raise UserError('Enter a quantity received before confirming.')
+        if not self.receipt_purpose:
+            raise UserError(
+                f'{self.contractor_id.name} has both stitching and repair dispatches '
+                f'open on this MO — select whether this receipt is their own stitching '
+                f'return or a repair return.'
+            )
+        balance = self.env['reema.ilo.dispatch']._ilo_ledger_balance_by_type(
+            self.workorder_id.production_id.id, self.contractor_id.id, self.receipt_purpose
+        )
+        if self.qty > balance:
+            purpose_label = 'stitching' if self.receipt_purpose == 'stitching' else 'repair'
+            raise UserError(
+                f'Only {balance:.0f} {purpose_label} balls are currently outstanding for '
+                f'{self.contractor_id.name} on this MO — cannot receive {self.qty}.'
+            )
+        if not self.original_contractor_id:
+            raise UserError('Select the original contractor these balls belong to.')
+        notes = f'ILO Receive: {self.qty} balls received'
+        if self.notes:
+            notes += f' — {self.notes}'
+        self.env['reema.wo.batch.entry'].create({
+            'workorder_id': self.workorder_id.id,
+            'contractor_id': self.contractor_id.id,
+            'qty': self.qty,
+            'payment_excluded': True,
+            'exclusion_reason': 'ILO — payment computed at Initial QC finalization',
+            'notes': notes,
+            'original_contractor_id': self.original_contractor_id.id,
+            'ilo_dispatch_type': self.receipt_purpose,
+        })
+
+
+class ReemaIloQcWizard(models.TransientModel):
+    _name = 'reema.ilo.qc.wizard'
+    _description = 'Initial QC — Pass / Repair / Scrap'
+
+    workorder_id = fields.Many2one('mrp.workorder', string='Work Order',
+                                   required=True, readonly=True)
+    workorder_name = fields.Char(related='workorder_id.name', string='Work Order', readonly=True)
+    mo_id = fields.Many2one(related='workorder_id.production_id', string='Manufacturing Order', readonly=True)
+    workcenter_name = fields.Char(related='workorder_id.workcenter_id.name', string='Hall', readonly=True)
+    construction_type = fields.Selection(related='mo_id.construction_type', readonly=True)
+    available_contractor_ids = fields.Many2many(
+        'res.partner', compute='_compute_available_contractor_ids',
+        string='Original Contractors',
+    )
+    contractor_id = fields.Many2one('res.partner', string='Original Contractor', required=True,
+                                    domain="[('id', 'in', available_contractor_ids)]")
+    pending_qty = fields.Integer(string='Pending Inspection', compute='_compute_pending_qty')
+    qty_pass = fields.Integer(string='Pass Qty')
+    qty_fail = fields.Integer(string='Fail Qty (Repair)')
+    qty_scrap = fields.Integer(string='Scrap / Write-off Qty')
+    repair_defect_type = fields.Selection(
+        [('bad_stitching', 'Bad Stitching'), ('missing_panel', 'Missing Panel'),
+         ('missing_bladder', 'Missing Bladder'), ('other', 'Other')],
+        string='Repair Defect Type',
+        help='Why the Fail quantity needs repair — recorded on the repair dispatch.',
+    )
+    scrap_defect_type = fields.Selection(
+        [('bad_stitching', 'Bad Stitching'), ('missing_panel', 'Missing Panel'),
+         ('missing_bladder', 'Missing Bladder'), ('other', 'Other')],
+        string='Scrap / Write-off Reason',
+        help='Why the Scrap quantity is being written off — recorded on the scrap record.',
+    )
+    repair_contractor_id = fields.Many2one(
+        'res.partner', string='Repair Contractor',
+        domain="[('is_contractor', '=', True)]",
+    )
+    notes = fields.Char(string='Notes')
+
+    @api.depends('workorder_id')
+    def _compute_available_contractor_ids(self):
+        for wiz in self:
+            wiz.available_contractor_ids = self.env['reema.ilo.dispatch']._ilo_original_contractors_for_mo(
+                wiz.workorder_id.production_id.id
+            )
+
+    @api.depends('contractor_id', 'workorder_id')
+    def _compute_pending_qty(self):
+        for wiz in self:
+            if wiz.contractor_id and wiz.workorder_id.production_id:
+                wiz.pending_qty = self.env['reema.ilo.dispatch']._ilo_qc_pending_balance(
+                    wiz.workorder_id.production_id.id, wiz.contractor_id.id
+                )
+            else:
+                wiz.pending_qty = 0
+
+    def action_confirm(self):
+        self.ensure_one()
+        if not self.contractor_id:
+            raise UserError('Please select the original contractor.')
+        if self.qty_pass < 0 or self.qty_fail < 0 or self.qty_scrap < 0:
+            raise UserError('Quantities cannot be negative.')
+        total = self.qty_pass + self.qty_fail + self.qty_scrap
+        if total <= 0:
+            raise UserError('Enter at least one quantity before confirming.')
+        pending = self.env['reema.ilo.dispatch']._ilo_qc_pending_balance(
+            self.workorder_id.production_id.id, self.contractor_id.id
+        )
+        if total > pending:
+            raise UserError(
+                f'Only {pending} balls are currently pending inspection for '
+                f'{self.contractor_id.name} on this MO — cannot process {total}.'
+            )
+        repair_rate = None
+        if self.qty_fail > 0:
+            if self.construction_type != 'hs':
+                raise UserError(
+                    'The ILO repair-dispatch mechanism only applies to HS (hand-stitched) '
+                    'construction. Balls on this MO cannot be sent to repair from here.'
+                )
+            if not self.repair_contractor_id:
+                raise UserError('Select a repair contractor before logging a Fail quantity.')
+            if not self.repair_defect_type:
+                raise UserError('Select a repair defect type before logging a Fail quantity.')
+            repair_rate = self.env['reema.piece.rate'].search([
+                ('workcenter_id.is_ilo', '=', True), ('work_type', '=ilike', 'Repair'),
+            ], limit=1)
+            if not repair_rate:
+                raise UserError(
+                    'No "Repair" piece rate is configured on the ILO Center work center. '
+                    'Create one under Manufacturing → Configuration → Piece Rates before '
+                    'logging a Fail quantity.'
+                )
+        if self.qty_scrap > 0 and not self.scrap_defect_type:
+            raise UserError('Select a scrap/write-off reason before logging a Scrap quantity.')
+
+        wo = self.workorder_id
+        mo = wo.production_id
+
+        # Always log one batch entry for this decision — even a 0-pass decision
+        # (all repair/scrap) needs a clickable record for this contractor+MO, since
+        # the QC summary (received/passed/repair/scrap) shown on it is computed
+        # live from the dispatch/scrap/receive tables, not snapshotted here. Payable
+        # rate comes from the original Stitching Center Issuance line — Initial QC
+        # is where ILO production is actually billed, but the rate was fixed when
+        # the balls were dispatched to the contractor.
+        stitch_dispatch = self.env['reema.ilo.dispatch'].search([
+            ('mo_id', '=', mo.id),
+            ('dispatch_type', '=', 'stitching'),
+            ('contractor_id', '=', self.contractor_id.id),
+        ], limit=1)
+        entry_vals = {
+            'workorder_id': wo.id,
+            'contractor_id': self.contractor_id.id,
+            'qty': self.qty_pass,
+            'piece_rate_id': stitch_dispatch.batch_entry_id.piece_rate_id.id,
+            'notes': self.notes,
+        }
+        if not self.qty_pass:
+            entry_vals['payment_excluded'] = True
+            entry_vals['exclusion_reason'] = 'No balls passed at this Initial QC decision — nothing payable'
+        self.env['reema.wo.batch.entry'].create(entry_vals)
+
+        if self.qty_fail > 0:
+            self.env['reema.ilo.dispatch'].create({
+                'mo_id': mo.id,
+                'contractor_id': self.repair_contractor_id.id,
+                'dispatch_type': 'repair',
+                'original_contractor_id': self.contractor_id.id,
+                'qty_balls': self.qty_fail,
+                'rate': repair_rate.rate,
+                'ball_size': mo.ball_size,
+                'construction_type': mo.construction_type,
+                'dispatched_by': self.env.user.id,
+                'defect_type': self.repair_defect_type,
+                'notes': self.notes,
+            })
+
+        if self.qty_scrap > 0:
+            self.env['reema.ilo.qc.scrap'].create({
+                'mo_id': mo.id,
+                'workorder_id': wo.id,
+                'contractor_id': self.contractor_id.id,
+                'qty': self.qty_scrap,
+                'defect_type': self.scrap_defect_type,
+                'recorded_by': self.env.user.id,
+                'notes': self.notes,
+            })
+
+        mo._message_log(
+            body=f'Initial QC — {self.contractor_id.name}: {self.qty_pass} passed, '
+                 f'{self.qty_fail} sent to repair'
+                 + (f' ({self.repair_contractor_id.name})' if self.qty_fail else '')
+                 + f', {self.qty_scrap} scrapped.'
+        )
 
 
 class AccountMoveLineExt(models.Model):

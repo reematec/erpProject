@@ -12,6 +12,14 @@
             <list position="attributes">
                 <attribute name="js_class">product_name_nav_list</attribute>
             </list>
+            <!-- Show "-" instead of 0.00 for the On Hand / Forecasted qty columns
+                 (zero_dash_float widget, defined in reema_mrp). -->
+            <field name="qty_available" position="attributes">
+                <attribute name="widget">zero_dash_float</attribute>
+            </field>
+            <field name="virtual_available" position="attributes">
+                <attribute name="widget">zero_dash_float</attribute>
+            </field>
         </field>
     </record>
 

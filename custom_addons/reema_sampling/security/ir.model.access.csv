@@ -9,6 +9,10 @@ access_reema_sampling_material_line_manager,reema.sampling.material.line manager
 access_reema_sampling_size_line_manager,reema.sampling.size.line manager,model_reema_sampling_size_line,base.group_erp_manager,1,1,1,1
 access_reema_sampling_knife_line_manager,reema.sampling.knife.line manager,model_reema_sampling_knife_line,base.group_erp_manager,1,1,1,1
 access_reema_sampling_ship_wizard_manager,reema.sampling.ship.wizard manager,model_reema_sampling_ship_wizard,base.group_erp_manager,1,1,1,1
+access_reema_sampling_blueprint_supervisor,reema.sampling.blueprint supervisor,model_reema_sampling_blueprint,reema_mrp.group_reema_supervisor,1,0,0,0
+access_reema_sampling_material_line_supervisor,reema.sampling.material.line supervisor,model_reema_sampling_material_line,reema_mrp.group_reema_supervisor,1,0,0,0
+access_reema_sampling_size_line_supervisor,reema.sampling.size.line supervisor,model_reema_sampling_size_line,reema_mrp.group_reema_supervisor,1,0,0,0
+access_reema_sampling_knife_line_supervisor,reema.sampling.knife.line supervisor,model_reema_sampling_knife_line,reema_mrp.group_reema_supervisor,1,0,0,0
 access_reema_product_type_user,reema.product.type user,model_reema_product_type,reema_sampling.group_reema_sampling,1,1,1,1
 access_reema_product_type_manager,reema.product.type manager,model_reema_product_type,base.group_erp_manager,1,1,1,1
 access_reema_sampling_status_info_wizard_user,reema.sampling.status.info.wizard user,model_reema_sampling_status_info_wizard,reema_sampling.group_reema_sampling,1,1,1,1

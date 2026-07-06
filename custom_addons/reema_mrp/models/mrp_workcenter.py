@@ -31,6 +31,25 @@ class MrpWorkcenter(models.Model):
              'every batch dispatched to ILO has been confirmed as received back. '
              'This prevents closing a production step while balls are still outside '
              'the factory.')
+    is_ball_receive_point = fields.Boolean(
+        string='Ball Receive Point', default=False,
+        help='Enable for the hall where balls dispatched to an ILO contractor are '
+             'logged back in — works for any construction type (HS, HYB, THB, etc). '
+             'Logging a batch here opens a dedicated "Log ILO Balls Received" modal '
+             '(contractor, full/no-bladder quantities) instead of the normal batch-log '
+             'modal, and the work order cannot be marked Done until every assigned '
+             'contractor\'s dispatched-vs-received balance is zero.\n\n'
+             'This must be its own dedicated work center — do not enable it on a hall '
+             'shared with other steps (e.g. a QC hall), since every work order hosted '
+             'there would then open the ILO receive modal.')
+    is_initial_qc = fields.Boolean(
+        string='Initial QC Point', default=False,
+        help='Enable for the dedicated hall where ILO (hand-stitched) production first '
+             'reaches inspection. Logging a batch here opens the Initial QC modal '
+             '(Pass / Fail-to-repair / Scrap) instead of the normal batch-log modal.\n\n'
+             'Do not enable this on Final QC or Sorting — those keep the generic '
+             '"Is QC Point" behaviour only; this flag is specifically for the ILO '
+             'repair-loop mechanism, which only exists at one hall.')
     is_printing = fields.Boolean(
         string='Printing Work Center', default=False,
         help='Enable for screen-printing (silk-screen) halls.\n\n'

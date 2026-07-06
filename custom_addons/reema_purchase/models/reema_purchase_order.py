@@ -66,6 +66,9 @@ class ReemaPurchaseOrder(models.Model):
     product_summary = fields.Char(
         string='Items', compute='_compute_product_summary',
     )
+    total_qty = fields.Float(
+        string='Order Qty', compute='_compute_total_qty', store=True,
+    )
 
     # ── Compute ────────────────────────────────────────────────────────────
 
@@ -89,6 +92,11 @@ class ReemaPurchaseOrder(models.Model):
         for rec in self:
             names = rec.line_ids.mapped('product_id.name')
             rec.product_summary = ', '.join(names) if names else ''
+
+    @api.depends('line_ids.product_qty')
+    def _compute_total_qty(self):
+        for rec in self:
+            rec.total_qty = sum(rec.line_ids.mapped('product_qty'))
 
     def _compute_gate_pass_count(self):
         for rec in self:
@@ -211,7 +219,7 @@ class ReemaPurchaseOrderLine(models.Model):
     sequence = fields.Integer(default=10)
     product_id = fields.Many2one(
         'product.product', string='Product / Material', required=True,
-        domain=[('product_tmpl_id.product_group', '=', 'raw_material')],
+        domain=[('product_tmpl_id.product_group', 'in', ['raw_material', 'packaging'])],
     )
     name = fields.Char(string='Description')
     product_qty = fields.Float(string='Ordered Qty', default=1.0, required=True)

@@ -25,7 +25,6 @@ class MrpWorkorder(models.Model):
     batch_released = fields.Boolean(string='Released to Next Hall', default=False)
     hall_qty = fields.Float(string='Target', compute='_compute_hall_qty', store=True)
     qty_balls_completed = fields.Float(string='Balls Done', compute='_compute_qty_balls_completed', store=True)
-    wip_labor_cost = fields.Float(string='Labor Cost (PKR)', compute='_compute_wip_labor_cost', store=True, digits=(16, 2))
     hall_uom_name = fields.Char(related='operation_id.piece_rate_id.uom_id.name', string='UOM', readonly=True)
     hall_unit_label = fields.Selection(related='workcenter_id.hall_unit', string='Logging Unit', readonly=True)
     state = fields.Selection(selection=[
@@ -37,10 +36,17 @@ class MrpWorkorder(models.Model):
         ('cancel', 'Cancelled'),
     ])
 
-    @api.depends('batch_entry_ids.qty')
+    @api.depends('batch_entry_ids.qty', 'batch_entry_ids.ilo_dispatch_type')
     def _compute_qty_batch_completed(self):
+        # Repair-return entries (ilo_dispatch_type='repair') are the same physical
+        # balls as an earlier stitching receive coming back through this same Ball
+        # Receive Point a second time — counting them again would let this work
+        # order's target/completion be inflated by rework loops instead of reflecting
+        # distinct balls actually received. Repair-outstanding is already gated
+        # separately on the Initial QC work order (_ilo_repair_outstanding).
         for wo in self:
-            wo.qty_batch_completed = sum(wo.batch_entry_ids.mapped('qty'))
+            entries = wo.batch_entry_ids.filtered(lambda e: e.ilo_dispatch_type != 'repair')
+            wo.qty_batch_completed = sum(entries.mapped('qty'))
 
     @api.depends('qty_production', 'operation_id.balls_per_unit',
                  'workcenter_id.hall_unit',
@@ -86,15 +92,13 @@ class MrpWorkorder(models.Model):
             return qty_balls / bpu if bpu else qty_balls
         return qty_balls
 
-    @api.depends('batch_entry_ids.qty_balls')
+    @api.depends('batch_entry_ids.qty_balls', 'batch_entry_ids.ilo_dispatch_type')
     def _compute_qty_balls_completed(self):
+        # Same reasoning as _compute_qty_batch_completed — exclude repair-return
+        # entries so rework loops don't double-count against this WO's target.
         for wo in self:
-            wo.qty_balls_completed = sum(wo.batch_entry_ids.mapped('qty_balls'))
-
-    @api.depends('batch_entry_ids.amount_earned')
-    def _compute_wip_labor_cost(self):
-        for wo in self:
-            wo.wip_labor_cost = sum(wo.batch_entry_ids.mapped('amount_earned'))
+            entries = wo.batch_entry_ids.filtered(lambda e: e.ilo_dispatch_type != 'repair')
+            wo.qty_balls_completed = sum(entries.mapped('qty_balls'))
 
     # Extend state computation: a work order blocked by a predecessor is also unblocked
     # when the predecessor sets batch_released=True (partial completion released to next hall).
@@ -155,6 +159,27 @@ class MrpWorkorder(models.Model):
         return res
 
     def button_start(self, raise_on_invalid_state=False):
+        for wo in self:
+            if not wo.operation_id:
+                continue
+            required_moves = wo.production_id.move_raw_ids.filtered(
+                lambda m: m.operation_id == wo.operation_id and m.state not in ('done', 'cancel')
+            )
+            if not required_moves:
+                continue
+            unissued = [
+                move.product_id.display_name
+                for move in required_moves
+                if not wo.production_id.issuance_ids.filtered(
+                    lambda i: i.raw_move_id == move
+                    and i.state in ('partial', 'fully_issued', 'over_issued')
+                )
+            ]
+            if unissued:
+                raise UserError(
+                    f'Cannot start "{wo.name}" — the following materials have not been issued to this hall:\n'
+                    + '\n'.join(f'• {n}' for n in unissued)
+                )
         res = super().button_start(raise_on_invalid_state=raise_on_invalid_state)
         for wo in self.filtered(lambda w: w.state == 'progress'):
             wo.production_id._message_log(
@@ -182,6 +207,24 @@ class MrpWorkorder(models.Model):
                 'Starting requires: material issued by the store, '
                 'and output received from the previous hall (if applicable).'
             )
+        if self.workcenter_id.is_ball_receive_point:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Log ILO Balls Received',
+                'res_model': 'reema.ilo.receive.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_workorder_id': self.id},
+            }
+        if self.workcenter_id.is_initial_qc:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Initial QC',
+                'res_model': 'reema.ilo.qc.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_workorder_id': self.id},
+            }
         return {
             'type': 'ir.actions.act_window',
             'name': 'Log Batch Progress',
@@ -207,19 +250,48 @@ class MrpWorkorder(models.Model):
                     'Click the Start button first. Starting requires a contractor assigned, '
                     'material issued by the store, and output received from the previous hall (if applicable).'
                 )
-            # ILO work centers: block completion until all dispatched balls have been received
-            if wo.workcenter_id.is_ilo:
-                dispatches = self.env['reema.ilo.dispatch'].search([
-                    ('mo_id', '=', wo.production_id.id),
-                    ('state', '=', 'dispatched'),
-                    ('qty_pending', '>', 0),
-                ])
-                if dispatches:
-                    pending_total = sum(dispatches.mapped('qty_pending'))
+            # Ball Receive Point: block completion until every ILO contractor who
+            # dispatched to this MO has a fully reconciled ledger balance (dispatched
+            # minus logged received). Contractor identity is read off the dispatch
+            # records themselves, not this work order's own contractor_ids — Ball
+            # Receive is an employee-type hall with no contractor assignment of its
+            # own. (Issuance itself is no longer gated this way — new batches can
+            # keep going out regardless of whether earlier ones are back yet.)
+            if wo.workcenter_id.is_ball_receive_point:
+                contractors = self.env['reema.ilo.dispatch']._ilo_contractors_for_mo(wo.production_id.id)
+                outstanding = [
+                    (contractor, self.env['reema.ilo.dispatch']._ilo_ledger_balance(
+                        wo.production_id.id, contractor.id
+                    ))
+                    for contractor in contractors
+                ]
+                outstanding = [(c, bal) for c, bal in outstanding if bal > 0]
+                if outstanding:
+                    detail = ', '.join(f'{c.name}: {bal:.0f} balls' for c, bal in outstanding)
                     raise UserError(
                         f'Work order "{wo.name}" cannot be completed yet.\n\n'
-                        f'{pending_total} balls are still pending at ILO centers. '
-                        f'Record receipts for all dispatches before finishing this step.'
+                        f'Balls still outstanding — {detail}. '
+                        f'Log all ILO receives before finishing this step.'
+                    )
+            # Initial QC: block completion while any original contractor still has
+            # balls out at repair (the generic qty_batch_completed>=target check
+            # below already covers "did enough balls actually pass" — this covers
+            # "is nothing still missing out at repair").
+            if wo.workcenter_id.is_initial_qc:
+                contractors = self.env['reema.ilo.dispatch']._ilo_original_contractors_for_mo(wo.production_id.id)
+                outstanding = [
+                    (contractor, self.env['reema.ilo.dispatch']._ilo_repair_outstanding(
+                        wo.production_id.id, contractor.id
+                    ))
+                    for contractor in contractors
+                ]
+                outstanding = [(c, bal) for c, bal in outstanding if bal > 0]
+                if outstanding:
+                    detail = ', '.join(f'{c.name}: {bal} balls' for c, bal in outstanding)
+                    raise UserError(
+                        f'Work order "{wo.name}" cannot be completed yet.\n\n'
+                        f'Balls still out for repair — {detail}. '
+                        f'Log all repair returns before finishing this step.'
                     )
             if not wo.batch_entry_ids:
                 raise UserError(

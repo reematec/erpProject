@@ -78,7 +78,15 @@
         <field name="view_mode">list</field>
         <field name="view_id" ref="view_contractor_wo_status_list"/>
         <field name="search_view_id" ref="view_contractor_wo_status_search"/>
-        <field name="context">{'search_default_filter_in_progress': 0}</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Search for a contractor to view their work status.
+            </p>
+            <p>
+                Use the search bar above to select a contractor by name.
+            </p>
+        </field>
     </record>
 
     <menuitem

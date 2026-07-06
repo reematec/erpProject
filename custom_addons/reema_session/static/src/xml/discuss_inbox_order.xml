@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <!-- Render inbox (mail.box) messages newest-first so newer notifications appear at the top -->
+    <t t-inherit="mail.Discuss" t-inherit-mode="extension">
+        <xpath expr="//*[@name='thread']" position="replace">
+            <t name="thread">
+                <Thread
+                    thread="thread"
+                    t-key="thread.localId"
+                    jumpPresent="state.jumpThreadPresent"
+                    messageEdition="messageEdition"
+                    messageToReplyTo="messageToReplyTo"
+                    order="thread.model === 'mail.box' ? 'desc' : 'asc'"
+                />
+            </t>
+        </xpath>
+    </t>
+</templates>

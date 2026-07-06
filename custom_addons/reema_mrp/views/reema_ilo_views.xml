@@ -9,65 +9,37 @@
         <field name="name">reema.ilo.dispatch.form</field>
         <field name="model">reema.ilo.dispatch</field>
         <field name="arch" type="xml">
-            <form string="ILO Dispatch">
-                <header>
-                    <button name="action_dispatch" string="Dispatch" type="object"
-                            class="btn-primary"
-                            invisible="state != 'draft'"
-                            confirm="Confirm dispatch? This will move panels to the ILO location."/>
-                    <button name="action_close" string="Close" type="object"
-                            invisible="state != 'dispatched'"
-                            confirm="Close this dispatch? All balls must have been received."/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,dispatched,closed"/>
-                </header>
+            <form string="ILO Outward Pass">
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
                     <group>
                         <group string="Dispatch Info">
-                            <field name="mo_id" options="{'no_create': True, 'no_edit': True}"
-                                   readonly="state != 'draft'"/>
-                            <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"
-                                   readonly="state != 'draft'"/>
-                            <field name="date" readonly="state != 'draft'"/>
-                            <field name="ball_size" readonly="state != 'draft'"/>
-                            <field name="construction_type" readonly="state != 'draft'"/>
+                            <field name="mo_id" options="{'no_create': True, 'no_edit': True}" readonly="1"/>
+                            <field name="dispatch_type" readonly="1"/>
+                            <field name="contractor_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="1"/>
+                            <field name="original_contractor_id" options="{'no_open': True}"
+                                   readonly="1" invisible="dispatch_type != 'repair'"/>
+                            <field name="defect_type" readonly="1" invisible="dispatch_type != 'repair'"/>
+                            <field name="date" readonly="1"/>
+                            <field name="ball_size" readonly="1"/>
+                            <field name="construction_type" readonly="1"/>
                         </group>
                         <group string="Quantities Sent">
-                            <field name="qty_panels" readonly="state != 'draft'"/>
-                            <field name="qty_bladders" readonly="state != 'draft'"/>
-                            <field name="qty_thread" readonly="state != 'draft'"/>
+                            <field name="product_id" options="{'no_open': True}" readonly="1"/>
+                            <field name="qty_balls" readonly="1"/>
+                            <field name="rate" readonly="1"/>
                         </group>
                     </group>
                     <group>
-                        <group string="Verification">
-                            <field name="dispatched_by" options="{'no_create': True, 'no_edit': True}"
-                                   readonly="state != 'draft'"/>
-                            <field name="verified_by" options="{'no_create': True, 'no_edit': True}"
-                                   readonly="state != 'draft'"/>
-                        </group>
-                        <group string="Return Status">
-                            <field name="qty_returned"/>
-                            <field name="qty_pending"/>
+                        <group string="Prepared By">
+                            <field name="dispatched_by" options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="1"/>
                         </group>
                     </group>
-                    <field name="notes" readonly="state != 'draft'" placeholder="Any notes about this dispatch..."/>
-                    <notebook>
-                        <page string="Receipts" name="receipts">
-                            <field name="receipt_ids" readonly="state == 'closed'">
-                                <list string="Receipts">
-                                    <field name="name"/>
-                                    <field name="date"/>
-                                    <field name="qty_full"/>
-                                    <field name="qty_no_bladder"/>
-                                    <field name="qty_damaged"/>
-                                    <field name="amount_due" string="Amount Due (PKR)"/>
-                                    <field name="state"/>
-                                </list>
-                            </field>
-                        </page>
-                    </notebook>
+                    <field name="notes" placeholder="Any notes about this dispatch..."/>
                 </sheet>
                 <chatter/>
             </form>
@@ -78,20 +50,23 @@
         <field name="name">reema.ilo.dispatch.list</field>
         <field name="model">reema.ilo.dispatch</field>
         <field name="arch" type="xml">
-            <list string="ILO Dispatches" decoration-warning="qty_pending > 0 and state == 'dispatched'"
+            <list string="ILO Dispatches" decoration-warning="state in ('dispatched', 'sent')"
                   decoration-success="state == 'closed'">
-                <field name="name"/>
-                <field name="date"/>
-                <field name="mo_id"/>
-                <field name="contractor_id"/>
-                <field name="ball_size"/>
-                <field name="construction_type"/>
-                <field name="qty_panels"/>
-                <field name="qty_returned"/>
-                <field name="qty_pending"/>
-                <field name="state" widget="badge"
-                       decoration-info="state == 'draft'"
+                <field name="name" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="mo_id" optional="show"/>
+                <field name="dispatch_type" optional="show"/>
+                <field name="product_id" options="{'no_open': True}" optional="hide"/>
+                <field name="contractor_id" options="{'no_open': True}" optional="show"/>
+                <field name="original_contractor_id" options="{'no_open': True}" optional="hide"/>
+                <field name="defect_type" optional="hide"/>
+                <field name="ball_size" optional="show"/>
+                <field name="construction_type" optional="show"/>
+                <field name="qty_balls" optional="show"/>
+                <field name="rate" optional="show"/>
+                <field name="state" widget="badge" optional="show"
                        decoration-warning="state == 'dispatched'"
+                       decoration-info="state == 'sent'"
                        decoration-success="state == 'closed'"/>
             </list>
         </field>
@@ -105,13 +80,17 @@
                 <field name="name"/>
                 <field name="mo_id"/>
                 <field name="contractor_id"/>
-                <filter name="pending" string="Pending" domain="[('qty_pending', '>', 0), ('state', '=', 'dispatched')]"/>
                 <filter name="dispatched" string="Dispatched" domain="[('state', '=', 'dispatched')]"/>
+                <filter name="sent" string="Sent" domain="[('state', '=', 'sent')]"/>
                 <filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+                <separator/>
+                <filter name="stitching_type" string="Stitching" domain="[('dispatch_type', '=', 'stitching')]"/>
+                <filter name="repair_type" string="Repair" domain="[('dispatch_type', '=', 'repair')]"/>
                 <group expand="0" string="Group By">
                     <filter name="group_contractor" string="Contractor" context="{'group_by': 'contractor_id'}"/>
                     <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
                     <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_dispatch_type" string="Dispatch Type" context="{'group_by': 'dispatch_type'}"/>
                 </group>
             </search>
         </field>
@@ -124,13 +103,198 @@
         <field name="search_view_id" ref="view_reema_ilo_dispatch_search"/>
     </record>
 
-    <record id="action_reema_ilo_pending" model="ir.actions.act_window">
-        <field name="name">ILO Pending</field>
+    <record id="action_reema_ilo_repair_dispatch" model="ir.actions.act_window">
+        <field name="name">ILO Repair Dispatches</field>
         <field name="res_model">reema.ilo.dispatch</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('qty_pending', '&gt;', 0), ('state', '=', 'dispatched')]</field>
+        <field name="domain">[('dispatch_type', '=', 'repair')]</field>
         <field name="search_view_id" ref="view_reema_ilo_dispatch_search"/>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
+         ILO RECEIVED — the actual reema.wo.batch.entry rows logged at the
+         Ball Receive Point work center (own stitching returns AND repair
+         returns). These are excluded from the main Batch Logs list (they're
+         provisional, not payable there), so this is the only place to see
+         them.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_ilo_receive_entry_list" model="ir.ui.view">
+        <field name="name">reema.wo.batch.entry.ilo.receive.list</field>
+        <field name="model">reema.wo.batch.entry</field>
+        <field name="arch" type="xml">
+            <list string="ILO Received" create="0" edit="0" delete="0" default_order="date desc">
+                <field name="name" string="Reference"/>
+                <field name="date"/>
+                <field name="mo_id"/>
+                <field name="contractor_id" string="Received From"/>
+                <field name="original_contractor_id" string="Original Contractor"/>
+                <field name="ilo_dispatch_type" string="ILO Flow" widget="badge"/>
+                <field name="qty" string="Qty" sum="Total"/>
+                <field name="qty_balls" string="Balls" sum="Total"/>
+                <field name="notes"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_ilo_receive_entry_search" model="ir.ui.view">
+        <field name="name">reema.wo.batch.entry.ilo.receive.search</field>
+        <field name="model">reema.wo.batch.entry</field>
+        <field name="arch" type="xml">
+            <search string="ILO Received">
+                <field name="mo_id"/>
+                <field name="contractor_id"/>
+                <field name="original_contractor_id"/>
+                <filter name="stitching_type" string="Stitching" domain="[('ilo_dispatch_type', '=', 'stitching')]"/>
+                <filter name="repair_type" string="Repair" domain="[('ilo_dispatch_type', '=', 'repair')]"/>
+                <separator/>
+                <filter name="today" string="Today"
+                        domain="[('date', '>=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_contractor" string="Received From" context="{'group_by': 'contractor_id'}"/>
+                    <filter name="group_original_contractor" string="Original Contractor" context="{'group_by': 'original_contractor_id'}"/>
+                    <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
+                    <filter name="group_ilo_flow" string="ILO Flow" context="{'group_by': 'ilo_dispatch_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_ilo_receive_entry" model="ir.actions.act_window">
+        <field name="name">ILO Received</field>
+        <field name="res_model">reema.wo.batch.entry</field>
+        <field name="view_mode">list</field>
+        <field name="domain">[('workorder_id.workcenter_id.is_ball_receive_point', '=', True)]</field>
+        <field name="search_view_id" ref="view_reema_ilo_receive_entry_search"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_ilo_receive_entry_list')}),
+        ]"/>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
+         ILO BALANCE (Dispatched vs Received) — real-time ledger,
+         used for "Pending" instead of the never-updated dispatch.state
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_ilo_balance_list" model="ir.ui.view">
+        <field name="name">reema.ilo.balance.list</field>
+        <field name="model">reema.ilo.balance</field>
+        <field name="arch" type="xml">
+            <list string="ILO Pending" create="0" edit="0" delete="0"
+                  decoration-warning="qty_outstanding &gt; 0">
+                <field name="mo_id"/>
+                <field name="contractor_id"/>
+                <field name="dispatch_type" string="ILO Flow" widget="badge"/>
+                <field name="qty_dispatched" sum="Total"/>
+                <field name="qty_received" sum="Total"/>
+                <field name="qty_outstanding" sum="Total"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_ilo_balance_search" model="ir.ui.view">
+        <field name="name">reema.ilo.balance.search</field>
+        <field name="model">reema.ilo.balance</field>
+        <field name="arch" type="xml">
+            <search string="ILO Pending">
+                <field name="mo_id"/>
+                <field name="contractor_id"/>
+                <filter name="stitching_type" string="Stitching" domain="[('dispatch_type', '=', 'stitching')]"/>
+                <filter name="repair_type" string="Repair" domain="[('dispatch_type', '=', 'repair')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_contractor" string="Contractor" context="{'group_by': 'contractor_id'}"/>
+                    <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
+                    <filter name="group_dispatch_type" string="ILO Flow" context="{'group_by': 'dispatch_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_ilo_pending" model="ir.actions.act_window">
+        <field name="name">ILO Pending</field>
+        <field name="res_model">reema.ilo.balance</field>
+        <field name="view_mode">list</field>
+        <field name="domain">[('qty_outstanding', '&gt;', 0)]</field>
+        <field name="search_view_id" ref="view_reema_ilo_balance_search"/>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
+         GATE STAFF — OUTWARD PASS (READ-ONLY)
+         Dispatch is finalized the moment it's logged, so there's nothing for
+         gate staff to confirm here — this is just the dispatch paper, shown
+         read-only for reference. A real gate-check workflow is follow-up work.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_ilo_dispatch_form_gate" model="ir.ui.view">
+        <field name="name">reema.ilo.dispatch.form.gate</field>
+        <field name="model">reema.ilo.dispatch</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <form string="Outward Pass" create="0" edit="0" delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Pass Details">
+                            <field name="mo_id" readonly="1"/>
+                            <field name="contractor_id" readonly="1"/>
+                            <field name="date" readonly="1"/>
+                            <field name="ball_size" readonly="1"/>
+                            <field name="construction_type" readonly="1"/>
+                        </group>
+                        <group string="Quantities">
+                            <field name="qty_balls" readonly="1"/>
+                        </group>
+                    </group>
+                    <field name="state" widget="statusbar" statusbar_visible="dispatched,sent,closed" readonly="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_ilo_dispatch_list_gate" model="ir.ui.view">
+        <field name="name">reema.ilo.dispatch.list.gate</field>
+        <field name="model">reema.ilo.dispatch</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <list string="Outward Passes" create="0" edit="0" delete="0">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="contractor_id"/>
+                <field name="qty_balls"/>
+                <field name="state" widget="badge"
+                       decoration-warning="state == 'dispatched'"
+                       decoration-info="state == 'sent'"
+                       decoration-success="state == 'closed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_ilo_dispatch_search_gate" model="ir.ui.view">
+        <field name="name">reema.ilo.dispatch.search.gate</field>
+        <field name="model">reema.ilo.dispatch</field>
+        <field name="arch" type="xml">
+            <search string="Outward Passes">
+                <field name="name" string="Reference"/>
+                <field name="contractor_id"/>
+                <filter name="pending" string="Pending at ILO" domain="[('state', 'in', ('dispatched', 'sent'))]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_ilo_dispatch_gate" model="ir.actions.act_window">
+        <field name="name">Outward Passes</field>
+        <field name="res_model">reema.ilo.dispatch</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_ilo_dispatch_search_gate"/>
         <field name="context">{'search_default_pending': 1}</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_ilo_dispatch_list_gate')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_reema_ilo_dispatch_form_gate')}),
+        ]"/>
     </record>
 
     <!-- ═══════════════════════════════════════════════
@@ -326,6 +490,32 @@
     </record>
 
     <!-- ═══════════════════════════════════════════════
+         ILO QC SCRAP
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_ilo_qc_scrap_list" model="ir.ui.view">
+        <field name="name">reema.ilo.qc.scrap.list</field>
+        <field name="model">reema.ilo.qc.scrap</field>
+        <field name="arch" type="xml">
+            <list string="ILO QC Scrap" create="0" edit="0" delete="0">
+                <field name="date"/>
+                <field name="mo_id"/>
+                <field name="contractor_id"/>
+                <field name="qty" string="Balls Scrapped" sum="Total"/>
+                <field name="defect_type"/>
+                <field name="recorded_by"/>
+                <field name="notes"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reema_ilo_qc_scrap" model="ir.actions.act_window">
+        <field name="name">ILO QC Scrap</field>
+        <field name="res_model">reema.ilo.qc.scrap</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
          MENUS
     ═══════════════════════════════════════════════ -->
 
@@ -340,17 +530,23 @@
               action="action_reema_ilo_dispatch"
               sequence="10"/>
 
+    <menuitem id="menu_reema_ilo_repair_dispatch"
+              name="Repair Dispatches"
+              parent="menu_reema_ilo_root"
+              action="action_reema_ilo_repair_dispatch"
+              sequence="15"/>
+
+    <menuitem id="menu_reema_ilo_receive_entry"
+              name="Received"
+              parent="menu_reema_ilo_root"
+              action="action_reema_ilo_receive_entry"
+              sequence="17"/>
+
     <menuitem id="menu_reema_ilo_pending"
               name="Pending"
               parent="menu_reema_ilo_root"
               action="action_reema_ilo_pending"
               sequence="20"/>
-
-    <menuitem id="menu_reema_ilo_receipt"
-              name="Receipts"
-              parent="menu_reema_ilo_root"
-              action="action_reema_ilo_receipt"
-              sequence="30"/>
 
     <menuitem id="menu_reema_ilo_payment"
               name="Payments"
@@ -358,5 +554,10 @@
               action="action_reema_ilo_payment"
               sequence="40"/>
 
+    <menuitem id="menu_reema_ilo_qc_scrap"
+              name="QC Scrap"
+              parent="menu_reema_ilo_root"
+              action="action_reema_ilo_qc_scrap"
+              sequence="50"/>
 
 </odoo>
