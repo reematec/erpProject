@@ -40,6 +40,8 @@ class MrpProduction(models.Model):
     ilo_dispatch_count = fields.Integer(compute='_compute_ilo_dispatch_count', string='ILO Dispatches')
     ilo_repair_qty_balls = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='ILO Repair Balls')
     ilo_scrap_qty = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='ILO Scrapped Balls')
+    production_scrap_qty = fields.Integer(compute='_compute_scrap_qty', string='Production Scrapped Balls')
+    total_scrap_qty = fields.Integer(compute='_compute_scrap_qty', string='Total Scrapped Balls')
 
     has_active_issuance = fields.Boolean(compute='_compute_has_active_issuance')
 
@@ -68,6 +70,12 @@ class MrpProduction(models.Model):
             ]).mapped('qty_balls'))
             rec.ilo_scrap_qty = sum(Scrap.search([('mo_id', '=', rec.id)]).mapped('qty'))
 
+    def _compute_scrap_qty(self):
+        ProdScrap = self.env['reema.production.scrap']
+        for rec in self:
+            rec.production_scrap_qty = sum(ProdScrap.search([('mo_id', '=', rec.id)]).mapped('qty'))
+            rec.total_scrap_qty = rec.ilo_scrap_qty + rec.production_scrap_qty
+
     def action_view_ilo_dispatches(self):
         self.ensure_one()
         return {
@@ -95,6 +103,16 @@ class MrpProduction(models.Model):
             'type': 'ir.actions.act_window',
             'name': 'ILO QC Scrap',
             'res_model': 'reema.ilo.qc.scrap',
+            'view_mode': 'list',
+            'domain': [('mo_id', '=', self.id)],
+        }
+
+    def action_view_scrap_report(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Total Scrap',
+            'res_model': 'reema.scrap.report',
             'view_mode': 'list',
             'domain': [('mo_id', '=', self.id)],
         }
@@ -147,6 +165,10 @@ class MrpProduction(models.Model):
         )._do_unreserve()
         # qty_producing should start at 0 and climb only when packing batches are logged.
         self.write({'qty_producing': 0.0})
+        # Start Date reflects when the MO was actually confirmed and work began —
+        # not the creation-time default or a user-typed guess. Set once here, then
+        # locked read-only in the view so it can't be edited afterward.
+        self.write({'date_start': fields.Datetime.now()})
         return res
 
     def action_open_status_info(self):

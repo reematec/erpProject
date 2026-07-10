@@ -62,6 +62,13 @@ class ReemaIloDispatch(models.Model):
          ('missing_bladder', 'Missing Bladder'), ('other', 'Other')],
         string='Defect Type',
     )
+    repair_source = fields.Selection(
+        [('initial_qc', 'Initial QC'), ('final_qc', 'Final QC')],
+        string='Repair Source',
+        help='Repair dispatches only: which QC stage sent this ball out for repair — '
+             'Initial QC (routes back to Initial QC once returned) or Final QC (Final '
+             'QC handles its own repair loop end-to-end, never routes back to Initial QC).',
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -85,9 +92,14 @@ class ReemaIloDispatch(models.Model):
     def _ilo_ledger_balance(self, mo_id, contractor_id):
         """Outstanding balls for (MO, contractor): total dispatched to ILO minus
         total logged back in at any 'Ball Receive Point' work center. Ledger-style —
-        never tracked per individual dispatch record."""
+        never tracked per individual dispatch record.
+
+        Excludes Final-QC-sourced repairs — those are dispatched and returned
+        entirely within Final QC's own loop (see is_final_qc), never through a
+        Ball Receive Point hall, so they can never appear as 'received' here."""
         dispatched = sum(self.search([
             ('mo_id', '=', mo_id), ('contractor_id', '=', contractor_id),
+            ('repair_source', '!=', 'final_qc'),
         ]).mapped('qty_balls'))
         received = sum(self.env['reema.wo.batch.entry'].search([
             ('workorder_id.production_id', '=', mo_id),
@@ -101,16 +113,44 @@ class ReemaIloDispatch(models.Model):
         """Same ledger as _ilo_ledger_balance but scoped to one dispatch type
         (stitching or repair), so a contractor who is both doing their own
         stitching AND repairing someone else's balls on the same MO gets two
-        independent numbers instead of one pooled total."""
+        independent numbers instead of one pooled total.
+
+        Excludes Final-QC-sourced repairs — see _ilo_ledger_balance."""
         dispatched = sum(self.search([
             ('mo_id', '=', mo_id), ('contractor_id', '=', contractor_id),
             ('dispatch_type', '=', dispatch_type),
+            ('repair_source', '!=', 'final_qc'),
         ]).mapped('qty_balls'))
         received = sum(self.env['reema.wo.batch.entry'].search([
             ('workorder_id.production_id', '=', mo_id),
             ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
             ('contractor_id', '=', contractor_id),
             ('ilo_dispatch_type', '=', dispatch_type),
+        ]).mapped('qty'))
+        return dispatched - received
+
+    @api.model
+    def _ilo_repair_balance_by_original(self, mo_id, contractor_id, original_contractor_id):
+        """Outstanding repair balance for one specific (repair contractor,
+        original contractor) pairing on this MO. A repair contractor can do
+        jobs for more than one original contractor on the same MO — once one
+        pairing is fully settled, its original contractor must stop being a
+        valid target for a NEW receipt, otherwise a receipt can be logged
+        against the wrong (already-closed) pairing while it still passes the
+        pooled per-contractor balance check. Excludes Final-QC-sourced repairs
+        — see _ilo_ledger_balance."""
+        dispatched = sum(self.search([
+            ('mo_id', '=', mo_id), ('contractor_id', '=', contractor_id),
+            ('original_contractor_id', '=', original_contractor_id),
+            ('dispatch_type', '=', 'repair'),
+            ('repair_source', '!=', 'final_qc'),
+        ]).mapped('qty_balls'))
+        received = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
+            ('contractor_id', '=', contractor_id),
+            ('original_contractor_id', '=', original_contractor_id),
+            ('ilo_dispatch_type', '=', 'repair'),
         ]).mapped('qty'))
         return dispatched - received
 
@@ -137,22 +177,33 @@ class ReemaIloDispatch(models.Model):
             ('workorder_id.workcenter_id.is_initial_qc', '=', True),
             ('contractor_id', '=', original_contractor_id),
         ]).mapped('qty'))
+        # Scoped to Initial QC's own leg only — a Final-QC-sourced repair or
+        # scrap happens to a ball that already passed Initial QC long ago, so
+        # it must not reduce this balance (mirrors the repair_source filter
+        # already used in _ilo_repair_outstanding below).
         sent_to_repair = sum(self.search([
             ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
             ('original_contractor_id', '=', original_contractor_id),
+            ('repair_source', '!=', 'final_qc'),
         ]).mapped('qty_balls'))
         scrapped = sum(self.env['reema.ilo.qc.scrap'].search([
             ('mo_id', '=', mo_id), ('contractor_id', '=', original_contractor_id),
+            ('workorder_id.workcenter_id.is_initial_qc', '=', True),
         ]).mapped('qty'))
         return received - qc_processed - sent_to_repair - scrapped
 
     @api.model
     def _ilo_repair_outstanding(self, mo_id, original_contractor_id):
         """Balls of original_contractor_id's production currently out at a
-        repair contractor, not yet back. Zero = fully reconciled."""
+        repair contractor, not yet back. Zero = fully reconciled.
+
+        Excludes Final-QC-sourced repairs — see _ilo_ledger_balance. Those are
+        tracked separately by _final_qc_repair_outstanding, scoped to Final
+        QC's own gate rather than Initial QC's."""
         sent = sum(self.search([
             ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
             ('original_contractor_id', '=', original_contractor_id),
+            ('repair_source', '!=', 'final_qc'),
         ]).mapped('qty_balls'))
         returned = sum(self.env['reema.wo.batch.entry'].search([
             ('workorder_id.production_id', '=', mo_id),
@@ -212,6 +263,63 @@ class ReemaIloDispatch(models.Model):
         ])
         rate = repair_dispatches[:1].rate or 0.0
         return {'qty': returned_qty, 'amount': returned_qty * rate}
+
+    @api.model
+    def _final_qc_repair_outstanding(self, mo_id, repair_contractor_id, original_contractor_id):
+        """Balls currently out at a Final-QC-sourced repair job for this exact
+        (repair contractor, original contractor) pair on this MO, not yet received
+        back at Final QC. Unambiguous — dispatch and receive are both tagged with
+        both contractor ids, unlike the pending-balance helper below."""
+        sent = sum(self.search([
+            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
+            ('repair_source', '=', 'final_qc'),
+            ('contractor_id', '=', repair_contractor_id),
+            ('original_contractor_id', '=', original_contractor_id),
+        ]).mapped('qty_balls'))
+        returned = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_final_qc', '=', True),
+            ('ilo_dispatch_type', '=', 'repair'),
+            ('contractor_id', '=', repair_contractor_id),
+            ('original_contractor_id', '=', original_contractor_id),
+        ]).mapped('qty'))
+        return sent - returned
+
+    @api.model
+    def _final_qc_repair_pending_balance(self, mo_id, original_contractor_id):
+        """Balls returned from a Final-QC repair job for this original contractor,
+        not yet re-decided at Final QC. Same ledger shape as _ilo_qc_pending_balance,
+        but scoped to Final QC's own self-contained repair loop.
+
+        Caveat: Final QC's Pass/Fail/Scrap entries don't distinguish whether they
+        came from a repair return or a first-time (never-repaired) ball — those
+        aren't tracked per original contractor before reaching Final QC at all
+        (the halls in between don't carry that lineage). So this number is only
+        accurate if repair-returned balls are decided separately from fresh ones,
+        which is the expected operational practice (they arrive as a distinct
+        batch), not something the system enforces."""
+        returned = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_final_qc', '=', True),
+            ('ilo_dispatch_type', '=', 'repair'),
+            ('original_contractor_id', '=', original_contractor_id),
+        ]).mapped('qty'))
+        qc_processed = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_final_qc', '=', True),
+            ('contractor_id', '=', original_contractor_id),
+        ]).mapped('qty'))
+        sent_to_repair_again = sum(self.search([
+            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
+            ('repair_source', '=', 'final_qc'),
+            ('original_contractor_id', '=', original_contractor_id),
+        ]).mapped('qty_balls'))
+        scrapped = sum(self.env['reema.ilo.qc.scrap'].search([
+            ('mo_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_final_qc', '=', True),
+            ('contractor_id', '=', original_contractor_id),
+        ]).mapped('qty'))
+        return returned - qc_processed - sent_to_repair_again - scrapped
 
     def action_close(self):
         # Fulfillment is no longer tracked per dispatch — the (MO, contractor)
@@ -279,6 +387,170 @@ class ReemaIloBalance(models.Model):
         """)
 
 
+class ReemaIloFlow(models.Model):
+    """Combined, chronological feed of every ILO Dispatch AND every ILO
+    Received row for the same (MO, contractor, flow type) — so the full
+    story (sent → received) is visible in one place instead of needing to
+    cross-reference the two separate lists. Read-only, doesn't replace
+    either source: reema.ilo.dispatch and reema.wo.batch.entry stay the
+    system of record for their own workflows."""
+    _name = 'reema.ilo.flow'
+    _description = 'ILO Combined Dispatch/Receive Flow'
+    _auto = False
+    _order = 'date desc'
+
+    reference = fields.Char(string='Reference', readonly=True)
+    date = fields.Datetime(string='Date', readonly=True)
+    mo_id = fields.Many2one('mrp.production', string='Manufacturing Order', readonly=True)
+    contractor_id = fields.Many2one('res.partner', string='Contractor', readonly=True)
+    original_contractor_id = fields.Many2one('res.partner', string='Original Contractor', readonly=True)
+    dispatch_type = fields.Selection(
+        [('stitching', 'Stitching'), ('repair', 'Repair')],
+        string='ILO Flow', readonly=True,
+    )
+    direction = fields.Selection(
+        [('dispatched', 'Dispatched'), ('received', 'Received')],
+        string='Direction', readonly=True,
+    )
+    process = fields.Selection(
+        [('initial_qc', 'Initial QC'), ('final_qc', 'Final QC')],
+        string='Process', readonly=True,
+        help='Which QC stage this event belongs to — Initial QC (Stitching Center '
+             'Issuance/Receive and its repair loop) or Final QC (its own '
+             'self-contained repair loop).',
+    )
+    qty_sent = fields.Float(string='Sent', readonly=True)
+    qty_received = fields.Float(string='Received', readonly=True)
+
+    def init(self):
+        tools.drop_view_if_exists(self.env.cr, self._table)
+        self.env.cr.execute("""
+            CREATE OR REPLACE VIEW reema_ilo_flow AS (
+                SELECT row_number() OVER (ORDER BY combined.date DESC) AS id,
+                       combined.reference,
+                       combined.date,
+                       combined.mo_id,
+                       combined.contractor_id,
+                       combined.original_contractor_id,
+                       combined.dispatch_type,
+                       combined.direction,
+                       combined.process,
+                       combined.qty_sent,
+                       combined.qty_received
+                FROM (
+                    SELECT
+                        d.name                AS reference,
+                        d.date::timestamp     AS date,
+                        d.mo_id,
+                        d.contractor_id,
+                        d.original_contractor_id,
+                        d.dispatch_type,
+                        'dispatched'           AS direction,
+                        CASE WHEN d.dispatch_type = 'repair'
+                             THEN d.repair_source
+                             ELSE 'initial_qc' END AS process,
+                        d.qty_balls            AS qty_sent,
+                        0                      AS qty_received
+                    FROM reema_ilo_dispatch d
+
+                    UNION ALL
+
+                    SELECT
+                        be.name                AS reference,
+                        be.date                 AS date,
+                        be.mo_id,
+                        be.contractor_id,
+                        be.original_contractor_id,
+                        be.ilo_dispatch_type    AS dispatch_type,
+                        'received'              AS direction,
+                        CASE WHEN wc.is_final_qc
+                             THEN 'final_qc'
+                             ELSE 'initial_qc' END AS process,
+                        0                       AS qty_sent,
+                        be.qty                  AS qty_received
+                    FROM reema_wo_batch_entry be
+                    JOIN mrp_workorder  wo ON wo.id = be.workorder_id
+                    JOIN mrp_workcenter wc ON wc.id = wo.workcenter_id
+                    WHERE wc.is_ball_receive_point = TRUE
+                       OR (wc.is_final_qc = TRUE AND be.ilo_dispatch_type = 'repair')
+                ) combined
+            )
+        """)
+
+
+class ReemaIloContractorDeduction(models.Model):
+    """Repair charge or scrap material-cost charge against the ORIGINAL
+    stitching contractor — created at Final QC. Deliberately separate from
+    the repair contractor's own payment: the repair contractor gets paid via
+    a normal reema.wo.batch.entry (its own is_billed tracks that side), while
+    this record tracks whether the deduction has been applied to the
+    original contractor's bill yet. The two settle on independent schedules,
+    linked here via repair_batch_entry_id for one-place traceability."""
+    _name = 'reema.ilo.contractor.deduction'
+    _description = 'ILO Contractor Deduction (Repair Charge / Scrap Material Cost)'
+    _order = 'date desc'
+
+    name = fields.Char(string='Reference', readonly=True, copy=False, default='New')
+    original_contractor_id = fields.Many2one(
+        'res.partner', string='Original Contractor', required=True,
+        domain="[('is_contractor', '=', True)]",
+    )
+    deduction_type = fields.Selection(
+        [('repair', 'Repair Charge'), ('scrap', 'Scrap Material Cost')],
+        string='Type', required=True,
+    )
+    mo_id = fields.Many2one('mrp.production', string='Manufacturing Order')
+    qty = fields.Integer(string='Qty', required=True)
+    construction_type = fields.Selection(
+        [('hs', 'HS'), ('hyb', 'HYB'), ('ms', 'MS'), ('thb', 'THB')],
+        string='Construction Type',
+        help='Shown for scrap so whoever prices the material cost later knows what '
+             'they are pricing.',
+    )
+    rate = fields.Float(
+        string='Rate (PKR)', digits=(10, 2),
+        help='Repair only — the ILO Repair piece rate at the time of the charge.',
+    )
+    amount = fields.Float(
+        string='Amount (PKR)', digits=(10, 2),
+        help='Repair: computed automatically (qty x rate). Scrap: left blank here — '
+             'entered manually when the contractor bill is prepared.',
+    )
+    state = fields.Selection(
+        [('pending', 'Pending'), ('applied', 'Applied')],
+        string='Status', default='pending', readonly=True, copy=False,
+    )
+    bill_id = fields.Many2one(
+        'account.move', string='Applied to Bill', readonly=True, copy=False,
+        help='The original contractor\'s vendor bill this deduction was added to.',
+    )
+    repair_dispatch_id = fields.Many2one(
+        'reema.ilo.dispatch', string='Repair Dispatch', readonly=True,
+        help='Repair only — the dispatch this charge is for.',
+    )
+    scrap_id = fields.Many2one(
+        'reema.ilo.qc.scrap', string='Scrap Record', readonly=True,
+        help='Scrap only — the scrap record this charge is for.',
+    )
+    repair_batch_entry_id = fields.Many2one(
+        'reema.wo.batch.entry', string='Repair Contractor Payable Entry', readonly=True,
+        help='Repair only — the repair contractor\'s own payable batch entry for this '
+             'job. Tracked independently via its own Billed status; kept here purely '
+             'for cross-reference ("charged to X because Y did this repair, which is '
+             '[billed/unbilled] as entry Z").',
+    )
+    date = fields.Date(string='Date', default=fields.Date.today)
+    recorded_by = fields.Many2one('res.users', string='Recorded By', default=lambda self: self.env.user)
+    notes = fields.Char(string='Notes')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('name', 'New') == 'New':
+                vals['name'] = self.env['ir.sequence'].next_by_code('reema.ilo.contractor.deduction') or 'New'
+        return super().create(vals_list)
+
+
 class ReemaIloQcScrap(models.Model):
     _name = 'reema.ilo.qc.scrap'
     _description = 'ILO Initial QC Scrap / Write-off'
@@ -286,6 +558,12 @@ class ReemaIloQcScrap(models.Model):
 
     mo_id = fields.Many2one('mrp.production', string='Manufacturing Order', required=True)
     workorder_id = fields.Many2one('mrp.workorder', string='Work Order', required=True)
+    batch_entry_id = fields.Many2one(
+        'reema.wo.batch.entry', string='Batch Entry',
+        help='The pass-qty entry created in the same QC decision this scrap was '
+             'logged alongside — lets that entry\'s own scrap qty be shown '
+             'per-decision instead of only as a cumulative MO/contractor total.',
+    )
     contractor_id = fields.Many2one(
         'res.partner', string='Original Contractor', required=True,
         domain="[('is_contractor', '=', True)]",

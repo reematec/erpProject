@@ -44,6 +44,14 @@
                            invisible="workforce_type == 'employee'"/>
                     <field name="notes" placeholder="Optional: e.g. 'Morning shift batch'"/>
                 </group>
+                <group invisible="not scrap_enabled">
+                    <field name="scrap_enabled" invisible="1"/>
+                    <field name="qty_scrap" string="Sheets Scrapped" invisible="hall_unit != 'sheet'"/>
+                    <field name="qty_scrap" string="Balls Scrapped" invisible="hall_unit != 'ball'"/>
+                    <field name="qty_scrap" string="Panels Scrapped" invisible="hall_unit != 'panel'"/>
+                    <field name="scrap_reason_id" string="Scrap Reason" required="qty_scrap &gt; 0"
+                           options="{'no_create': True, 'no_edit': True}"/>
+                </group>
                 <div class="alert alert-warning mb-0 mt-2" role="alert" invisible="not qty_warning">
                     <field name="qty_warning" readonly="1" nolabel="1"/>
                 </div>
@@ -124,15 +132,99 @@
                         <field name="qty_pass" string="Pass Qty" autofocus="1"/>
                         <field name="qty_fail" string="Fail Qty (Repair)"
                                invisible="construction_type != 'hs'"/>
+                        <field name="repair_defect_type" required="qty_fail != 0"/>
+                        <field name="repair_contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                    </group>
+                    <group string="Scrap / Write-off">
                         <field name="qty_scrap" string="Scrap / Write-off Qty"/>
                         <field name="scrap_defect_type" invisible="qty_scrap == 0"
                                required="qty_scrap != 0"/>
                     </group>
-                    <group string="Repair Dispatch">
-                        <field name="repair_defect_type" required="qty_fail != 0"/>
-                        <field name="repair_contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                </group>
+                <field name="notes" placeholder="Optional notes..."/>
+                <footer>
+                    <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Final QC wizard -->
+    <record id="view_reema_final_qc_wizard_form" model="ir.ui.view">
+        <field name="name">reema.final.qc.wizard.form</field>
+        <field name="model">reema.final.qc.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Final QC">
+                <group>
+                    <group string="Work Order">
+                        <field name="workorder_id" invisible="1"/>
+                        <field name="mo_id" invisible="1"/>
+                        <field name="workorder_name" readonly="1"/>
+                        <field name="workcenter_name" readonly="1"/>
+                        <field name="construction_type" invisible="1"/>
+                    </group>
+                    <group>
+                        <field name="qty_pass" string="Pass Qty" autofocus="1"/>
                     </group>
                 </group>
+                <separator string="Only if there's a fault — repair or scrap"/>
+                <group>
+                    <field name="available_contractor_ids" invisible="1"/>
+                    <field name="contractor_id" string="Original Contractor"
+                           options="{'no_create': True, 'no_edit': True}"
+                           required="qty_fail != 0 or qty_scrap != 0"/>
+                    <field name="pending_repair_return_qty" readonly="1"/>
+                </group>
+                <group>
+                    <group string="Repair">
+                        <field name="qty_fail" string="Fail Qty (Repair)"
+                               readonly="construction_type != 'hs'"/>
+                        <field name="repair_defect_type"
+                               readonly="qty_fail == 0" required="qty_fail != 0"/>
+                        <field name="repair_contractor_id" options="{'no_create': True, 'no_edit': True}"
+                               readonly="qty_fail == 0" required="qty_fail != 0"/>
+                    </group>
+                    <group string="Scrap">
+                        <field name="qty_scrap" string="Scrap / Write-off Qty"/>
+                        <field name="scrap_defect_type"
+                               readonly="qty_scrap == 0" required="qty_scrap != 0"/>
+                    </group>
+                </group>
+                <field name="notes" placeholder="Optional notes..."/>
+                <footer>
+                    <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Receive Repaired Ball (Final QC) wizard -->
+    <record id="view_reema_final_qc_receive_wizard_form" model="ir.ui.view">
+        <field name="name">reema.final.qc.receive.wizard.form</field>
+        <field name="model">reema.final.qc.receive.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Receive Repaired Ball">
+                <group>
+                    <group string="Work Order">
+                        <field name="workorder_id" invisible="1"/>
+                        <field name="mo_id" invisible="1"/>
+                        <field name="workorder_name" readonly="1"/>
+                        <field name="workcenter_name" readonly="1"/>
+                    </group>
+                    <group string="Repair">
+                        <field name="available_contractor_ids" invisible="1"/>
+                        <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                        <field name="available_original_contractor_ids" invisible="1"/>
+                        <field name="original_contractor_id" options="{'no_create': True, 'no_edit': True}"/>
+                        <field name="balance_display" string="Outstanding" readonly="1"/>
+                        <field name="qty" string="Quantity Received" autofocus="1"/>
+                    </group>
+                </group>
+                <div class="alert alert-danger mb-0 mt-2" role="alert" invisible="not qty_warning">
+                    <field name="qty_warning" readonly="1" nolabel="1"/>
+                </div>
                 <field name="notes" placeholder="Optional notes..."/>
                 <footer>
                     <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
@@ -283,16 +375,101 @@
         </field>
     </record>
 
+    <!-- Per-work-order progress log — used by the "Balls Done" click-through
+         (action_view_batch_log on mrp.workorder) for cross-checking production
+         progress in case of a dispute. Deliberately stripped down from the
+         payment-oriented Batch Logs list above: one Qty column (the hall's own
+         logging unit — sheets/panels/balls — not also a second "Balls
+         Equivalent" figure, which is a conversion for internal costing, not a
+         second physical quantity), no Rate/Amount/Billed/Excluded/Bill Ref —
+         none of that is relevant to "how much was physically logged and by
+         whom." Fully read-only: this view exists to verify history, not edit it. -->
+    <record id="reema_batch_entry_view_list_progress" model="ir.ui.view">
+        <field name="name">reema.wo.batch.entry.list.progress</field>
+        <field name="model">reema.wo.batch.entry</field>
+        <field name="arch" type="xml">
+            <list string="Progress Log" create="0" delete="0" edit="0" default_order="date asc">
+                <field name="workforce_type" column_invisible="1"/>
+                <field name="ilo_dispatch_type" column_invisible="1"/>
+                <field name="is_initial_qc_entry" column_invisible="1"/>
+                <field name="name" string="Reference" readonly="1"/>
+                <field name="date" string="Date" readonly="1"/>
+                <field name="logged_by" string="Logged By" readonly="1"/>
+                <!-- Employee-staffed halls (Initial QC, Final QC's repair-return) still
+                     carry a meaningful contractor_id — it's whose production is being
+                     inspected/repaired, not who staffed the hall. Mirrors the same
+                     condition already used on the detailed form view below. -->
+                <field name="contractor_id" string="Contractor" readonly="1"
+                       invisible="workforce_type == 'employee' and not ilo_dispatch_type and not is_initial_qc_entry"/>
+                <field name="qty" string="Qty" readonly="1" sum="Total"/>
+                <field name="qty_balls" string="Balls Done" readonly="1" sum="Total"/>
+                <!-- Initial QC only — what THIS decision sent to repair/scrap alongside
+                     its pass qty (0/blank for entries logged before this linkage
+                     existed, and for halls other than Initial QC). -->
+                <field name="entry_repair_qty" string="Repair Qty" readonly="1" sum="Total"
+                       invisible="not is_initial_qc_entry"/>
+                <field name="entry_repair_defect_types" string="Repair Reason" readonly="1"
+                       invisible="not is_initial_qc_entry or not entry_repair_qty"/>
+                <field name="entry_scrap_qty" string="Scrap Qty" readonly="1" sum="Total"
+                       invisible="not is_initial_qc_entry"/>
+                <field name="entry_scrap_defect_types" string="Scrap Reason" readonly="1"
+                       invisible="not is_initial_qc_entry or not entry_scrap_qty"/>
+                <field name="notes" string="Notes" readonly="1" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Stored action scoped to one work order via active_id — needed so the
+         "Balls Done" click-through (action_view_batch_log on mrp.workorder) can
+         address it by a real numeric action id and open it as a new browser tab
+         (/odoo/<active_id>/action-<id>), which a plain inline action dict cannot do. -->
+    <record id="reema_batch_entry_action_from_workorder" model="ir.actions.act_window">
+        <field name="name">Batch Log</field>
+        <field name="res_model">reema.wo.batch.entry</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="reema_batch_entry_view_search"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('reema_batch_entry_view_list_progress')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('reema_batch_entry_view_form')}),
+        ]"/>
+        <field name="domain">[('workorder_id', '=', active_id)]</field>
+    </record>
+
     <!-- Window action — Unbilled is the default filter -->
     <record id="reema_batch_entry_action" model="ir.actions.act_window">
         <field name="name">Batch Logs</field>
         <field name="res_model">reema.wo.batch.entry</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="reema_batch_entry_view_search"/>
-        <!-- ILO Issuance/Receive entries are provisional ledger records, not payable
-             lines — only Initial QC carries the real payable qty/rate for ILO work.
-             Full detail for Issuance/Receive still lives under ILO Dispatches. -->
-        <field name="domain">[('workorder_id.workcenter_id.is_ilo', '=', False), ('workorder_id.workcenter_id.is_ball_receive_point', '=', False)]</field>
+        <!-- ILO Issuance/Stitching-Receive entries are provisional ledger records,
+             not payable lines — only Initial QC carries the real payable qty/rate
+             for a contractor's own stitching work. Full detail for those still
+             lives under ILO Dispatches / ILO Received. Repair-Receive entries are
+             the exception: they carry a real piece_rate_id (assigned automatically
+             at receive time, see ReemaIloReceiveWizard.action_confirm) and ARE
+             payable to whoever performed the repair — let through here regardless
+             of Ball Receive Point being an employee-staffed hall (which would
+             otherwise be filtered out below), alongside Final QC's own repair
+             receipts.
+             Plain employee-hall entries (Shaping, Raw Material Store, etc.) are also
+             excluded — nothing billable or QC-decision-worthy happens there. Initial
+             QC and Final QC stay visible even though they're employee-type too, since
+             their Pass entries carry the QC decision detail (received/passed/repair/
+             scrap, contractor charges) that Batch Logs is deliberately extended for. -->
+        <field name="domain">[
+            ('workorder_id.workcenter_id.is_ilo', '=', False),
+            '|',
+                '&amp;',
+                    ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
+                    ('ilo_dispatch_type', '=', 'repair'),
+                '&amp;',
+                    ('workorder_id.workcenter_id.is_ball_receive_point', '=', False),
+                    '|', '|',
+                        ('workorder_id.workcenter_id.workforce_type', '!=', 'employee'),
+                        ('workorder_id.workcenter_id.is_initial_qc', '=', True),
+                        ('workorder_id.workcenter_id.is_final_qc', '=', True),
+        ]</field>
         <field name="context">{'search_default_unbilled': 1}</field>
         <!-- Pinned explicitly: reema.wo.batch.entry now has more than one primary
              list view (see ILO Received), and Odoo's default-view fallback picks
@@ -342,5 +519,133 @@
             </xpath>
         </field>
     </record>
+
+    <!-- ═══════════════════════════════════════════════
+         SCRAP REASONS — configurable, per-hall-scoped cause list used by
+         the Production Scrap qty on the Log Batch modal. Add new reasons
+         here as new halls get scrap logging enabled.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_scrap_reason_list" model="ir.ui.view">
+        <field name="name">reema.scrap.reason.list</field>
+        <field name="model">reema.scrap.reason</field>
+        <field name="arch" type="xml">
+            <list string="Scrap Reasons" editable="bottom">
+                <field name="name"/>
+                <field name="workcenter_ids" widget="many2many_tags"
+                       options="{'no_create': True}"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_scrap_reason_form" model="ir.ui.view">
+        <field name="name">reema.scrap.reason.form</field>
+        <field name="model">reema.scrap.reason</field>
+        <field name="arch" type="xml">
+            <form string="Scrap Reason">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="workcenter_ids" widget="many2many_tags"
+                               options="{'no_create': True}"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reema_scrap_reason" model="ir.actions.act_window">
+        <field name="name">Scrap Reasons</field>
+        <field name="res_model">reema.scrap.reason</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No scrap reasons defined yet. Click New to add one.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="reema_mrp_menu_scrap_reasons"
+              name="Scrap Reasons"
+              parent="mrp.menu_mrp_configuration"
+              action="action_reema_scrap_reason"
+              groups="reema_mrp.group_reema_production_manager"
+              sequence="21"/>
+
+    <!-- ═══════════════════════════════════════════════
+         PRODUCTION SCRAP — shop-floor scrap (Shaping, Printing, and other
+         halls as they get enabled). Separate from ILO QC Scrap. Chargeable
+         to a contractor only at contractor-staffed halls (e.g. Printing) —
+         contractor_id/amount/is_billed stay blank at employee halls
+         (e.g. Shaping), where scrap is never charged to anyone.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_production_scrap_list" model="ir.ui.view">
+        <field name="name">reema.production.scrap.list</field>
+        <field name="model">reema.production.scrap</field>
+        <field name="arch" type="xml">
+            <list string="Production Scrap" create="0" default_order="date desc">
+                <field name="name" string="Reference"/>
+                <field name="date"/>
+                <field name="mo_id"/>
+                <field name="workcenter_id" string="Hall"/>
+                <field name="contractor_id" optional="show"/>
+                <field name="qty" string="Qty Scrapped" sum="Total"/>
+                <field name="reason_id" string="Reason"/>
+                <field name="amount" string="Amount (PKR)" optional="show" sum="Total"/>
+                <field name="is_billed" string="Billed" widget="boolean_toggle" optional="show"/>
+                <field name="recorded_by"/>
+                <field name="notes"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reema_production_scrap" model="ir.actions.act_window">
+        <field name="name">Production Scrap</field>
+        <field name="res_model">reema.production.scrap</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
+         SCRAP REPORT — combined read-only feed of ILO QC Scrap +
+         Production Scrap, for a single "how many balls got
+         scrapped" view across every source.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_scrap_report_list" model="ir.ui.view">
+        <field name="name">reema.scrap.report.list</field>
+        <field name="model">reema.scrap.report</field>
+        <field name="arch" type="xml">
+            <list string="Total Scrap" create="0" edit="0" delete="0" default_order="date desc">
+                <field name="date"/>
+                <field name="mo_id"/>
+                <field name="workcenter_id" string="Hall"/>
+                <field name="source" widget="badge"/>
+                <field name="contractor_id" string="Charged To" optional="show"/>
+                <field name="qty" string="Qty Scrapped" sum="Total"/>
+                <field name="reason"/>
+                <field name="recorded_by"/>
+                <field name="notes"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reema_scrap_report" model="ir.actions.act_window">
+        <field name="name">Total Scrap</field>
+        <field name="res_model">reema.scrap.report</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <menuitem id="menu_reema_scrap_report"
+              name="Total Scrap"
+              parent="mrp.menu_mrp_reporting"
+              action="action_reema_scrap_report"
+              sequence="30"/>
+
+    <menuitem id="menu_reema_production_scrap"
+              name="Production Scrap"
+              parent="mrp.menu_mrp_reporting"
+              action="action_reema_production_scrap"
+              sequence="31"/>
 
 </odoo>

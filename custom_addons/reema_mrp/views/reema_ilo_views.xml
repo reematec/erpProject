@@ -220,6 +220,93 @@
     </record>
 
     <!-- ═══════════════════════════════════════════════
+         ILO FLOW — combined, chronological feed of Dispatches AND Received
+         together (union of reema.ilo.dispatch + the receive-point rows of
+         reema.wo.batch.entry). Testing replacement for the two separate
+         menus — read-only, doesn't touch either source model.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_ilo_flow_list" model="ir.ui.view">
+        <field name="name">reema.ilo.flow.list</field>
+        <field name="model">reema.ilo.flow</field>
+        <field name="arch" type="xml">
+            <list string="ILO Flow" create="0" edit="0" delete="0" default_order="date desc">
+                <field name="reference" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="mo_id" optional="show"/>
+                <field name="contractor_id" optional="show"/>
+                <field name="original_contractor_id" optional="show"/>
+                <field name="dispatch_type" string="ILO Flow" widget="badge" optional="show"/>
+                <field name="process" widget="badge" optional="show"/>
+                <field name="direction" widget="badge"
+                       decoration-warning="direction == 'dispatched'"
+                       decoration-success="direction == 'received'"
+                       optional="show"/>
+                <field name="qty_sent" widget="zero_dash_float" sum="Total" optional="show"/>
+                <field name="qty_received" widget="zero_dash_float" sum="Total" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_ilo_flow_search" model="ir.ui.view">
+        <field name="name">reema.ilo.flow.search</field>
+        <field name="model">reema.ilo.flow</field>
+        <field name="arch" type="xml">
+            <search string="ILO Flow">
+                <field name="reference"/>
+                <field name="mo_id"/>
+                <field name="contractor_id"/>
+                <field name="original_contractor_id"/>
+                <filter name="dispatched" string="Dispatched" domain="[('direction', '=', 'dispatched')]"/>
+                <filter name="received" string="Received" domain="[('direction', '=', 'received')]"/>
+                <separator/>
+                <filter name="stitching_type" string="Stitching" domain="[('dispatch_type', '=', 'stitching')]"/>
+                <filter name="repair_type" string="Repair" domain="[('dispatch_type', '=', 'repair')]"/>
+                <separator/>
+                <filter name="initial_qc_process" string="Initial QC" domain="[('process', '=', 'initial_qc')]"/>
+                <filter name="final_qc_process" string="Final QC" domain="[('process', '=', 'final_qc')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_direction" string="Direction" context="{'group_by': 'direction'}"/>
+                    <filter name="group_process" string="Process" context="{'group_by': 'process'}"/>
+                    <filter name="group_contractor" string="Contractor" context="{'group_by': 'contractor_id'}"/>
+                    <filter name="group_original_contractor" string="Original Contractor" context="{'group_by': 'original_contractor_id'}"/>
+                    <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
+                    <filter name="group_dispatch_type" string="ILO Flow" context="{'group_by': 'dispatch_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_ilo_flow" model="ir.actions.act_window">
+        <field name="name">ILO Flow</field>
+        <field name="res_model">reema.ilo.flow</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_reema_ilo_flow_search"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_ilo_flow_list')}),
+        ]"/>
+    </record>
+
+    <!-- Stored variant scoped to one MO via active_id — needed so the "Balls Done"
+         click-through (action_view_ilo_flow on mrp.workorder) can address it by a
+         real numeric action id and open it as a new browser tab
+         (/odoo/<active_id>/action-<id>), which a plain inline action dict cannot do.
+         The menu-driven action_reema_ilo_flow above stays domain-less/unscoped. -->
+    <record id="action_reema_ilo_flow_from_workorder" model="ir.actions.act_window">
+        <field name="name">ILO Flow</field>
+        <field name="res_model">reema.ilo.flow</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_reema_ilo_flow_search"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_ilo_flow_list')}),
+        ]"/>
+        <field name="domain">[('mo_id', '=', active_id)]</field>
+        <field name="context">{'search_default_group_contractor': 1}</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
          GATE STAFF — OUTWARD PASS (READ-ONLY)
          Dispatch is finalized the moment it's logged, so there's nothing for
          gate staff to confirm here — this is just the dispatch paper, shown
@@ -516,6 +603,72 @@
     </record>
 
     <!-- ═══════════════════════════════════════════════
+         ILO CONTRACTOR DEDUCTIONS — repair charge / scrap material cost
+         charged to the original stitching contractor, created at Final QC.
+         Pending until applied as a line on that contractor's next bill.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_ilo_contractor_deduction_list" model="ir.ui.view">
+        <field name="name">reema.ilo.contractor.deduction.list</field>
+        <field name="model">reema.ilo.contractor.deduction</field>
+        <field name="arch" type="xml">
+            <list string="ILO Contractor Deductions" create="0" edit="0" delete="0" default_order="date desc">
+                <field name="name" string="Reference" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="original_contractor_id" optional="show"/>
+                <field name="deduction_type" string="Type" widget="badge" optional="show"/>
+                <field name="mo_id" optional="show"/>
+                <field name="qty" optional="show"/>
+                <field name="construction_type" optional="show"/>
+                <field name="rate" widget="zero_dash_float" optional="show"/>
+                <field name="amount" optional="show"/>
+                <field name="state" string="Status" widget="badge"
+                       decoration-warning="state == 'pending'"
+                       decoration-success="state == 'applied'"
+                       optional="show"/>
+                <field name="repair_batch_entry_id" string="Repair Contractor Entry" optional="hide"/>
+                <field name="bill_id" optional="hide"/>
+                <field name="recorded_by" optional="hide"/>
+                <field name="notes" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_ilo_contractor_deduction_search" model="ir.ui.view">
+        <field name="name">reema.ilo.contractor.deduction.search</field>
+        <field name="model">reema.ilo.contractor.deduction</field>
+        <field name="arch" type="xml">
+            <search string="ILO Contractor Deductions">
+                <field name="original_contractor_id"/>
+                <field name="mo_id"/>
+                <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]"/>
+                <filter name="applied" string="Applied" domain="[('state', '=', 'applied')]"/>
+                <separator/>
+                <filter name="repair_type" string="Repair Charge" domain="[('deduction_type', '=', 'repair')]"/>
+                <filter name="scrap_type" string="Scrap Material Cost" domain="[('deduction_type', '=', 'scrap')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_contractor" string="Original Contractor" context="{'group_by': 'original_contractor_id'}"/>
+                    <filter name="group_type" string="Type" context="{'group_by': 'deduction_type'}"/>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_ilo_contractor_deduction" model="ir.actions.act_window">
+        <field name="name">ILO Contractor Deductions</field>
+        <field name="res_model">reema.ilo.contractor.deduction</field>
+        <field name="view_mode">list</field>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="search_view_id" ref="view_reema_ilo_contractor_deduction_search"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_ilo_contractor_deduction_list')}),
+        ]"/>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
          MENUS
     ═══════════════════════════════════════════════ -->
 
@@ -524,23 +677,11 @@
               parent="mrp.menu_mrp_root"
               sequence="35"/>
 
-    <menuitem id="menu_reema_ilo_dispatch"
-              name="Dispatches"
+    <menuitem id="menu_reema_ilo_flow"
+              name="ILO Flow"
               parent="menu_reema_ilo_root"
-              action="action_reema_ilo_dispatch"
-              sequence="10"/>
-
-    <menuitem id="menu_reema_ilo_repair_dispatch"
-              name="Repair Dispatches"
-              parent="menu_reema_ilo_root"
-              action="action_reema_ilo_repair_dispatch"
-              sequence="15"/>
-
-    <menuitem id="menu_reema_ilo_receive_entry"
-              name="Received"
-              parent="menu_reema_ilo_root"
-              action="action_reema_ilo_receive_entry"
-              sequence="17"/>
+              action="action_reema_ilo_flow"
+              sequence="19"/>
 
     <menuitem id="menu_reema_ilo_pending"
               name="Pending"
@@ -559,5 +700,11 @@
               parent="menu_reema_ilo_root"
               action="action_reema_ilo_qc_scrap"
               sequence="50"/>
+
+    <menuitem id="menu_reema_ilo_contractor_deduction"
+              name="Contractor Deductions"
+              parent="menu_reema_ilo_root"
+              action="action_reema_ilo_contractor_deduction"
+              sequence="60"/>
 
 </odoo>

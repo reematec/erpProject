@@ -79,6 +79,13 @@
                 <button name="action_print_mo" string="Print Selected"
                         type="object" class="btn-secondary"/>
             </xpath>
+            <!-- Hide "Component Status" — it's computed from Odoo's native stock
+                 reservation forecast, but raw moves never reserve in this system
+                 (material readiness is tracked via RMI issuance instead), so it
+                 always shows "Not Available" regardless of real material state. -->
+            <xpath expr="//field[@name='components_availability']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
         </field>
     </record>
 
@@ -109,6 +116,16 @@
             <xpath expr="//field[@name='move_raw_ids']//field[@name='product_id']" position="before">
                 <field name="sequence" widget="handle"/>
             </xpath>
+            <!-- Work Orders tab: swap in our field widget so clicking the Completed
+                 figure on a Ball Receive Point row can open the ILO Flow — see
+                 workorder_completed_nav_list.js for why this has to be a field-widget
+                 override rather than js_class on the nested list. -->
+            <xpath expr="//field[@name='workorder_ids'][@widget='mrp_workorder_one2many']" position="attributes">
+                <attribute name="widget">reema_workorder_completed_nav_one2many</attribute>
+            </xpath>
+            <!-- Hide Product Moves and Overview smart buttons — not used in our flow -->
+            <xpath expr="//button[@name='%(mrp.action_mrp_production_moves)d']" position="replace"/>
+            <xpath expr="//button[@name='%(mrp.action_report_mo_overview)d']" position="replace"/>
             <form position="attributes">
                 <attribute name="create">0</attribute>
             </form>
@@ -148,6 +165,14 @@
                         icon="fa-trash"
                         invisible="ilo_scrap_qty == 0">
                     <field name="ilo_scrap_qty" widget="statinfo" string="Scrapped"/>
+                </button>
+                <!-- Smart button: total scrap across all sources (ILO QC + production floor) -->
+                <button name="action_view_scrap_report"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-trash-o"
+                        invisible="total_scrap_qty == 0">
+                    <field name="total_scrap_qty" widget="statinfo" string="Total Scrap"/>
                 </button>
             </xpath>
             <!-- Drop the core "Open Move" detail-operations icon: components aren't
@@ -198,8 +223,10 @@
                 <attribute name="widget">trim_mrp_should_consume</attribute>
             </xpath>
             <!-- Issued column: net qty physically issued via RMI, shown right after To Consume.
-                 Target [@widget='trim_float'] because the prior xpath already assigned that widget. -->
-            <xpath expr="//field[@name='move_raw_ids']//field[@name='product_uom_qty'][@widget='trim_float']" position="after">
+                 Anchored on the [trim_]mrp_should_consume variant (not the plain trim_float one)
+                 because that's the variant actually visible when show_produce_all is false —
+                 anchoring on the other one put Issued before the (invisible) To Consume column. -->
+            <xpath expr="//field[@name='move_raw_ids']//field[@name='product_uom_qty'][@widget='trim_mrp_should_consume']" position="after">
                 <field name="move_net_issued_qty" string="Issued" readonly="1" widget="trim_float"/>
             </xpath>
             <!-- Miscellaneous tab is for admins only (warehouse/location/scheduling
@@ -279,6 +306,18 @@
                 <attribute name="invisible">1</attribute>
             </xpath>
             <xpath expr="//span[text()='To Produce']" position="replace"/>
+            <!-- Hide "Component Status" — computed from Odoo's native stock
+                 reservation forecast, but raw moves never reserve in this system
+                 (material readiness is tracked via RMI issuance instead), so it
+                 always shows "Not Available" regardless of real material state. -->
+            <xpath expr="//field[@name='components_availability']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- Start Date is set automatically when the MO is confirmed (see
+                 action_confirm override) — never user-editable. -->
+            <xpath expr="//field[@name='date_start']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
             <!-- Move Cancel to the very end and rename to "Cancel MO" so it's not confused with browser back -->
             <xpath expr="//header/button[@name='action_cancel']" position="replace"/>
             <xpath expr="//header/field[@name='show_lock']" position="before">
@@ -320,6 +359,7 @@
                 <field name="workforce_type" column_invisible="1"/>
                 <field name="contractor_ids" widget="many2many_tags" options="{'no_create': True, 'no_edit': True}"
                        invisible="workforce_type == 'employee'"/>
+                <field name="is_ball_receive_point" column_invisible="1"/>
                 <field name="hall_qty" string="Target" readonly="1" widget="trim_float"/>
                 <field name="qty_batch_completed" string="Completed" readonly="1" widget="trim_float"/>
                 <field name="hall_unit_label" string="UOM" readonly="1" optional="show"/>
@@ -328,11 +368,17 @@
             <!-- Place the Log-batch button adjacent to the native Start/Done buttons so all
                  action buttons share ONE button column (avoids a second reserved ~90px column) -->
             <xpath expr="//button[@name='button_start']" position="before">
+                <field name="final_qc_repair_outstanding" column_invisible="1"/>
                 <button name="action_log_batch" type="object"
                         icon="fa-plus-circle"
                         title="Log batch progress"
                         groups="reema_mrp.group_reema_supervisor,base.group_system"
                         invisible="state != 'progress'"/>
+                <button name="action_final_qc_receive" type="object"
+                        icon="fa-undo"
+                        title="Receive repaired ball back at Final QC"
+                        groups="reema_mrp.group_reema_supervisor,base.group_system"
+                        invisible="state != 'progress' or not final_qc_repair_outstanding"/>
             </xpath>
             <!-- Reema tracks one shared WO status, not Odoo's per-user clock-in/out.
                  The native invisible conditions key off is_user_working (true only for
@@ -354,11 +400,16 @@
             <xpath expr="//field[@name='name']" position="attributes">
                 <attribute name="readonly">1</attribute>
             </xpath>
-            <!-- Work center is defined in the BOM and must not change after MO creation -->
+            <!-- Work center is defined in the BOM and must not change after MO creation.
+                 no_open — plain text only, not a clickable link into the work center record. -->
             <xpath expr="//field[@name='workcenter_id']" position="attributes">
                 <attribute name="readonly">1</attribute>
+                <attribute name="options">{'no_open': True}</attribute>
             </xpath>
-            <!-- Disable delete — work orders are managed at BOM level, not removed mid-production -->
+            <!-- Disable delete — work orders are managed at BOM level, not removed mid-production.
+                 (Completed-figure navigation is wired via the workorder_ids field's
+                 widget override in mrp_production_reema_form below, not js_class here —
+                 this list is rendered as a one2many field, which ignores js_class.) -->
             <xpath expr="//list" position="attributes">
                 <attribute name="delete">0</attribute>
             </xpath>
@@ -699,7 +750,10 @@
                        help="Enable for the dedicated hall where balls dispatched to an ILO contractor are logged back in — works for any construction type (HS, HYB, THB, etc). Must be its own work center, not shared with another step."/>
                 <field name="is_initial_qc" string="Initial QC Point"
                        help="Enable for the ILO Initial QC hall — logging a batch here opens the Pass/Fail-to-repair/Scrap modal instead of the normal one."/>
+                <field name="is_final_qc" string="Final QC Point"
+                       help="Enable for the ILO Final QC hall — logging a batch here (HS construction only) opens its own Pass/Fail-to-repair/Scrap modal with a self-contained repair loop, separate from Initial QC."/>
                 <field name="is_printing"/>
+                <field name="scrap_enabled"/>
                 <field name="hall_unit"/>
                 <field name="pay_basis"/>
                 <field name="sfg_product_id"
@@ -770,6 +824,7 @@
                 <field name="is_ilo" optional="hide"/>
                 <field name="is_ball_receive_point" optional="hide"/>
                 <field name="is_initial_qc" optional="hide"/>
+                <field name="is_final_qc" optional="hide"/>
                 <field name="is_printing" optional="hide"/>
             </xpath>
         </field>

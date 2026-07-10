@@ -2,6 +2,9 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_reema_piece_rate_user,reema.piece.rate user,model_reema_piece_rate,base.group_user,1,0,0,0
 access_reema_piece_rate_admin,reema.piece.rate admin,model_reema_piece_rate,base.group_system,1,1,1,1
 access_reema_piece_rate_manager,reema.piece.rate manager,model_reema_piece_rate,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_scrap_reason_user,reema.scrap.reason user,model_reema_scrap_reason,base.group_user,1,0,0,0
+access_reema_scrap_reason_admin,reema.scrap.reason admin,model_reema_scrap_reason,base.group_system,1,1,1,1
+access_reema_scrap_reason_manager,reema.scrap.reason manager,model_reema_scrap_reason,reema_mrp.group_reema_production_manager,1,1,1,1
 access_reema_production_order_user,reema.production.order user,model_reema_production_order,base.group_user,1,0,0,0
 access_reema_production_order_admin,reema.production.order admin,model_reema_production_order,base.group_system,1,1,1,1
 access_reema_production_order_manager,reema.production.order manager,model_reema_production_order,reema_mrp.group_reema_production_manager,1,1,1,1
@@ -12,9 +15,16 @@ access_reema_wo_batch_entry_user,reema.wo.batch.entry user,model_reema_wo_batch_
 access_reema_wo_batch_entry_admin,reema.wo.batch.entry admin,model_reema_wo_batch_entry,base.group_system,1,1,1,1
 access_reema_wo_batch_entry_supervisor,reema.wo.batch.entry supervisor,model_reema_wo_batch_entry,reema_mrp.group_reema_supervisor,1,1,1,0
 access_reema_wo_batch_entry_manager,reema.wo.batch.entry manager,model_reema_wo_batch_entry,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_production_scrap_user,reema.production.scrap user,model_reema_production_scrap,base.group_user,1,0,0,0
+access_reema_production_scrap_admin,reema.production.scrap admin,model_reema_production_scrap,base.group_system,1,1,1,1
+access_reema_production_scrap_supervisor,reema.production.scrap supervisor,model_reema_production_scrap,reema_mrp.group_reema_supervisor,1,1,1,0
+access_reema_production_scrap_manager,reema.production.scrap manager,model_reema_production_scrap,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_scrap_report_user,reema.scrap.report user,model_reema_scrap_report,base.group_user,1,0,0,0
 access_reema_batch_entry_wizard_user,reema.batch.entry.wizard user,model_reema_batch_entry_wizard,base.group_user,1,1,1,1
 access_reema_ilo_receive_wizard_user,reema.ilo.receive.wizard user,model_reema_ilo_receive_wizard,base.group_user,1,1,1,1
 access_reema_ilo_qc_wizard_user,reema.ilo.qc.wizard user,model_reema_ilo_qc_wizard,base.group_user,1,1,1,1
+access_reema_final_qc_wizard_user,reema.final.qc.wizard user,model_reema_final_qc_wizard,base.group_user,1,1,1,1
+access_reema_final_qc_receive_wizard_user,reema.final.qc.receive.wizard user,model_reema_final_qc_receive_wizard,base.group_user,1,1,1,1
 access_reema_material_issuance_user,reema.material.issuance user,model_reema_material_issuance,base.group_user,1,0,0,0
 access_reema_material_issuance_admin,reema.material.issuance admin,model_reema_material_issuance,base.group_system,1,1,1,1
 access_reema_material_issuance_store,reema.material.issuance store,model_reema_material_issuance,reema_mrp.group_reema_store,1,1,1,0
@@ -41,6 +51,10 @@ access_reema_ilo_dispatch_user,reema.ilo.dispatch user,model_reema_ilo_dispatch,
 access_reema_ilo_dispatch_admin,reema.ilo.dispatch admin,model_reema_ilo_dispatch,base.group_system,1,1,1,1
 access_reema_ilo_dispatch_manager,reema.ilo.dispatch manager,model_reema_ilo_dispatch,reema_mrp.group_reema_production_manager,1,1,1,1
 access_reema_ilo_dispatch_supervisor,reema.ilo.dispatch supervisor,model_reema_ilo_dispatch,reema_mrp.group_reema_supervisor,1,1,1,0
+access_reema_ilo_contractor_deduction_user,reema.ilo.contractor.deduction user,model_reema_ilo_contractor_deduction,base.group_user,1,0,0,0
+access_reema_ilo_contractor_deduction_admin,reema.ilo.contractor.deduction admin,model_reema_ilo_contractor_deduction,base.group_system,1,1,1,1
+access_reema_ilo_contractor_deduction_manager,reema.ilo.contractor.deduction manager,model_reema_ilo_contractor_deduction,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_ilo_contractor_deduction_supervisor,reema.ilo.contractor.deduction supervisor,model_reema_ilo_contractor_deduction,reema_mrp.group_reema_supervisor,1,1,1,0
 access_reema_ilo_qc_scrap_user,reema.ilo.qc.scrap user,model_reema_ilo_qc_scrap,base.group_user,1,0,0,0
 access_reema_ilo_qc_scrap_admin,reema.ilo.qc.scrap admin,model_reema_ilo_qc_scrap,base.group_system,1,1,1,1
 access_reema_ilo_qc_scrap_manager,reema.ilo.qc.scrap manager,model_reema_ilo_qc_scrap,reema_mrp.group_reema_production_manager,1,1,1,1
@@ -61,3 +75,4 @@ access_reema_po_status_info_wizard_user,reema.po.status.info.wizard user,model_r
 access_reema_mo_status_info_wizard_user,reema.mo.status.info.wizard user,model_reema_mo_status_info_wizard,base.group_user,1,1,1,1
 access_reema_contractor_wo_status_user,reema.contractor.wo.status user,model_reema_contractor_wo_status,base.group_user,1,0,0,0
 access_reema_ilo_balance_user,reema.ilo.balance user,model_reema_ilo_balance,base.group_user,1,0,0,0
+access_reema_ilo_flow_user,reema.ilo.flow user,model_reema_ilo_flow,base.group_user,1,0,0,0

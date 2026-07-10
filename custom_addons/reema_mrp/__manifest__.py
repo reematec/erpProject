@@ -1,6 +1,6 @@
 {
     'name': 'Reema Group MRP',
-    'version': '2.5',
+    'version': '2.6',
     'category': 'Manufacturing',
     'summary': 'Integrated MRP flow for Football Production (Reema Group Logic)',
     'description': """
@@ -42,6 +42,8 @@
             'reema_mrp/static/src/components/mo_confirm_banner.js',
             'reema_mrp/static/src/components/mo_confirm_banner.xml',
             'reema_mrp/static/src/views/workorder_standalone_list_view.js',
+            'reema_mrp/static/src/views/workorder_completed_nav_list.js',
+            'reema_mrp/static/src/views/workorder_completed_nav_list.css',
             'reema_mrp/static/src/views/move_one2many_no_detail.js',
             'reema_mrp/static/src/components/panels_balls_sync_field.js',
             'reema_mrp/static/src/components/trim_float_field.js',

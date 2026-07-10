@@ -24,7 +24,13 @@ class MrpWorkorder(models.Model):
     qty_batch_completed = fields.Float(string='Completed So Far', compute='_compute_qty_batch_completed', store=True)
     batch_released = fields.Boolean(string='Released to Next Hall', default=False)
     hall_qty = fields.Float(string='Target', compute='_compute_hall_qty', store=True)
-    qty_balls_completed = fields.Float(string='Balls Done', compute='_compute_qty_balls_completed', store=True)
+    qty_balls_completed = fields.Float(string='Balls Done', compute='_compute_qty_balls_completed')
+    is_ball_receive_point = fields.Boolean(
+        related='workcenter_id.is_ball_receive_point', string='Ball Receive Point',
+        store=True, readonly=True,
+    )
+    scrap_ids = fields.One2many('reema.production.scrap', 'workorder_id', string='Scrap Entries')
+    qty_scrap_balls = fields.Float(string='Scrapped Balls', compute='_compute_qty_scrap_balls', store=True)
     hall_uom_name = fields.Char(related='operation_id.piece_rate_id.uom_id.name', string='UOM', readonly=True)
     hall_unit_label = fields.Selection(related='workcenter_id.hall_unit', string='Logging Unit', readonly=True)
     state = fields.Selection(selection=[
@@ -38,15 +44,51 @@ class MrpWorkorder(models.Model):
 
     @api.depends('batch_entry_ids.qty', 'batch_entry_ids.ilo_dispatch_type')
     def _compute_qty_batch_completed(self):
-        # Repair-return entries (ilo_dispatch_type='repair') are the same physical
-        # balls as an earlier stitching receive coming back through this same Ball
-        # Receive Point a second time — counting them again would let this work
-        # order's target/completion be inflated by rework loops instead of reflecting
-        # distinct balls actually received. Repair-outstanding is already gated
-        # separately on the Initial QC work order (_ilo_repair_outstanding).
+        # Repair-return entries (ilo_dispatch_type='repair') at the Ball Receive
+        # Point are the same physical balls as an earlier stitching receive coming
+        # back through that same work order a second time — counting them again
+        # would let its target/completion be inflated by rework loops instead of
+        # reflecting distinct balls actually received. Repair-outstanding is already
+        # gated separately on the Initial QC work order (_ilo_repair_outstanding).
+        # Final QC has no such duplicate: a repair-return entry there is the ONLY
+        # record of those balls being back (the Fail qty never created a batch
+        # entry at all), so it must count normally, not be excluded.
         for wo in self:
-            entries = wo.batch_entry_ids.filtered(lambda e: e.ilo_dispatch_type != 'repair')
+            entries = wo.batch_entry_ids
+            if wo.workcenter_id.is_ball_receive_point:
+                entries = entries.filtered(lambda e: e.ilo_dispatch_type != 'repair')
             wo.qty_batch_completed = sum(entries.mapped('qty'))
+
+    def action_view_ilo_flow(self):
+        """Balls Done click-through for a Ball Receive Point row. Opens as a new
+        browser tab rather than navigating in-place — an act_window action dict
+        can't do that (Odoo's action service only opens act_url as a new tab), so
+        this addresses the stored, active_id-scoped variant of the ILO Flow action
+        by its real numeric id via the /odoo/<active_id>/action-<id> URL form."""
+        self.ensure_one()
+        action_id = self.env.ref('reema_mrp.action_reema_ilo_flow_from_workorder').id
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/odoo/{self.production_id.id}/action-{action_id}',
+            'target': 'new',
+        }
+
+    def action_view_batch_log(self):
+        """Balls Done click-through for every non-Ball-Receive-Point hall (see
+        action_view_ilo_flow above for that one) — the plain batch entries
+        logged at this specific work order, so a supervisor can see exactly
+        which submissions add up to the figure they clicked, in a new browser
+        tab (see action_view_ilo_flow for why act_url/active_id is used instead
+        of a plain act_window dict). Uses the stripped-down progress-log list
+        (one Qty column, no payment columns) — this is for verifying production
+        history in case of a dispute, not for payment review."""
+        self.ensure_one()
+        action_id = self.env.ref('reema_mrp.reema_batch_entry_action_from_workorder').id
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/odoo/{self.id}/action-{action_id}',
+            'target': 'new',
+        }
 
     @api.depends('qty_production', 'operation_id.balls_per_unit',
                  'workcenter_id.hall_unit',
@@ -92,13 +134,49 @@ class MrpWorkorder(models.Model):
             return qty_balls / bpu if bpu else qty_balls
         return qty_balls
 
-    @api.depends('batch_entry_ids.qty_balls', 'batch_entry_ids.ilo_dispatch_type')
+    @api.depends('batch_entry_ids.qty_balls', 'batch_entry_ids.ilo_dispatch_type',
+                 'is_ball_receive_point', 'production_id')
     def _compute_qty_balls_completed(self):
-        # Same reasoning as _compute_qty_batch_completed — exclude repair-return
-        # entries so rework loops don't double-count against this WO's target.
+        # Same base reasoning as _compute_qty_batch_completed (exclude repair-return
+        # entries to avoid double-counting a ball's original arrival and its later
+        # repair round-trip) — but ALSO, at the Ball Receive Point only, net out
+        # balls currently dispatched out for an Initial-QC-sourced repair: they
+        # already contributed to a prior stitching receipt here, so while they're
+        # away being fixed they should not still read as "done". This is a live
+        # balance, not a one-way deduction — it comes back up on its own once the
+        # repair is received (dispatched - received nets back to 0), which is why
+        # this field is intentionally NOT stored: a repair dispatch is created on a
+        # different model from a different work order (Initial QC), so a stored
+        # value here would go stale with no dependency path to trigger recompute.
+        #
+        # qty_batch_completed (Completed) is deliberately left alone — it keeps
+        # meaning "total ever received from stitching", not "currently on hand".
+        # The two are expected to diverge whenever a repair is outstanding; that
+        # gap is itself the signal something is out being fixed (see the ILO Flow
+        # link on this column).
+        #
+        # Final QC has no such duplicate: a repair-return entry there is the ONLY
+        # record of those balls being back (the Fail qty never created a batch
+        # entry at all there), so it must count normally, not be excluded/netted.
+        Dispatch = self.env['reema.ilo.dispatch']
         for wo in self:
-            entries = wo.batch_entry_ids.filtered(lambda e: e.ilo_dispatch_type != 'repair')
-            wo.qty_balls_completed = sum(entries.mapped('qty_balls'))
+            entries = wo.batch_entry_ids
+            if wo.is_ball_receive_point:
+                entries = entries.filtered(lambda e: e.ilo_dispatch_type != 'repair')
+            total = sum(entries.mapped('qty_balls'))
+            if wo.is_ball_receive_point and wo.production_id:
+                contractors = Dispatch._ilo_contractors_for_mo(wo.production_id.id)
+                repair_outstanding = sum(
+                    Dispatch._ilo_ledger_balance_by_type(wo.production_id.id, c.id, 'repair')
+                    for c in contractors
+                )
+                total -= repair_outstanding
+            wo.qty_balls_completed = total
+
+    @api.depends('scrap_ids.qty_balls')
+    def _compute_qty_scrap_balls(self):
+        for wo in self:
+            wo.qty_scrap_balls = sum(wo.scrap_ids.mapped('qty_balls'))
 
     # Extend state computation: a work order blocked by a predecessor is also unblocked
     # when the predecessor sets batch_released=True (partial completion released to next hall).
@@ -225,10 +303,58 @@ class MrpWorkorder(models.Model):
                 'target': 'new',
                 'context': {'default_workorder_id': self.id},
             }
+        # Final QC's own repair/scrap loop only applies to HS/ILO construction —
+        # other construction types keep the plain generic batch-log wizard, since
+        # there's no original-contractor lineage to charge repair/scrap against.
+        if self.workcenter_id.is_final_qc and self.production_id.construction_type == 'hs':
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Final QC',
+                'res_model': 'reema.final.qc.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_workorder_id': self.id},
+            }
         return {
             'type': 'ir.actions.act_window',
             'name': 'Log Batch Progress',
             'res_model': 'reema.batch.entry.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_workorder_id': self.id},
+        }
+
+    final_qc_repair_outstanding = fields.Boolean(
+        compute='_compute_final_qc_repair_outstanding',
+        help='True when this Final QC work order has a repair dispatch (sent from '
+             'Final QC itself) not yet received back — shows the Receive Repaired '
+             'Ball button.',
+    )
+
+    def _compute_final_qc_repair_outstanding(self):
+        Dispatch = self.env['reema.ilo.dispatch']
+        for wo in self:
+            if not wo.workcenter_id.is_final_qc:
+                wo.final_qc_repair_outstanding = False
+                continue
+            dispatches = Dispatch.search([
+                ('mo_id', '=', wo.production_id.id),
+                ('dispatch_type', '=', 'repair'),
+                ('repair_source', '=', 'final_qc'),
+            ])
+            wo.final_qc_repair_outstanding = any(
+                Dispatch._final_qc_repair_outstanding(
+                    wo.production_id.id, d.contractor_id.id, d.original_contractor_id.id
+                ) > 0
+                for d in dispatches
+            )
+
+    def action_final_qc_receive(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Receive Repaired Ball',
+            'res_model': 'reema.final.qc.receive.wizard',
             'view_mode': 'form',
             'target': 'new',
             'context': {'default_workorder_id': self.id},

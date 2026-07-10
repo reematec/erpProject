@@ -50,6 +50,15 @@ class MrpWorkcenter(models.Model):
              'Do not enable this on Final QC or Sorting — those keep the generic '
              '"Is QC Point" behaviour only; this flag is specifically for the ILO '
              'repair-loop mechanism, which only exists at one hall.')
+    is_final_qc = fields.Boolean(
+        string='Final QC Point', default=False,
+        help='Enable for the dedicated hall where ILO (hand-stitched) production gets '
+             'its last inspection before Packing. Logging a batch here opens the Final '
+             'QC modal (Pass / Fail-to-repair / Scrap) instead of the normal batch-log '
+             'modal.\n\n'
+             'Unlike Initial QC, Final QC runs its own self-contained repair loop — a '
+             'failed ball is dispatched straight to a repair contractor and received '
+             'back here directly, never routed back to Initial QC.')
     is_printing = fields.Boolean(
         string='Printing Work Center', default=False,
         help='Enable for screen-printing (silk-screen) halls.\n\n'
@@ -104,3 +113,11 @@ class MrpWorkcenter(models.Model):
         domain=[('code', '=like', '5-2-1%')],
         help='Account debited when a contractor bill is posted for this work center.',
     )
+    scrap_enabled = fields.Boolean(
+        string='Allow Scrap Logging', default=False,
+        help='Adds a "Scrapped Qty" field (with a reason) to the Log Batch Progress '
+             'modal at this hall, for balls that are damaged/lost during this '
+             'operation and cannot proceed to the next hall.\n\n'
+             'This is separate from the ILO Initial/Final QC scrap mechanism — it\'s '
+             'for general shop-floor loss (e.g. a burst ball at Shaping), logged to '
+             'the Production Scrap ledger with no contractor charge.')

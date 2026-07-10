@@ -32,14 +32,15 @@ registry.category("fields").add("trim_float", {
 });
 
 // Same trimming for the MO "To Consume" column, which uses the standard
-// mrp_should_consume widget (main qty + optional "should / total" prefix).
-// We trim both the editable quantity and the should-consume prefix.
+// mrp_should_consume widget. We suppress its "should / total" prefix
+// (not wanted here) and just trim the remaining quantity.
 export class TrimMrpShouldConsume extends MrpShouldConsumeOwl {
+    setup() {
+        super.setup();
+        this.displayShouldConsume = false;
+    }
     get formattedValue() {
         return trimZeros(super.formattedValue);
-    }
-    get shouldConsumeQty() {
-        return trimZeros(super.shouldConsumeQty);
     }
 }
 

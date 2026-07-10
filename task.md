@@ -9,7 +9,52 @@
 
 ## Current Tasks
 
-[ ] Admin overview — Shipped invoices with open production — logged June 23 2026
+[ ] Initial QC pending-balance formula fix — awaiting user review, logged Jul 10 2026
+    - Bug found while tracing MO/26/00020 (498 Ball Receive vs 493 Initial QC, off by 5).
+    - `_ilo_qc_pending_balance()` (reema_mrp/models/reema_ilo.py:165-187) wrongly
+      netted Final-QC-sourced repair dispatches and Final-QC scrap into the
+      Initial-QC pending count — a ball that already passed Initial QC and later
+      failed/was scrapped at Final QC has nothing to do with Initial QC's own
+      pending balance, but the formula subtracted it anyway. On this MO those two
+      unrelated Final QC items (2 balls repaired, 1 ball scrapped) happened to
+      exactly cancel out 3 real still-pending balls (Mushtaq Gunah returned from an
+      Initial-QC repair but never re-submitted for a Pass/Fail/Scrap decision),
+      so the wizard showed "Pending Inspection: 0" when it should have shown 3.
+    - Fix applied: added `('repair_source', '!=', 'final_qc')` to the sent_to_repair
+      search and `('workorder_id.workcenter_id.is_initial_qc', '=', True)` to the
+      scrapped search — mirrors the scoping `_ilo_repair_outstanding` already used
+      correctly. Verified via odoo shell: Mushtaq Gunah now correctly shows 3
+      pending on MO/26/00020; Afzal Badiana unaffected (still 0).
+    - User to review the change, then restart their dev server to pick it up
+      (Python model change — not hot-reloadable).
+    - File: reema_mrp/models/reema_ilo.py
+
+[x] Final QC — entered qty allowed to exceed previous stage output — fixed Jul 10 2026
+    - Root cause: `ReemaFinalQcWizard.action_confirm()` (reema_wo_batch.py:1352) never
+      checked Pass/Fail/Scrap qty against anything upstream — confirmed via odoo.log,
+      the 5 rapid entries all hit `reema.final.qc.wizard/action_confirm`. Every other
+      QC gate in the pipeline caps its qty (generic "Log Batch" wizard checks
+      blocked_by_workorder_ids; Initial QC checks `total > pending`) — Final QC was
+      the one gate that didn't, acknowledged in its own docstring ("no automatic cap
+      for them here").
+    - Fix applied: added a predecessor-output cap mirroring the generic wizard's
+      pattern — sums the predecessor hall's (e.g. Cleaning) qty_balls_completed,
+      subtracts what's already been passed/repaired/scrapped at Final QC for this MO
+      (excluding repair-return re-entries, which are the same physical balls cycling
+      back, not new arrivals), and blocks if Pass+Fail+Scrap would exceed what's left.
+      Verified via odoo shell: a 30-ball entry on MO/26/00020 is now correctly
+      rejected.
+    - Historical over-entry on MO/26/00020 also corrected (Jul 10 2026): traced the
+      11-ball overage to a single entry, WL/26/00101 (qty 30, logged last in the
+      rapid-entry sequence at 09:40:56) — everything logged before it exactly
+      matched Cleaning's output at that moment, so it was the sole violation.
+      Reduced to qty 19 (the true remaining balance at that point) via
+      `reema.wo.batch.entry`.write(), with a note added on the entry recording the
+      correction. Re-verified: Cleaning output 492 == Final QC consumed 492,
+      balance 0.
+    - File: reema_mrp/models/reema_wo_batch.py
+
+[ ] Admin overview — Shipped invoices with open production — logged June 23 2026 — PARTIAL, reconciled Jul 9 2026
     - Background: "Mark Done" on a Production Order is now decoupled from shipping.
       An invoice can be marked as Shipped even if the linked PO is still Confirmed
       or the MOs are still in progress. This is intentional (shipping documents can
@@ -27,27 +72,13 @@
     - Files likely involved:
         reema_mrp/models/reema_production_order.py (computed field or new model)
         reema_mrp/views/reema_production_order_views.xml (new list view + menu item)
-
-[ ] Work Order Start/Pause/Finish button visibility bug (MO form, Work Orders tab) — logged June 16 2026
-    - Reported: after clicking Play (Start), the row still shows the Play button even
-      though the state badge correctly says "In Progress" — confusing, looks like it
-      never started. Also: no Pause button is visible at all to stop/hold a work order
-      mid-process.
-    - Root cause found: the embedded Work Orders list
-      (custom_addons/reema_mrp/views/mrp_views.xml, view `mrp_workorder_reema_list`)
-      inherits Odoo's base buttons, which are driven by `is_user_working` — a *per-viewing-user*
-      clock-in flag (true only for whoever personally clicked Start), not the WO's own
-      `state`. Since this workflow has one operator/contractor per hall (not Odoo's
-      multi-user clock-in model), anyone else viewing the row (or the same person via a
-      different login) still sees stale Play/no-Pause. Pause was also previously hidden
-      outright via `column_invisible="True"` instead of fixing the condition.
-    - Planned fix (not yet implemented): change the `invisible` attribute on
-      button_start/button_pending/button_finish in `mrp_workorder_reema_list` to key off
-      `state` directly (progress/done/cancel) instead of `is_user_working`. No Python/model
-      changes needed — `button_pending()`/`button_finish()` server-side guards in
-      reema_mrp/models/mrp_workorder.py are already correct.
-    - Full plan: /home/amir/.claude/plans/now-in-manufacturing-orders-jolly-meerkat.md
-    - Status: deferred — user wants to pick this up later.
+    - STATUS CHECK (Jul 9 2026): the `has_active_production_order` compute field
+      already exists (ReemaInvoiceProductionExt, reema_mrp/models/reema_production_order.py:419-450)
+      but is only wired up to gate the "Reset to Pending" button's visibility
+      (reema_mrp/views/reema_production_order_views.xml:219) — no dashboard/list view
+      exists yet, and action_close (reema_invoice/models/reema_invoice.py:237) doesn't
+      check it before allowing Shipped. Remaining work is narrower than originally
+      scoped: just the list/dashboard view + menu, the underlying field is ready to use.
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      CLAUDE AI INTEGRATION — MCP Server for Odoo Development
@@ -286,16 +317,17 @@
     - Suggest PO quantities for replenishment based on shortfall
     - Optional: auto-generate draft reema.purchase.order for consumables
 
-[] In batch logs, include a column for PO,
-  - Also assign a reference number to Batch log
-
-[] BOM deletion — add stricter constraints
-  - Current Odoo built-in only blocks deletion if an MO is actively running (state not in done/cancel)
-  - No protection for: completed/cancelled MO history, reema.production.order references, invoices
-  - Add @api.ondelete on mrp.bom (inherited in reema_mrp) to block deletion if:
-      1. Any mrp.production (regardless of state) references the BOM — preserves full history
-      2. Any reema.production.order.line references the BOM via bom_id
-  - File to modify: reema_mrp/models/reema_production_order.py (MrpBomReemaExt class)
+[ ] BOM deletion — cancelled-MO gap — reconciled Jul 9 2026
+  - Original ask: block mrp.bom deletion if referenced by ANY mrp.production regardless
+    of state, or by any reema.production.order.line.
+  - STATUS CHECK (Jul 9 2026): mostly done — MrpBomReemaExt.unlink() override in
+    reema_mrp/models/reema_production_order.py:695-712 blocks deletion when any
+    mrp.production with state != 'cancel' references the BOM (covers done/in-progress,
+    not just actively-running), and unconditionally blocks if any
+    reema.production.order.line references it. Remaining gap: cancelled MOs are NOT
+    protected, so BOM history tied only to a cancelled MO can still be deleted.
+  - Remaining work: decide if cancelled-MO history should also block deletion, and if
+    so extend the state check to include 'cancel'.
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      PHASE 1 — Foundation
@@ -341,18 +373,6 @@
 [x] MO number in Production Order lines — clickable link — Completed May 11 2026
     - Added options="{'no_open': False}" to mo_id field in production lines list.
     - File: reema_mrp/views/reema_production_order_views.xml
-
-[ ] BOM auto-reference number
-    - mrp.bom has no reference field — BOMs are currently identified only by
-      product name, which is ambiguous when a product has multiple BOMs (e.g.
-      different revisions or construction types).
-    - Add a `reema_reference` Char field on mrp.bom (inherited via MrpBomReemaExt
-      in reema_mrp/models/reema_production_order.py).
-    - Auto-assign on create using a new ir.sequence: prefix BOM/%(year)s/, padding 5.
-    - Field must be readonly after creation (assigned once, never changed).
-    - Show it in the BOM form view header (oe_title area) and BOM list view as
-      first column so it is immediately visible.
-    - Sequence record to add in reema_mrp/data/ir_sequence_data.xml.
 
 [x] Phase 1.1 — Fix reema_mrp bugs — Completed May 5 2026
     - Duplicate line was a reporting artifact — actual code was fine.
@@ -516,7 +536,21 @@
     - Inline qty editing is preserved (no changes to editable="bottom").
     - Plan file: /home/wsl_amir/.claude/plans/cozy-moseying-crown.md
 
-[ ] Phase 1.8 — Role-based access control (all users)
+[ ] Phase 1.8 — Role-based access control (all users) — PARTIAL, reconciled Jul 9 2026
+    - STATUS CHECK (Jul 9 2026): most of the group structure below already exists,
+      just not exactly as named here. reema_mrp/security/reema_mrp_security.xml has
+      group_reema_hall_incharge, group_reema_supervisor, group_reema_production_manager,
+      group_reema_store. reema_sampling has group_reema_sampling ("Sampling Team").
+      reema_invoice has group_reema_invoice_user ("Export Staff") and
+      group_reema_packing_user ("Packing Staff"). reema_purchase has its own
+      gate/purchase-user/purchase-manager/owner groups. Two real gaps remain:
+      (1) no group is ACL-restricted to mrp.workorder only for a tablet/floor-only
+      role (group_reema_hall_incharge implies base.group_user, giving broader
+      access than "Work Orders only, tablet view" calls for); (2) no explicit
+      Finance group exists (closest analog is the purchase module's Owner/
+      Management group). Remaining work is narrower than a from-scratch build —
+      mainly closing those two gaps and confirming real users are assigned to the
+      right existing groups (Step 3 below).
     ─────────────────────────────────────────────────────
     ROLES TO DEFINE:
 
@@ -683,28 +717,7 @@
       material issuance auto-posts Dr WIP / Cr Raw Materials;
       MO close auto-posts Dr Finished Goods / Cr WIP (no code needed)
 
-[ ] Phase A.3 — Contractor Bill Model + Workflow
-    - New model: reema.contractor.bill in reema_mrp/models/reema_contractor_bill.py
-    - Purpose: labor cost hits COGS only when contractor bill is confirmed,
-      NOT when work order is completed (supervisors don't close WOs reliably)
-    - Bill is fully independent of WO/MO/PO closure state
-    - Fields: contractor_id, work_type (stitching/cutting/sublimation),
-      date, line_ids, state, account_move_id, total_amount
-    - Bill lines: description, qty (from contractor tally), piece_rate_id,
-      rate (auto-filled from piece rate master, editable), subtotal
-    - Workflow states:
-        draft → [Supervisor Approves qty against physical count]
-        supervisor_approved → [Accounting Confirms]
-        confirmed → posts account.move:
-                      Dr 5200/5210/5220 Direct Labor (by work_type)
-                      Cr 2121/2122/2123 Contractor Payable (by contractor)
-        paid → [Register Payment] Dr Contractor Payable / Cr 1111 Bank
-    - Payment is often instant (same session as confirmation)
-    - Files to create: reema_mrp/models/reema_contractor_bill.py (new),
-      reema_mrp/views/reema_contractor_bill_views.xml (new)
-    - Files to modify: reema_mrp/models/__init__.py, reema_mrp/__manifest__.py
-
-[ ] Phase A.4 — Sales Invoice from Pro Forma Invoice
+[ ] Phase A.4 — Sales Invoice from Pro Forma Invoice — PARTIAL, reconciled Jul 9 2026
     - reema.invoice (PI) is currently a standalone document with no accounting impact
     - When PI is marked as Shipped (action_mark_shipped), auto-generate account.move
     - New field on reema.invoice: account_invoice_id (Many2one account.move, readonly)
@@ -716,6 +729,14 @@
         Link: account_invoice_id ← new move
     - Add smart button on PI form: "Accounting Invoice" (links to account.move)
     - Files: custom_addons/reema_invoice/models/reema_invoice.py
+    - STATUS CHECK (Jul 9 2026): `move_id` field + `_create_accounting_entry()`
+      already exist (reema_invoice/models/reema_invoice.py:120,268-375), but two gaps
+      vs. the spec above: (1) it fires on action_accept() [state→accepted], not on
+      shipment [action_close(), state→closed] as originally planned; (2) it creates a
+      generic move_type='entry' journal entry, not a proper move_type='out_invoice'
+      customer invoice. Remaining work: decide whether to move the trigger to
+      shipment and switch to a real out_invoice, or keep current behavior and update
+      this spec to match reality.
 
 [ ] Phase A.5 — Purchase & Vendor Bills Setup (Native Odoo, config only)
     - No custom code needed — use Odoo's standard purchase module
@@ -731,7 +752,7 @@
         Each customer partner: set property_account_receivable_id → their individual account
         WHT and Input GST taxes set as default on vendor records
 
-[ ] Phase A.6 — Payments & Advances
+[ ] Phase A.6 — Payments & Advances — PARTIAL, reconciled Jul 9 2026
     - Customer Advances:
         account.payment inbound → post to customer's advance account (2131/2132...)
         On invoice confirmation, reconcile advance against receivable
@@ -740,6 +761,12 @@
         On vendor bill confirmation, reconcile advance against payable
     - Contractor instant payment: built into Phase A.3 contractor bill flow
     - Test: advance paid → invoice raised → reconcile → balance = 0
+    - STATUS CHECK (Jul 9 2026): contractor/vendor side exists — reema.bill.deduction
+      (reema_accounting/models/account_move_ext.py:5-6) injects deduction lines into
+      contractor vendor bills on post, and res.partner has a per-partner
+      reema_advance_account_id (reema_accounting/models/res_partner_ext.py:14-17).
+      Customer-side advance payment/reconciliation on reema.invoice is NOT started —
+      that's the remaining scope here.
 
 [ ] Phase A.7 — Bank & Reconciliation
     - Use native Odoo account.bank.statement
@@ -773,14 +800,6 @@
     - Shows: ball type, quantity, contractor, current hall
     - One button: "Mark Done" with qty field
 
-[ ] Phase 2.2 — Material consumption at correct work order step
-    - Configure "Consumed in Operation" on BOM components:
-        Bladder → consumed at Hall 9 (Bladder Attachment)
-        Foam Panel → consumed at Hall 7 (Foam Attachment, HYB only)
-        Thread → consumed at Hall 6 (Stitching)
-        PU + Fabric → consumed at Hall 2 (Lamination)
-    - System deducts stock at the exact hall where material is physically used
-
 [x] Batch Log view + Piece Rate linkage on batch entries — Completed May 13 2026
     - Added `piece_rate_id` (Many2one → reema.piece.rate) and `amount_earned`
       (computed: rate × qty, stored) to `reema.wo.batch.entry`.
@@ -810,9 +829,9 @@
 
     OPEN DECISIONS (resolve before Phase 2.3):
 
-    1. MO column in Batch Logs list
-       - Currently shows Work Order name (e.g. "Cutting") but NOT MO number (MO/2026/00012)
-       - Add production_id as a separate column for quick MO identification
+    1. MO column in Batch Logs list — RESOLVED (Jul 9 2026)
+       - reema_mrp/views/reema_wo_batch_views.xml shows both `mo_id` ("MO") and
+         `reema_po_id` ("PO") columns on the Batch Logs list — already done.
 
     2. Piece rate population
        - Who enters rates — Waleed or Irfan?
@@ -820,10 +839,12 @@
        - Same rate for all contractors, or negotiated individually per contractor?
        - Current design: one rate per hall + work_type, same for everyone
 
-    3. Payables generation (Phase 2.3)
-       - amount_earned exists on batch entries but is NOT posted to accounting yet
-       - Irfan needs weekly payables report per contractor
-       - Decision: use account.move (vendor bill) or a custom payable model?
+    3. Payables generation (Phase 2.3) — RESOLVED (Jul 9 2026)
+       - Decision landed on account.move (vendor bill), not a custom payable model —
+         see action_create_contractor_bill() on reema.wo.batch.entry
+         (reema_mrp/models/reema_wo_batch.py). Selected unbilled entries for one
+         contractor become lines on an in_invoice account.move; ILO repair charges
+         and production-scrap deductions are pulled in automatically as extra lines.
 
     4. Approval workflow
        - Should Irfan approve batch entries before amounts are finalized?
@@ -834,31 +855,11 @@
         reema_mrp/models/reema_piece_rate.py
         reema_mrp/views/reema_wo_batch_views.xml
 
-[ ] Phase 2.3 — Piece rate payables to accounting
-    - After Phase 1 work centers are set up, Waleed fills piece rate matrix:
-        Hall + construction type + ball size + complexity → rate per unit
-    - Contractor payable auto-entry when work order is confirmed by Ali Shan
-    - Irfan sees pending payables per contractor per week for approval
-
-[ ] Phase 2.4 — QC pass / rework / reject buttons
-    - Hall 13 (Initial QC) and Hall 16 (Final QC) get three buttons:
-        Pass → ball moves to next hall, contractor cleared for payment
-        Rework → ball sent back to previous hall, contractor flagged (no double pay)
-        Reject → ball moved to B-Grade warehouse or Scrap location
-    - System records rejection reason for monthly quality reports
-
-
 <!-- ═══════════════════════════════════════════════════════════════════════
      PHASE 3 — Quality, HS & Advanced Costing
      Goal: Full production control, HS ball ILO tracking, accurate COGS.
      Start only after Phase 2 is stable.
 ════════════════════════════════════════════════════════════════════════ -->
-
-[ ] Phase 3.1 — HS ball ILO contractor tracking
-    - Printed Panel Sets issued to ILO contractors (outgoing transfer)
-    - Stitched Shells received back (incoming transfer)
-    - Gatekeeper interface: scan out / scan in
-    - Track "in transit" quantity per contractor
 
 [ ] Phase 3.2 — Yield gap variance reporting
     - Compare input vs output at each hall (detect waste/theft)
@@ -869,6 +870,15 @@
     - When balls are scrapped in Final QC, redistribute cost of
       scrapped balls across remaining good balls in the same MO
     - Use Scrap Entry within the Manufacturing Order
+    - NOTE (Jul 9 2026): related infrastructure now exists but doesn't do this — a
+      generic scrap-tracking system (reema.production.scrap + reema.ilo.qc.scrap,
+      combined in reema.scrap.report) was built for Shaping/Printing/Cutting plus
+      the existing ILO QC scrap flow. It records qty + reason + (for contractor
+      halls) a manual PKR deduction on that contractor's bill, but never computes
+      or spreads a redistributed cost across the MO's remaining good units — for
+      employee halls (Shaping) the cost is just left unrecovered/absorbed, not
+      explicitly redistributed. This phase's actual "redistribute across remaining
+      good balls" calculation is still not started.
 
 [ ] Phase 3.4 — Full COGS calculation per order
     - Raw material landed cost + cumulative piece rates + consumables
@@ -879,6 +889,56 @@
 
 
 ## Completed Tasks
+
+[x] Work Order Start/Pause/Finish button visibility bug — Completed, reconciled Jul 9 2026
+    - Was logged June 16 2026 as deferred; found already fixed in the codebase during
+      a task.md reconciliation pass. `mrp_workorder_reema_list`
+      (reema_mrp/views/mrp_views.xml:379-390) now keys `invisible` on
+      button_start/button_finish off `state` directly (progress/done/cancel) instead
+      of the per-viewing-user `is_user_working` clock-in flag, matching the planned
+      fix. `button_pending` stays fully hidden via `column_invisible`.
+
+[x] Batch Logs — PO column + reference number — Completed, reconciled Jul 9 2026
+    - Both sub-items already done: reema_batch_entry_view_list
+      (reema_mrp/views/reema_wo_batch_views.xml) shows `reema_po_id` ("PO") and
+      `mo_id` ("MO") columns; batch entries get an auto-sequenced `name`
+      (WL/%(y)s/#####, seq_reema_production_batch in
+      reema_mrp/data/ir_sequence_data.xml, consumed in reema_wo_batch.py create()).
+
+[x] BOM auto-reference number — Completed May 11 2026
+    - `reema_reference` Char field on mrp.bom (MrpBomReemaExt,
+      reema_mrp/models/reema_production_order.py), auto-sequenced via
+      seq_reema_bom (BOM/%(year)s/, padding 5) on create(), set as `_rec_name`.
+      Shown as form title and first column in the BOM list view
+      (reema_mrp/views/mrp_views.xml).
+
+[x] Phase 2.2 — Material consumption at correct work order step — Completed, reconciled Jul 9 2026
+    - mrp.bom.line has a "Consuming Operation" (operation_id) column; backflush
+      consumes each hall's assigned components proportional to that batch's balls
+      via _backflush_components() (reema_mrp/models/reema_wo_batch.py) when a batch
+      is logged at that hall — material is deducted at the exact hall it's used,
+      not all at once. (Some halls, e.g. Shaping/Printing/Cutting, deliberately have
+      zero components assigned — they're pure labor steps, material was already
+      consumed upstream.)
+
+[x] Phase 2.4 — QC pass / rework / reject buttons — Completed, reconciled Jul 9 2026
+    - Built out considerably beyond the original 3-button sketch: Initial QC and
+      Final QC each get a dedicated Pass/Fail(repair)/Scrap wizard
+      (ReemaIloQcWizard, ReemaFinalQcWizard in reema_mrp/models/reema_wo_batch.py) —
+      Pass credits the contractor and advances the ball, Fail dispatches it to a
+      repair contractor (reema.ilo.dispatch) with a full outstanding-balance ledger,
+      Scrap writes it off (reema.ilo.qc.scrap) with a defect reason and a contractor
+      deduction. Rejection reasons are recorded and reportable via the combined
+      Scrap Report (reema.scrap.report).
+
+[x] Phase 3.1 — HS ball ILO contractor tracking — Completed, reconciled Jul 9 2026
+    - Full dispatch/receive/ledger subsystem in reema_mrp/models/reema_ilo.py:
+      reema.ilo.dispatch (outgoing, stitching + repair), receive wizard logging
+      returns as batch entries, reema.ilo.balance (SQL view, dispatched vs.
+      received per MO/contractor/flow type), reema.ilo.flow (combined chronological
+      feed). Goes beyond "scan out/scan in" — tracks stitching vs. repair
+      separately, per-contractor outstanding balances, and payable computation.
+
 [x] Charges in correct totals order + document file upload fix — Completed May 5, 2026.
     - Totals block restructured: Total Qty → Total Amount → [named charges inline] → Net Total Payable.
       Used Bootstrap col-6/ms-auto div to right-align, with tables above/below the charge_ids list.

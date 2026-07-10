@@ -1,0 +1,9 @@
+/* Work Orders list on the MO form: mirror the Products list treatment
+   (On Hand / Forecasted) for the Balls Done figure on every row —
+   pointer cursor + underline on hover signals it navigates. */
+.o_reema_wo_nav_cell {
+    cursor: pointer;
+}
+.o_reema_wo_nav_cell:hover {
+    text-decoration: underline;
+}
