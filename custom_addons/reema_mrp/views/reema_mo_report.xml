@@ -121,6 +121,7 @@
                                     <th class="text-end">Target</th>
                                     <th class="text-end">Completed</th>
                                     <th class="text-end">Balls Done</th>
+                                    <th class="text-end">Scrapped</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -132,6 +133,10 @@
                                         <td class="text-end"><span t-out="('%.6f' % w.hall_qty).rstrip('0').rstrip('.')"/></td>
                                         <td class="text-end"><span t-out="('%.6f' % w.qty_batch_completed).rstrip('0').rstrip('.')"/></td>
                                         <td class="text-end"><span t-out="('%.6f' % w.qty_balls_completed).rstrip('0').rstrip('.')"/></td>
+                                        <td class="text-end">
+                                            <span t-if="w.qty_scrap_hall_unit" t-out="('%.6f' % w.qty_scrap_hall_unit).rstrip('0').rstrip('.')"/>
+                                            <span t-else="">-</span>
+                                        </td>
                                         <td><span t-field="w.state"/></td>
                                     </tr>
                                 </t>

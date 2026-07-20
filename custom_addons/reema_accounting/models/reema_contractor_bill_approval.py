@@ -38,7 +38,7 @@ class ReemaContractorBillApproval(models.Model):
         currency_field='currency_id',
     )
     reema_bill_state = fields.Selection(
-        [('pending', 'Pending'), ('confirmed', 'Confirmed')],
+        [('pending', 'Pending'), ('submitted', 'Submitted'), ('confirmed', 'Confirmed')],
         compute='_compute_from_move',
         string='Approval',
     )
@@ -89,7 +89,7 @@ class ReemaContractorBillApproval(models.Model):
 
     def action_delete(self):
         self.ensure_one()
-        action = self.env.ref('reema_accounting.action_contractor_bill_approval').read()[0]
+        action = self.env['ir.actions.act_window']._for_xml_id('reema_accounting.action_contractor_bill_approval')
         self.move_id.sudo().action_delete_contractor_bill()
         return action
 

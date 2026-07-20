@@ -9,6 +9,24 @@
 
 ## Current Tasks
 
+[ ] Batch Log — "Correct Quantity" wizard — HELD, logged Jul 14 2026
+    - Problem: if a supervisor logs the wrong qty (e.g. 50 balls received when it
+      was actually 60), there is no in-place edit — the whole batch entry form is
+      read-only (reema_wo_batch_views.xml, reema_batch_entry_view_form). Today's
+      only path is delete the wrong entry (action_supervisor_delete, now with the
+      cascade-reversal + safety guards added Jul 14 2026 — see completed entry
+      below) then log a fresh correct entry via the normal wizard. That works but
+      is two manual steps with no explicit "corrected X → Y" trail beyond the two
+      separate chatter messages.
+    - Possible fix (not started, holding per user's request): a "Correct Quantity"
+      wizard/button on the batch entry that does the delete + re-log in one action
+      and writes a single clear "Corrected 50 → 60" message to the MO chatter,
+      instead of two disconnected log lines.
+    - Explicitly NOT building this now — user said hold for the moment, just keep
+      the possibility on record.
+    - Files likely involved: reema_mrp/models/reema_wo_batch.py (new wizard/method
+      on reema.wo.batch.entry), reema_mrp/views/reema_wo_batch_views.xml (button).
+
 [ ] Initial QC pending-balance formula fix — awaiting user review, logged Jul 10 2026
     - Bug found while tracing MO/26/00020 (498 Ball Receive vs 493 Initial QC, off by 5).
     - `_ilo_qc_pending_balance()` (reema_mrp/models/reema_ilo.py:165-187) wrongly
@@ -752,7 +770,7 @@
         Each customer partner: set property_account_receivable_id → their individual account
         WHT and Input GST taxes set as default on vendor records
 
-[ ] Phase A.6 — Payments & Advances — PARTIAL, reconciled Jul 9 2026
+[ ] Phase A.6 — Payments & Advances — PARTIAL, reconciled Jul 9 2026, contractor design planned Jul 15 2026
     - Customer Advances:
         account.payment inbound → post to customer's advance account (2131/2132...)
         On invoice confirmation, reconcile advance against receivable
@@ -767,6 +785,35 @@
       reema_advance_account_id (reema_accounting/models/res_partner_ext.py:14-17).
       Customer-side advance payment/reconciliation on reema.invoice is NOT started —
       that's the remaining scope here.
+    - CONTRACTOR ADVANCE DESIGN (planned Jul 15 2026, NOT started — user wants to
+      prioritize accounting work first, so this is next up once that's underway):
+      Today's Advance Deductions tab on the contractor bill is pure free text
+      (description + account + amount, reema.bill.deduction) — nothing tracks how
+      much a contractor was actually advanced or how much is left, so a deduction
+      can be entered for any amount regardless of real outstanding balance.
+      Contractors take advances in 2 forms that need different recovery rules:
+        1. Long-term advance — recovered gradually, any amount per bill, stays
+           active until fully recovered.
+        2. One-time advance — must be recovered in full on the very next bill
+           (no partial recovery allowed).
+      Planned fix: new reema.contractor.advance model (contractor_id, advance_type
+      [long_term/one_time], amount, date, recovery_account_id default from
+      partner.reema_advance_account_id, state [active/settled/cancelled],
+      amount_recovered + amount_remaining computed from linked deduction lines).
+      reema.bill.deduction gets a new advance_id field (domain: contractor's active
+      advances only) — picking one auto-fills/locks the recovery account, forces
+      full-remaining-balance for one_time, caps at remaining balance for long_term,
+      and auto-settles the advance at 0 remaining. Smart button on contractor form
+      shows outstanding balance. Gated to account.group_account_manager throughout
+      (matches existing reema_can_edit_deductions / all other real accounting
+      actions in this module — no new group needed; "all advance processing and
+      payments are done by accounts" per user).
+      OPEN DECISION (blocks starting this): does creating an advance record also
+      post the actual outbound payment (Dr Advance Account / Cr Bank — one
+      integrated step, no drift risk — recommended), or does Accounts keep paying
+      the advance the normal manual way and this model is purely a declared
+      tracking record entered afterward (simpler to build, two steps that can
+      drift out of sync)? User has not yet picked between the two.
 
 [ ] Phase A.7 — Bank & Reconciliation
     - Use native Odoo account.bank.statement
@@ -889,6 +936,55 @@
 
 
 ## Completed Tasks
+
+[x] Batch Log — "Balance" instead of "Completed So Far" in Log Batch Progress modal — Completed Jul 14 2026
+    - Work Orders list already showed both Target and Completed columns
+      (mrp_views.xml:364-365), so repeating "Completed So Far" in the Log Batch
+      Progress wizard was redundant — a Balance (remaining) figure is more useful
+      there.
+    - Added qty_balance computed field (hall_qty - qty_batch_completed) on
+      reema.batch.entry.wizard; swapped it in for qty_batch_completed in the
+      wizard form.
+    - Files: reema_mrp/models/reema_wo_batch.py, reema_mrp/views/reema_wo_batch_views.xml
+
+[x] Batch Log view — Production Order / Manufacturing Order group-by — Completed Jul 14 2026
+    - Added reema_po_id and mo_id (both already existed on reema.wo.batch.entry)
+      as searchable fields and Group By filters in the Batch Logs search view —
+      they were shown as list columns already but had no way to group by them.
+    - File: reema_mrp/views/reema_wo_batch_views.xml
+
+[x] Batch Log delete — cascade-reverse ILO/scrap side effects — Completed Jul 14 2026
+    - Background: reema.wo.batch.entry.unlink() (written Jun 19 2026) only ever
+      reversed stock moves + WO/MO state. The repair-dispatch, scrap, and
+      contractor-deduction tables it never knew about (reema.ilo.qc.scrap added
+      Jul 6, reema.ilo.contractor.deduction + reema.production.scrap added Jul 10)
+      were added after unlink() was written and nobody taught it about them —
+      confirmed via git log. Deleting an ILO/scrap-involved batch entry silently
+      orphaned those rows (all FKs are ON DELETE SET NULL — verified via psql
+      pg_constraint) instead of reversing or erroring, leaving contractors still
+      charged / balls still shown as outstanding for a batch entry that no longer
+      existed.
+    - Fix: unlink() now finds and deletes the linked reema.ilo.dispatch (+ its
+      repair deduction), reema.ilo.qc.scrap (+ its scrap deduction), and
+      reema.production.scrap records; un-consumes repair_count_consumed on any
+      dispatch this entry had consumed as a repair-contractor payable ("Pass")
+      entry. Blocks deletion with a clear UserError (does not attempt to silently
+      proceed) when: the dispatch already has downstream receive/QC activity, the
+      repair was already paid out, a linked deduction/scrap was already applied to
+      a bill, or the entry includes a lost-ball report.
+    - Deliberate scope limit: lost-ball charges (deduction_type='lost') are BLOCKED
+      on delete, not auto-reversed — the qty_lost amount gets spread across
+      dispatch rows with no record of which event added how much to which row, so
+      auto-reversing it isn't safely automatable without a bigger allocation-
+      tracking redesign. Added a new batch_entry_id field on
+      reema.ilo.contractor.deduction (reema_ilo.py) so future lost-ball entries are
+      at least detectable/blockable — reordered ReemaIloReceiveWizard and
+      ReemaFinalQcReceiveWizard (action_confirm) to create the batch entry before
+      the lost/scrap side records so they can link back to it (also fixed
+      Final QC Receive's scrap record, which had no batch_entry_id link at all
+      before this).
+    - Related, held for later: see "Batch Log — Correct Quantity wizard" above.
+    - Files: reema_mrp/models/reema_wo_batch.py, reema_mrp/models/reema_ilo.py
 
 [x] Work Order Start/Pause/Finish button visibility bug — Completed, reconciled Jul 9 2026
     - Was logged June 16 2026 as deferred; found already fixed in the codebase during

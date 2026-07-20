@@ -15,7 +15,7 @@
                     </group>
                     <group string="Progress">
                         <field name="hall_qty" string="Target" readonly="1"/>
-                        <field name="qty_batch_completed" readonly="1"/>
+                        <field name="qty_balance" readonly="1"/>
                     </group>
                 </group>
                 <group>
@@ -42,7 +42,7 @@
                            invisible="hall_unit != 'panel'"/>
                     <field name="piece_rate_value" string="Rate (PKR)" readonly="1"
                            invisible="workforce_type == 'employee'"/>
-                    <field name="notes" placeholder="Optional: e.g. 'Morning shift batch'"/>
+                    <field name="notes" placeholder="Optional: e.g. 'Morning shift batch'" colspan="2"/>
                 </group>
                 <group invisible="not scrap_enabled">
                     <field name="scrap_enabled" invisible="1"/>
@@ -97,6 +97,7 @@
                            required="receipt_purpose == 'repair'"
                            options="{'no_create': True, 'no_edit': True}"/>
                     <field name="qty" string="Quantity Received" autofocus="1"/>
+                    <field name="qty_lost" string="Balls Reported Lost"/>
                 </group>
                 <field name="notes" placeholder="Optional notes..."/>
                 <footer>
@@ -124,24 +125,43 @@
                     <group string="Contractor">
                         <field name="available_contractor_ids" invisible="1"/>
                         <field name="contractor_id" options="{'no_create': True, 'no_edit': True}"/>
-                        <field name="pending_qty" string="Pending Inspection" readonly="1"/>
+                        <field name="qc_stitching_open" invisible="1"/>
+                        <field name="qc_repair_open" invisible="1"/>
+                        <field name="pending_qty" string="Pending Inspection (Total)" readonly="1"/>
+                        <field name="pending_qty_stitching" string="Pending — First-Time" readonly="1"
+                               invisible="not qc_stitching_open"/>
+                        <field name="pending_qty_repair" string="Pending — Repair Return" readonly="1"
+                               invisible="not qc_repair_open"/>
                     </group>
+                </group>
+                <group>
+                    <field name="inspection_purpose"
+                           invisible="not (qc_stitching_open and qc_repair_open)"
+                           required="qc_stitching_open and qc_repair_open"/>
+                    <field name="available_returning_repair_contractor_ids" invisible="1"/>
+                    <field name="returning_repair_contractor_id"
+                           invisible="inspection_purpose != 'repair'"
+                           required="inspection_purpose == 'repair'"
+                           options="{'no_create': True, 'no_edit': True}"/>
                 </group>
                 <group>
                     <group string="Inspection Result">
                         <field name="qty_pass" string="Pass Qty" autofocus="1"/>
-                        <field name="qty_fail" string="Fail Qty (Repair)"
+                        <field name="qty_fail" string="Fail Balls"
                                invisible="construction_type != 'hs'"/>
+                        <field name="repair_count" string="Number of Repairs"
+                               invisible="construction_type != 'hs'" required="qty_fail != 0"/>
                         <field name="repair_defect_type" required="qty_fail != 0"/>
                         <field name="repair_contractor_id" options="{'no_create': True, 'no_edit': True}"/>
                     </group>
                     <group string="Scrap / Write-off">
                         <field name="qty_scrap" string="Scrap / Write-off Qty"/>
-                        <field name="scrap_defect_type" invisible="qty_scrap == 0"
-                               required="qty_scrap != 0"/>
+                        <field name="scrap_defect_type" required="qty_scrap != 0"/>
                     </group>
                 </group>
-                <field name="notes" placeholder="Optional notes..."/>
+                <group col="1">
+                    <field name="notes" placeholder="Optional notes..." nolabel="1"/>
+                </group>
                 <footer>
                     <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
@@ -156,17 +176,15 @@
         <field name="model">reema.final.qc.wizard</field>
         <field name="arch" type="xml">
             <form string="Final QC">
+                <group string="Work Order">
+                    <field name="workorder_id" invisible="1"/>
+                    <field name="mo_id" invisible="1"/>
+                    <field name="workorder_name" readonly="1"/>
+                    <field name="workcenter_name" readonly="1"/>
+                    <field name="construction_type" invisible="1"/>
+                </group>
                 <group>
-                    <group string="Work Order">
-                        <field name="workorder_id" invisible="1"/>
-                        <field name="mo_id" invisible="1"/>
-                        <field name="workorder_name" readonly="1"/>
-                        <field name="workcenter_name" readonly="1"/>
-                        <field name="construction_type" invisible="1"/>
-                    </group>
-                    <group>
-                        <field name="qty_pass" string="Pass Qty" autofocus="1"/>
-                    </group>
+                    <field name="qty_pass" string="Pass Qty" autofocus="1"/>
                 </group>
                 <separator string="Only if there's a fault — repair or scrap"/>
                 <group>
@@ -174,21 +192,20 @@
                     <field name="contractor_id" string="Original Contractor"
                            options="{'no_create': True, 'no_edit': True}"
                            required="qty_fail != 0 or qty_scrap != 0"/>
-                    <field name="pending_repair_return_qty" readonly="1"/>
                 </group>
                 <group>
                     <group string="Repair">
-                        <field name="qty_fail" string="Fail Qty (Repair)"
+                        <field name="qty_fail" string="Fail Balls"
                                readonly="construction_type != 'hs'"/>
-                        <field name="repair_defect_type"
-                               readonly="qty_fail == 0" required="qty_fail != 0"/>
+                        <field name="repair_count" string="Number of Repairs"
+                               invisible="construction_type != 'hs'" required="qty_fail != 0"/>
+                        <field name="repair_defect_type" required="qty_fail != 0"/>
                         <field name="repair_contractor_id" options="{'no_create': True, 'no_edit': True}"
-                               readonly="qty_fail == 0" required="qty_fail != 0"/>
+                               required="qty_fail != 0"/>
                     </group>
                     <group string="Scrap">
                         <field name="qty_scrap" string="Scrap / Write-off Qty"/>
-                        <field name="scrap_defect_type"
-                               readonly="qty_scrap == 0" required="qty_scrap != 0"/>
+                        <field name="scrap_defect_type" required="qty_scrap != 0"/>
                     </group>
                 </group>
                 <field name="notes" placeholder="Optional notes..."/>
@@ -219,8 +236,14 @@
                         <field name="available_original_contractor_ids" invisible="1"/>
                         <field name="original_contractor_id" options="{'no_create': True, 'no_edit': True}"/>
                         <field name="balance_display" string="Outstanding" readonly="1"/>
-                        <field name="qty" string="Quantity Received" autofocus="1"/>
                     </group>
+                </group>
+                <group>
+                    <field name="qty" autofocus="1"/>
+                    <field name="qty_reject"/>
+                    <field name="qty_scrap"/>
+                    <field name="scrap_defect_type" required="qty_scrap != 0"/>
+                    <field name="qty_lost"/>
                 </group>
                 <div class="alert alert-danger mb-0 mt-2" role="alert" invisible="not qty_warning">
                     <field name="qty_warning" readonly="1" nolabel="1"/>
@@ -355,6 +378,8 @@
                 <field name="logged_by" string="Logged By"/>
                 <field name="contractor_id" string="Contractor"/>
                 <field name="workorder_id" string="Work Order"/>
+                <field name="reema_po_id" string="Production Order"/>
+                <field name="mo_id" string="Manufacturing Order"/>
                 <field name="piece_rate_id" string="Piece Rate"/>
                 <filter string="Unbilled" name="unbilled" domain="[('is_billed', '=', False), ('payment_excluded', '=', False)]"/>
                 <filter string="Billed"   name="billed"   domain="[('is_billed', '=', True)]"/>
@@ -369,6 +394,8 @@
                     <filter string="Logged By" name="group_logged_by" context="{'group_by': 'logged_by'}"/>
                     <filter string="Contractor" name="group_contractor" context="{'group_by': 'contractor_id'}"/>
                     <filter string="Work Order" name="group_wo" context="{'group_by': 'workorder_id'}"/>
+                    <filter string="Production Order" name="group_po" context="{'group_by': 'reema_po_id'}"/>
+                    <filter string="Manufacturing Order" name="group_mo" context="{'group_by': 'mo_id'}"/>
                     <filter string="Date" name="group_date" context="{'group_by': 'date:month'}"/>
                 </group>
             </search>
@@ -392,28 +419,29 @@
                 <field name="workforce_type" column_invisible="1"/>
                 <field name="ilo_dispatch_type" column_invisible="1"/>
                 <field name="is_initial_qc_entry" column_invisible="1"/>
+                <field name="is_final_qc_entry" column_invisible="1"/>
                 <field name="name" string="Reference" readonly="1"/>
                 <field name="date" string="Date" readonly="1"/>
                 <field name="logged_by" string="Logged By" readonly="1"/>
-                <!-- Employee-staffed halls (Initial QC, Final QC's repair-return) still
-                     carry a meaningful contractor_id — it's whose production is being
+                <!-- Employee-staffed halls (Initial QC, Final QC) still carry a
+                     meaningful contractor_id — it's whose production is being
                      inspected/repaired, not who staffed the hall. Mirrors the same
                      condition already used on the detailed form view below. -->
                 <field name="contractor_id" string="Contractor" readonly="1"
-                       invisible="workforce_type == 'employee' and not ilo_dispatch_type and not is_initial_qc_entry"/>
+                       invisible="workforce_type == 'employee' and not ilo_dispatch_type and not is_initial_qc_entry and not is_final_qc_entry"/>
                 <field name="qty" string="Qty" readonly="1" sum="Total"/>
                 <field name="qty_balls" string="Balls Done" readonly="1" sum="Total"/>
-                <!-- Initial QC only — what THIS decision sent to repair/scrap alongside
-                     its pass qty (0/blank for entries logged before this linkage
-                     existed, and for halls other than Initial QC). -->
+                <!-- Initial/Final QC only — what THIS decision sent to repair/scrap
+                     alongside its pass qty (0/blank for entries logged before this
+                     linkage existed, and for halls other than Initial/Final QC). -->
                 <field name="entry_repair_qty" string="Repair Qty" readonly="1" sum="Total"
-                       invisible="not is_initial_qc_entry"/>
+                       invisible="not is_initial_qc_entry and not is_final_qc_entry"/>
                 <field name="entry_repair_defect_types" string="Repair Reason" readonly="1"
-                       invisible="not is_initial_qc_entry or not entry_repair_qty"/>
+                       invisible="(not is_initial_qc_entry and not is_final_qc_entry) or not entry_repair_qty"/>
                 <field name="entry_scrap_qty" string="Scrap Qty" readonly="1" sum="Total"
-                       invisible="not is_initial_qc_entry"/>
+                       invisible="not is_initial_qc_entry and not is_final_qc_entry"/>
                 <field name="entry_scrap_defect_types" string="Scrap Reason" readonly="1"
-                       invisible="not is_initial_qc_entry or not entry_scrap_qty"/>
+                       invisible="(not is_initial_qc_entry and not is_final_qc_entry) or not entry_scrap_qty"/>
                 <field name="notes" string="Notes" readonly="1" optional="show"/>
             </list>
         </field>
@@ -470,7 +498,7 @@
                         ('workorder_id.workcenter_id.is_initial_qc', '=', True),
                         ('workorder_id.workcenter_id.is_final_qc', '=', True),
         ]</field>
-        <field name="context">{'search_default_unbilled': 1}</field>
+        <field name="context">{'search_default_unbilled': 1, 'search_default_group_mo': 1, 'search_default_group_wo': 2}</field>
         <!-- Pinned explicitly: reema.wo.batch.entry now has more than one primary
              list view (see ILO Received), and Odoo's default-view fallback picks
              between same-priority views alphabetically by name — leaving this
@@ -585,9 +613,16 @@
         <field name="model">reema.production.scrap</field>
         <field name="arch" type="xml">
             <list string="Production Scrap" create="0" default_order="date desc">
+                <header>
+                    <button name="action_apply_selected_to_bill" type="object"
+                            string="Add to Bill" class="btn-primary"
+                            invisible="not context.get('reema_pick_bill_id')"/>
+                </header>
                 <field name="name" string="Reference"/>
                 <field name="date"/>
+                <field name="reema_product_id" string="Product"/>
                 <field name="mo_id"/>
+                <field name="reema_po_id" string="PO" optional="hide"/>
                 <field name="workcenter_id" string="Hall"/>
                 <field name="contractor_id" optional="show"/>
                 <field name="qty" string="Qty Scrapped" sum="Total"/>
@@ -600,10 +635,31 @@
         </field>
     </record>
 
+    <record id="view_reema_production_scrap_search" model="ir.ui.view">
+        <field name="name">reema.production.scrap.search</field>
+        <field name="model">reema.production.scrap</field>
+        <field name="arch" type="xml">
+            <search string="Production Scrap">
+                <field name="name"/>
+                <field name="mo_id"/>
+                <field name="contractor_id"/>
+                <field name="reason_id"/>
+                <filter name="unbilled" string="Unbilled" domain="[('is_billed', '=', False)]"/>
+                <filter name="billed" string="Billed" domain="[('is_billed', '=', True)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_contractor" string="Contractor" context="{'group_by': 'contractor_id'}"/>
+                    <filter name="group_hall" string="Hall" context="{'group_by': 'workcenter_id'}"/>
+                    <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <record id="action_reema_production_scrap" model="ir.actions.act_window">
         <field name="name">Production Scrap</field>
         <field name="res_model">reema.production.scrap</field>
         <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_reema_production_scrap_search"/>
     </record>
 
     <!-- ═══════════════════════════════════════════════
@@ -623,6 +679,7 @@
                 <field name="source" widget="badge"/>
                 <field name="contractor_id" string="Charged To" optional="show"/>
                 <field name="qty" string="Qty Scrapped" sum="Total"/>
+                <field name="hall_unit" string="UOM"/>
                 <field name="reason"/>
                 <field name="recorded_by"/>
                 <field name="notes"/>
@@ -634,6 +691,15 @@
         <field name="name">Total Scrap</field>
         <field name="res_model">reema.scrap.report</field>
         <field name="view_mode">list</field>
+    </record>
+
+    <!-- MO smart-button variant — active_id-scoped, opened as a new tab via
+         mrp_production._action_view_url_new_tab -->
+    <record id="action_reema_scrap_report_from_mo" model="ir.actions.act_window">
+        <field name="name">Total Scrap</field>
+        <field name="res_model">reema.scrap.report</field>
+        <field name="view_mode">list</field>
+        <field name="domain">[('mo_id', '=', active_id)]</field>
     </record>
 
     <menuitem id="menu_reema_scrap_report"

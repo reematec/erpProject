@@ -82,6 +82,23 @@
         </field>
     </record>
 
+    <!-- ── Accounting > Vendors > Vendors / Customers > Customers: core ships these
+         filtered only via a removable search_default_* facet — clear the facet and
+         every partner type floods back in. Hard-bake the same domain the facet
+         applies so the list can never show anything but its own partner type, no
+         matter what the user does in the search bar. Vendors additionally excludes
+         contractors (their own dedicated Contractors section, see
+         reema_contractor_views.xml). List-only, no kanban clutter. ── -->
+    <record id="account.res_partner_action_supplier" model="ir.actions.act_window">
+        <field name="domain">[('supplier_rank', '>', 0), ('is_contractor', '=', False)]</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="account.res_partner_action_customer" model="ir.actions.act_window">
+        <field name="domain">[('customer_rank', '>', 0)]</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
     <!-- ── Partner form (account extension): hide irrelevant Invoicing tab groups + lock account fields ── -->
     <record id="view_partner_invoicing_cleanup" model="ir.ui.view">
         <field name="name">reema.partner.invoicing.cleanup</field>
@@ -119,7 +136,7 @@
     <!-- Rename top-level "Invoicing" to "Accounting"; restrict to accounting staff only -->
     <record id="account.menu_finance" model="ir.ui.menu">
         <field name="name">Accounting</field>
-        <field name="groups_id" eval="[(6, 0, [ref('account.group_account_manager')])]"/>
+        <field name="groups_id" eval="[(6, 0, [ref('group_reema_accountant')])]"/>
     </record>
 
     <!-- ── Partner Reports ────────────────────────────────────────── -->
@@ -283,6 +300,18 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <!-- ── Advance Ledger: opened from the Contractor Bill's Advances tab via
+         action_view_advance_ledger(), which builds a /odoo/<account_id>/action-...
+         URL so it opens in a new browser tab instead of navigating away from
+         the bill. active_id in the domain below comes from that URL path. ── -->
+    <record id="action_reema_advance_ledger" model="ir.actions.act_window">
+        <field name="name">Advance Ledger</field>
+        <field name="res_model">account.move.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="views" eval="[(ref('account.view_move_line_tree'), 'list'), (ref('account.view_move_line_form'), 'form')]"/>
+        <field name="domain">[('account_id', '=', active_id), ('parent_state', '=', 'posted')]</field>
+    </record>
+
     <!-- ── Account Groups menu item under Configuration → Accounting ── -->
     <menuitem
         id="menu_action_account_group"
@@ -304,6 +333,7 @@
                  Delete would bypass action_delete_contractor_bill and leave
                  batch entries permanently billed. -->
             <xpath expr="//form" position="attributes">
+                <attribute name="create">0</attribute>
                 <attribute name="delete">0</attribute>
                 <attribute name="duplicate">0</attribute>
             </xpath>
@@ -318,6 +348,22 @@
                 </div>
             </xpath>
 
+            <!-- Title caption: "Vendor Bill" -> "Bill Number"; number itself read-only -->
+            <xpath expr="//div[@class='oe_title']/span[@class='o_form_label']/field[@name='move_type']" position="replace">
+                <span>Bill Number</span>
+            </xpath>
+            <xpath expr="//div[@class='oe_title']//h1/field[@name='name']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+
+            <!-- "Vendor" -> "Contractor" label; partner is plain text, not a link -->
+            <xpath expr="//label[@for='partner_id'][2]" position="attributes">
+                <attribute name="string">Contractor</attribute>
+            </xpath>
+            <xpath expr="//group[@id='header_left_group']//field[@name='partner_id']" position="attributes">
+                <attribute name="options">{'no_open': True, 'no_create': True, 'no_edit': True}</attribute>
+            </xpath>
+
             <!-- Remove Bill Reference label + both ref fields in header -->
             <xpath expr="//group[@id='header_left_group']/label[@for='ref']" position="attributes">
                 <attribute name="invisible">True</attribute>
@@ -327,6 +373,43 @@
             </xpath>
             <xpath expr="//group[@id='header_left_group']/field[@name='ref'][2]" position="attributes">
                 <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Remove Payment Terms + the "or" separator, and hide Due Date
+                 entirely too — Bill Date alone is used for contractor bills;
+                 showing Bill Date, Accounting Date, and Due Date together was
+                 confusing since none of the latter two are actually used. -->
+            <xpath expr="//div[@name='due_date']/span[@class='o_form_label mx-3 oe_edit_only text-center']" position="replace"/>
+            <field name="invoice_payment_term_id" position="replace"/>
+            <xpath expr="//div[@name='due_date']/field[@name='invoice_date_due']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <label for="invoice_payment_term_id" position="replace"/>
+            <xpath expr="//label[@for='invoice_date_due']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//div[@class='o_td_label']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//div[@name='due_date']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <!-- Accounting Date not needed either — defaults to Bill Date
+                 automatically when left blank. -->
+            <xpath expr="//group[@id='header_right_group']/field[@name='date']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <!-- Currency is always PKR for contractor bills — hide the picker -->
+            <xpath expr="//label[@for='currency_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//div[@name='in_and_refresh_button_div']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//div[@name='currency_div']" position="attributes">
+                <attribute name="invisible">1</attribute>
             </xpath>
 
             <!-- Remove Auto-Complete (account version) -->
@@ -352,6 +435,11 @@
                 <attribute name="invisible">True</attribute>
             </page>
 
+            <!-- "Invoice Lines" -> "Bill Lines", matching "Bill Number" title -->
+            <xpath expr="//page[@id='invoice_tab']" position="attributes">
+                <attribute name="string">Bill Lines</attribute>
+            </xpath>
+
             <!-- Remove Add a line / Add a section / Add a note / Catalog from invoice lines -->
             <create name="add_line_control" position="replace"/>
             <create name="add_section_control" position="replace"/>
@@ -361,44 +449,200 @@
             <!-- Remove Purchase Matching stat button -->
             <button name="action_purchase_matching" position="replace"/>
 
-            <!-- Add Notes + Advance Deductions tabs after Invoice Lines -->
+            <!-- Qty column padded to 4 decimals by default (e.g. "30.0000") even
+                 though these are ball counts, almost always whole numbers — trim
+                 to match reema_mrp's own Batch Logs/Work Orders columns. -->
+            <xpath expr="//page[@id='invoice_tab']//field[@name='quantity']" position="attributes">
+                <attribute name="widget">trim_float</attribute>
+            </xpath>
+
+            <!-- UOM next to Qty — the unit the batch entry was actually logged in
+                 (Ball, Sheet, Panel, Impression...), not the generic product UoM
+                 column already in core (already hidden further below — these
+                 lines carry no product_id, so that one is always blank). -->
+            <xpath expr="//page[@id='invoice_tab']//field[@name='quantity']" position="after">
+                <field name="reema_uom_id" string="UOM" readonly="1" optional="show"
+                       options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
+            </xpath>
+
+            <!-- Replace the native Untaxed Amount / Total tax breakdown widget
+                 with a clean Total / Total Deductions / Net Payable summary —
+                 contractor bills never carry tax (tax_ids column is already
+                 hidden above), so "Untaxed Amount" duplicating "Total" was
+                 just noise. The two deduction rows only show when there's
+                 actually something to subtract, so a bill with none of either
+                 just shows Total = Net Payable. -->
+            <xpath expr="//field[@name='tax_totals']" position="replace">
+                <field name="amount_total" string="Total" widget="monetary"/>
+                <field name="reema_total_deductions" string="Total Advances"
+                       invisible="not reema_total_deductions"/>
+                <field name="reema_total_production_deductions" string="Total QC Charges"
+                       invisible="not reema_total_production_deductions"/>
+                <field name="reema_total_charges" string="Total Misc"
+                       invisible="not reema_total_charges"/>
+                <field name="reema_net_payable" string="Net Payable" class="oe_subtotal_footer_separator"/>
+            </xpath>
+
+            <!-- Add Advances, QC Charges, Misc, Notes tabs after Bill Lines
+                 (order: QC Charges, then Advances — production-computed
+                 charges reviewed first, manual advance recovery entered after) -->
             <page id="invoice_tab" position="after">
-                <page string="Notes" name="notes_tab">
-                    <field name="narration" nolabel="1" placeholder="Internal notes..."/>
+                <!-- ILO repair/lost charges + shop-floor scrap — pulled in
+                     automatically by action_create_contractor_bill(), never
+                     typed in here. Kept apart from Advances above:
+                     that one is a manual, unrelated recovery of a prior
+                     advance; this is charges computed from production/QC
+                     activity, each traceable back to a specific dispatch or
+                     scrap record — mixing the two would blur that distinction. -->
+                <page string="QC Charges" name="production_deductions_tab"
+                      invisible="not reema_ilo_deduction_ids and not reema_scrap_deduction_ids and not (state == 'draft' and reema_bill_state == 'pending' and (reema_has_pending_ilo_deductions or reema_has_pending_scrap_deductions))">
+                    <group string="ILO Repair / Lost Charges"
+                           invisible="not reema_ilo_deduction_ids and not (state == 'draft' and reema_bill_state == 'pending' and reema_has_pending_ilo_deductions)">
+                        <field name="reema_ilo_deduction_ids" nolabel="1" colspan="2"
+                               readonly="not reema_price_editable">
+                            <list editable="bottom" create="0" delete="0">
+                                <field name="reema_product_id" string="Product" readonly="1"/>
+                                <field name="name" string="Reference" readonly="1"/>
+                                <field name="mo_id" string="MO" readonly="1"/>
+                                <field name="reema_po_id" string="PO" readonly="1" optional="hide"/>
+                                <field name="deduction_type" string="Type" widget="badge" readonly="1"/>
+                                <field name="qty" string="Qty" readonly="1"/>
+                                <field name="rate" string="Rate" widget="zero_dash_float" readonly="1"/>
+                                <field name="amount" string="Amount (PKR)"
+                                       readonly="deduction_type == 'repair' or not parent.reema_price_editable"/>
+                                <field name="notes" optional="hide"/>
+                                <button name="action_return_to_pending" type="object" string="Remove"
+                                        icon="fa-times" class="text-danger"
+                                        invisible="parent.state != 'draft' or parent.reema_bill_state != 'pending' or not parent.reema_price_editable"
+                                        confirm="Remove this deduction from the bill? It will return to the pending pool for a future bill."
+                                        confirm-label="Yes, Remove" cancel-label="Go Back"/>
+                            </list>
+                        </field>
+                        <button name="action_add_pending_ilo_deductions" type="object"
+                                string="Add Pending ILO Deduction" class="btn-link px-0"
+                                invisible="state != 'draft' or reema_bill_state != 'pending' or not reema_has_pending_ilo_deductions or not reema_price_editable"/>
+                    </group>
+                    <group string="Scrap / Material Cost"
+                           invisible="not reema_scrap_deduction_ids and not (state == 'draft' and reema_bill_state == 'pending' and reema_has_pending_scrap_deductions)">
+                        <field name="reema_scrap_deduction_ids" nolabel="1" colspan="2"
+                               readonly="not reema_price_editable">
+                            <list editable="bottom" create="0" delete="0">
+                                <field name="reema_product_id" string="Product" readonly="1"/>
+                                <field name="name" string="Reference" readonly="1"/>
+                                <field name="mo_id" string="MO" readonly="1"/>
+                                <field name="reema_po_id" string="PO" readonly="1" optional="hide"/>
+                                <field name="reason_id" string="Reason" readonly="1"
+                                       options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
+                                <field name="qty" string="Qty" readonly="1"/>
+                                <field name="amount" string="Amount (PKR)"
+                                       readonly="not parent.reema_price_editable"/>
+                                <field name="notes" optional="hide"/>
+                                <button name="action_return_to_pending" type="object" string="Remove"
+                                        icon="fa-times" class="text-danger"
+                                        invisible="parent.state != 'draft' or parent.reema_bill_state != 'pending' or not parent.reema_price_editable"
+                                        confirm="Remove this deduction from the bill? It will return to the pending pool for a future bill."
+                                        confirm-label="Yes, Remove" cancel-label="Go Back"/>
+                            </list>
+                        </field>
+                        <button name="action_add_pending_scrap_deductions" type="object"
+                                string="Add Pending Scrap Deduction" class="btn-link px-0"
+                                invisible="state != 'draft' or reema_bill_state != 'pending' or not reema_has_pending_scrap_deductions or not reema_price_editable"/>
+                    </group>
+                    <group class="oe_subtotal_footer">
+                        <field name="reema_total_production_deductions" string="Total QC Charges" readonly="1"/>
+                        <field name="reema_net_payable" string="Net Payable" readonly="1"/>
+                    </group>
                 </page>
-                <page string="Advance Deductions" name="deductions_tab">
+                <page string="Advances" name="deductions_tab">
+                    <div class="alert alert-info py-2 d-flex justify-content-between align-items-center" role="alert">
+                        <span>
+                            Outstanding Advance Balance:
+                            <strong><field name="reema_outstanding_advance" readonly="1" nolabel="1" class="d-inline-block"/></strong>
+                        </span>
+                        <button name="action_view_advance_ledger" type="object" string="View Ledger"
+                                class="btn-link px-0"
+                                invisible="not reema_contractor_advance_account_id or not reema_can_edit_deductions"/>
+                    </div>
+                    <div class="alert alert-warning py-2" role="alert"
+                         invisible="not reema_suggested_deduction_note">
+                        <field name="reema_suggested_deduction_note" readonly="1" nolabel="1"/>
+                    </div>
+                    <div class="alert alert-danger py-2" role="alert"
+                         invisible="reema_total_deductions &lt;= reema_outstanding_advance">
+                        Warning: this bill's Advance deductions exceed the contractor's outstanding advance balance.
+                    </div>
                     <field name="reema_deduction_ids"
                            readonly="not reema_can_edit_deductions"
                            context="{'default_deduction_account_id': reema_contractor_advance_account_id}">
                         <list editable="bottom">
+                            <field name="deduction_account_id" string="Recovery Account" readonly="1"/>
                             <field name="description" string="Description"
                                    placeholder="e.g. Advance recovery – June"/>
-                            <field name="deduction_account_id" string="Recovery Account"/>
                             <field name="amount" string="Amount (PKR)"/>
                         </list>
                     </field>
                     <group class="oe_subtotal_footer">
-                        <field name="reema_total_deductions" string="Total Deductions" readonly="1"/>
+                        <field name="reema_total_deductions" string="Total Advances" readonly="1"/>
                         <field name="reema_net_payable" string="Net Payable" readonly="1"/>
                     </group>
                 </page>
+                <!-- Free-form catch-all — description + account + amount, sign
+                     decides direction (positive adds, negative subtracts).
+                     Accountant-only, same as Advances, since this is
+                     manual entry rather than pulled from production activity. -->
+                <page string="Misc" name="charges_tab">
+                    <div class="alert alert-info py-2" role="alert">
+                        Enter a positive amount to add to Net Payable (e.g. a bonus),
+                        or a negative amount to deduct (e.g. -500).
+                    </div>
+                    <field name="reema_charge_ids"
+                           readonly="not reema_can_edit_deductions">
+                        <list editable="bottom">
+                            <field name="name" string="Description"
+                                   placeholder="e.g. Urgent-job bonus, or Uniform cost"/>
+                            <field name="account_id" string="Account"
+                                   options="{'no_create': True, 'no_edit': True}"/>
+                            <field name="amount" string="Amount (PKR)"/>
+                        </list>
+                    </field>
+                    <group class="oe_subtotal_footer">
+                        <field name="reema_total_charges" string="Total Misc" readonly="1"/>
+                        <field name="reema_net_payable" string="Net Payable" readonly="1"/>
+                    </group>
+                </page>
+                <page string="Notes" name="notes_tab">
+                    <field name="narration" nolabel="1" placeholder="Internal notes..."/>
+                </page>
             </page>
 
-            <!-- ── Production buttons: Approve + Void ───────────────────── -->
+            <!-- Print: opens an HTML preview of this bill in a new tab -->
+            <xpath expr="//header" position="inside">
+                <button name="action_print_contractor_bill" string="Print"
+                        type="object" class="btn-secondary"/>
+            </xpath>
+
+            <!-- ── Production workflow: Submit (supervisor) -> Approve/Void (manager) ── -->
             <xpath expr="//header/button[@name='action_post'][1]" position="before">
+                <button name="action_reema_submit" string="Submit" class="oe_highlight"
+                        type="object"
+                        groups="reema_mrp.group_reema_supervisor"
+                        invisible="reema_bill_state != 'pending' or state != 'draft' or not invoice_line_ids"
+                        confirm="Submit this bill? It will be assigned a reference number and locked for production manager review."
+                        confirm-label="Yes, Submit"
+                        cancel-label="Go Back"/>
                 <button name="action_reema_confirm" string="Approve" class="oe_highlight"
                         type="object"
-                        groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor"
-                        invisible="reema_bill_state == 'confirmed' or state != 'draft' or not invoice_line_ids"
+                        groups="reema_mrp.group_reema_production_manager"
+                        invisible="reema_bill_state != 'submitted' or state != 'draft'"
                         confirm="Approve this bill as correct and ready for posting by accounting?"
                         confirm-label="Yes, Approve"
                         cancel-label="Go Back"/>
                 <button name="action_reema_reset_to_pending" string="Void"
                         type="object"
-                        groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor"
-                        invisible="reema_bill_state != 'confirmed' or state != 'draft'"
-                        confirm="Void this approval? The bill will return to pending and cannot be posted until re-approved."
-                        confirm-label="Yes, Void Approval"
+                        groups="reema_mrp.group_reema_production_manager"
+                        invisible="reema_bill_state not in ('submitted', 'confirmed') or state != 'draft'"
+                        confirm="Void this bill? It will return to the supervisor for correction (it keeps its reference number)."
+                        confirm-label="Yes, Void"
                         cancel-label="Go Back"/>
             </xpath>
 
@@ -426,7 +670,7 @@
                         string="Delete Bill"
                         type="object"
                         class="btn-danger"
-                        invisible="state != 'draft'"
+                        invisible="state != 'draft' or reema_bill_state != 'pending'"
                         confirm="Delete this bill? All batch entries will be released back to unbilled."
                         confirm-label="Yes, Delete Bill"
                         cancel-label="Go Back"/>
@@ -453,10 +697,24 @@
                 <attribute name="readonly">True</attribute>
             </xpath>
 
-            <!-- Invoice lines: no add, deletion allowed (releases batch entry back to unbilled) -->
+            <!-- Lines are only editable/deletable while the bill is still Pending
+                 (supervisor drafting stage) AND the user is supervisor/production
+                 manager (reema_price_editable) — an accountant can view Bill Lines
+                 but must not add/edit/delete them, same restriction as price_unit
+                 below, just applied to the whole row (including the delete icon,
+                 which price_unit's column-level readonly alone doesn't cover).
+                 Once Submitted, the whole o2m locks regardless of role. -->
+            <xpath expr="//field[@name='invoice_line_ids']" position="attributes">
+                <attribute name="readonly">state != 'draft' or reema_bill_state != 'pending' or not reema_price_editable</attribute>
+            </xpath>
+
+            <!-- Invoice lines: inline-editable only (no add, no popup dialog) so every
+                 field's own readonly attribute is actually enforced. A non-editable list
+                 opens rows in a popup that ignores column_invisible fields, letting anyone
+                 edit taxes/discount/analytic distribution through the back door. -->
             <xpath expr="//field[@name='invoice_line_ids']/list" position="attributes">
                 <attribute name="create">0</attribute>
-                <attribute name="editable"></attribute>
+                <attribute name="editable">bottom</attribute>
             </xpath>
 
             <!-- Hide native product column (replaced by reema_product_id below) -->
@@ -478,38 +736,44 @@
                 <attribute name="column_invisible">True</attribute>
             </xpath>
 
-            <!-- Add Product / PO / MO columns before the description -->
+            <!-- Add Product / MO columns before the description (PO column removed
+                 per request; both togglable via the column selector) -->
             <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='name']" position="before">
-                <field name="reema_product_id" string="Product" readonly="1"/>
-                <field name="reema_po_id" string="PO" readonly="1"/>
-                <field name="reema_mo_id" string="MO" readonly="1"/>
+                <field name="reema_product_id" string="Product" readonly="1" optional="show"/>
+                <field name="reema_mo_id" string="MO" readonly="1" optional="show"/>
             </xpath>
 
-            <!-- is_printing_bill must be declared in the form so parent.is_printing_bill works in the embedded list -->
+            <!-- is_printing_bill / reema_price_editable must be declared in the form so
+                 parent.<field> works in the embedded list -->
             <xpath expr="//field[@name='invoice_line_ids']" position="before">
                 <field name="is_printing_bill" invisible="1"/>
+                <field name="reema_price_editable" invisible="1"/>
             </xpath>
 
-            <!-- Printing-only columns: Ball Qty and Imp/Ball (hidden on non-printing bills) -->
+            <!-- Printing-only columns: Ball Qty and Imp/Ball (hidden on non-printing bills),
+                 both togglable via the column selector -->
             <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='quantity']" position="before">
-                <field name="reema_balls_qty" string="Ball Qty" readonly="1"
+                <field name="reema_balls_qty" string="Ball Qty" readonly="1" optional="show"
                        invisible="not parent.is_printing_bill"/>
-                <field name="reema_impressions_per_ball" string="Imp/Ball" readonly="1"
+                <field name="reema_impressions_per_ball" string="Imp/Ball" readonly="1" optional="show"
                        invisible="not parent.is_printing_bill"/>
             </xpath>
 
-            <!-- Lock remaining editable columns -->
+            <!-- Lock remaining editable columns; Account/Quantity/Price stay togglable -->
             <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='name']" position="attributes">
                 <attribute name="readonly">1</attribute>
             </xpath>
             <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='account_id']" position="attributes">
                 <attribute name="readonly">1</attribute>
+                <attribute name="optional">show</attribute>
             </xpath>
             <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='quantity']" position="attributes">
                 <attribute name="readonly">1</attribute>
+                <attribute name="optional">show</attribute>
             </xpath>
             <xpath expr="//field[@name='invoice_line_ids']/list/field[@name='price_unit']" position="attributes">
-                <attribute name="readonly">1</attribute>
+                <attribute name="readonly">not parent.reema_price_editable</attribute>
+                <attribute name="optional">show</attribute>
             </xpath>
 
         </field>
@@ -522,13 +786,27 @@
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header/field[@name='state'][1]" position="after">
-                <field name="reema_bill_state" widget="statusbar" statusbar_visible="pending,confirmed"
+                <field name="reema_bill_state" widget="statusbar" statusbar_visible="pending,submitted,confirmed"
                        invisible="not batch_entry_ids"/>
             </xpath>
         </field>
     </record>
 
     <!-- ── Contractor Bills: filtered vendor bills view ─────────────── -->
+    <!-- No New/Upload here — bills are only ever generated from Manufacturing's
+         batch-log billing flow, never created by hand from this list. -->
+    <record id="view_contractor_bill_list" model="ir.ui.view">
+        <field name="name">reema.contractor.bill.list</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="create">0</attribute>
+                <attribute name="import">0</attribute>
+            </xpath>
+        </field>
+    </record>
+
     <record id="action_contractor_bills" model="ir.actions.act_window">
         <field name="name">Contractor Bills</field>
         <field name="res_model">account.move</field>
@@ -536,44 +814,28 @@
         <field name="domain">[('move_type', '=', 'in_invoice'), ('batch_entry_ids', '!=', False)]</field>
         <field name="context">{'default_move_type': 'in_invoice'}</field>
         <field name="view_ids" eval="[(5, 0, 0),
-            (0, 0, {'view_mode': 'list', 'view_id': False}),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_contractor_bill_list')}),
             (0, 0, {'view_mode': 'form', 'view_id': ref('view_contractor_bill_form')})]"/>
     </record>
     <menuitem
         id="menu_contractor_bills"
         name="Contractor Bills"
-        parent="account.menu_finance_payables"
+        parent="menu_reema_accounting_contractors"
         action="action_contractor_bills"
-        sequence="5"
+        sequence="2"
         groups="account.group_account_invoice,account.group_account_manager"/>
 
-    <!-- Contractor Bills from Manufacturing — production staff see proxy view, no accounting access needed -->
+    <!-- Contractor Bills from Manufacturing — same account.move form as "Create Contractor
+         Bill" (view_contractor_bill_form). Production access is scoped to contractor-bill
+         rows only via rule_account_move_reema_production_contractor_bills_only, so this
+         group still can't see any other vendor bill / invoice / journal entry. -->
     <menuitem
         id="menu_contractor_bills_mfg"
         name="Contractor Bills"
         parent="mrp.menu_mrp_manufacturing"
-        action="action_contractor_bill_approval"
+        action="action_contractor_bills"
         sequence="30"
         groups="reema_mrp.group_reema_production_manager,reema_mrp.group_reema_supervisor"/>
-
-    <!-- ── Bills to Post: accountant queue of approved-but-unposted bills ── -->
-    <record id="action_contractor_bills_to_post" model="ir.actions.act_window">
-        <field name="name">Bills to Post</field>
-        <field name="res_model">account.move</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('move_type', '=', 'in_invoice'), ('batch_entry_ids', '!=', False), ('reema_bill_state', '=', 'confirmed'), ('state', '=', 'draft')]</field>
-        <field name="context">{'default_move_type': 'in_invoice'}</field>
-        <field name="view_ids" eval="[(5, 0, 0),
-            (0, 0, {'view_mode': 'list', 'view_id': False}),
-            (0, 0, {'view_mode': 'form', 'view_id': ref('view_contractor_bill_form')})]"/>
-    </record>
-    <menuitem
-        id="menu_contractor_bills_to_post"
-        name="Bills to Post"
-        parent="account.menu_finance_payables"
-        action="action_contractor_bills_to_post"
-        sequence="4"
-        groups="account.group_account_invoice,account.group_account_manager"/>
 
     <!-- Hide the now-empty OCA grouping menu -->
     <record id="account_financial_report.menu_oca_reports" model="ir.ui.menu">

@@ -7,6 +7,18 @@ class MrpProduction(models.Model):
 
     responsible_name = fields.Char(related='user_id.name', string='Responsible', readonly=True)
     reema_po_line_ids = fields.One2many('reema.production.order.line', 'mo_id')
+    # Single-value lookup of the Production Order this MO belongs to, for models
+    # (scrap, ILO deductions, ...) that only carry mo_id and need "which PO" —
+    # a plain related field can't cross a one2many, hence a compute here.
+    reema_po_id = fields.Many2one(
+        'reema.production.order', string='PO',
+        compute='_compute_reema_po_id', store=True,
+    )
+
+    @api.depends('reema_po_line_ids.order_id')
+    def _compute_reema_po_id(self):
+        for mo in self:
+            mo.reema_po_id = mo.reema_po_line_ids[:1].order_id
 
     construction_type = fields.Selection([
         ('hs', 'Hand Stitched (HS)'),
@@ -42,6 +54,7 @@ class MrpProduction(models.Model):
     ilo_scrap_qty = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='ILO Scrapped Balls')
     production_scrap_qty = fields.Integer(compute='_compute_scrap_qty', string='Production Scrapped Balls')
     total_scrap_qty = fields.Integer(compute='_compute_scrap_qty', string='Total Scrapped Balls')
+    ilo_lost_qty = fields.Integer(compute='_compute_ilo_lost_qty', string='Lost Balls')
 
     has_active_issuance = fields.Boolean(compute='_compute_has_active_issuance')
 
@@ -76,46 +89,39 @@ class MrpProduction(models.Model):
             rec.production_scrap_qty = sum(ProdScrap.search([('mo_id', '=', rec.id)]).mapped('qty'))
             rec.total_scrap_qty = rec.ilo_scrap_qty + rec.production_scrap_qty
 
-    def action_view_ilo_dispatches(self):
+    def _compute_ilo_lost_qty(self):
+        Dispatch = self.env['reema.ilo.dispatch']
+        for rec in self:
+            rec.ilo_lost_qty = sum(Dispatch.search([
+                ('mo_id', '=', rec.id), ('dispatch_type', '=', 'repair'),
+            ]).mapped('qty_lost'))
+
+    def _action_view_url_new_tab(self, action_xmlid):
+        # Smart buttons open in a new browser tab rather than navigating away from
+        # the MO in-place — a plain act_window action dict can't do that (Odoo's
+        # action service only opens act_url as a new tab), so this targets the
+        # active_id-scoped variant of the action by its real numeric id via the
+        # /odoo/<active_id>/action-<id> URL form. Same pattern as
+        # mrp_workorder.action_view_ilo_flow / action_view_batch_log.
         self.ensure_one()
+        action_id = self.env.ref(action_xmlid).id
         return {
-            'type': 'ir.actions.act_window',
-            'name': 'ILO Dispatches',
-            'res_model': 'reema.ilo.dispatch',
-            'view_mode': 'list,form',
-            'domain': [('mo_id', '=', self.id)],
-            'context': {'default_mo_id': self.id},
+            'type': 'ir.actions.act_url',
+            'url': f'/odoo/{self.id}/action-{action_id}',
+            'target': 'new',
         }
+
+    def action_view_ilo_dispatches(self):
+        return self._action_view_url_new_tab('reema_mrp.action_reema_ilo_dispatch_from_mo')
 
     def action_view_ilo_repairs(self):
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'ILO Repair Dispatches',
-            'res_model': 'reema.ilo.dispatch',
-            'view_mode': 'list,form',
-            'domain': [('mo_id', '=', self.id), ('dispatch_type', '=', 'repair')],
-        }
-
-    def action_view_ilo_scrap(self):
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'ILO QC Scrap',
-            'res_model': 'reema.ilo.qc.scrap',
-            'view_mode': 'list',
-            'domain': [('mo_id', '=', self.id)],
-        }
+        return self._action_view_url_new_tab('reema_mrp.action_reema_ilo_repair_dispatch_from_mo')
 
     def action_view_scrap_report(self):
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Total Scrap',
-            'res_model': 'reema.scrap.report',
-            'view_mode': 'list',
-            'domain': [('mo_id', '=', self.id)],
-        }
+        return self._action_view_url_new_tab('reema_mrp.action_reema_scrap_report_from_mo')
+
+    def action_view_lost_balls(self):
+        return self._action_view_url_new_tab('reema_mrp.action_reema_lost_balls_from_mo')
 
     def action_print_mo(self):
         # Open the MO HTML preview in a new browser tab (works for a single order

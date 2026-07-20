@@ -230,6 +230,16 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <!-- MO smart-button variant — active_id-scoped, opened as a new tab via
+         mrp_production._action_view_url_new_tab -->
+    <record id="reema_material_issuance_action_from_mo" model="ir.actions.act_window">
+        <field name="name">Material Issuances</field>
+        <field name="res_model">reema.material.issuance</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('production_id', '=', active_id)]</field>
+        <field name="context">{'default_production_id': active_id}</field>
+    </record>
+
     <!-- Hide the default "Inventory Overview" dashboard menu so clicking
          Inventory no longer opens the picking-type kanban overview. -->
     <record id="stock.stock_picking_type_menu" model="ir.ui.menu">

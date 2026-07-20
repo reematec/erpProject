@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Production staff (supervisor / production manager) were granted direct
+         account.move access so they can use the same Contractor Bill form as
+         accounting (view_contractor_bill_form). This rule keeps that access
+         scoped to contractor bills only — they must never see any other
+         vendor bill, customer invoice, or journal entry. -->
+    <record id="rule_account_move_reema_production_contractor_bills_only" model="ir.rule">
+        <field name="name">Contractor bills only (Production)</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="domain_force">[('move_type', '=', 'in_invoice'), ('batch_entry_ids', '!=', False)]</field>
+        <field name="groups" eval="[(4, ref('reema_mrp.group_reema_supervisor')),
+                                     (4, ref('reema_mrp.group_reema_production_manager'))]"/>
+    </record>
+
+    <!-- Same scoping for the invoice lines themselves — editing/deleting a bill
+         line is a direct account.move.line operation, not just a write on the
+         parent account.move, so it needs its own rule. -->
+    <record id="rule_account_move_line_reema_production_contractor_bills_only" model="ir.rule">
+        <field name="name">Contractor bill lines only (Production)</field>
+        <field name="model_id" ref="account.model_account_move_line"/>
+        <field name="domain_force">[('move_id.move_type', '=', 'in_invoice'), ('move_id.batch_entry_ids', '!=', False)]</field>
+        <field name="groups" eval="[(4, ref('reema_mrp.group_reema_supervisor')),
+                                     (4, ref('reema_mrp.group_reema_production_manager'))]"/>
+    </record>
+
+</odoo>

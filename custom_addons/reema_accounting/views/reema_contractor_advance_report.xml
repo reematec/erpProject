@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Contractor Advance Vouchers, following the
+        reema reporting standard (see custom_addons/REPORTS.md): report_type=
+        "qweb-html", no binding_model_id (kept out of the cog Print menu).
+        Triggered by action_print_advance_voucher(), which opens
+        /report/html/... in a new tab; the user prints with the browser
+        (Ctrl+P) — the printout is meant to be signed by the contractor as
+        acknowledgment of cash/bank receipt.
+    -->
+    <record id="action_report_contractor_advance" model="ir.actions.report">
+        <field name="name">Contractor Advance Voucher</field>
+        <field name="model">reema.contractor.advance</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_accounting.report_contractor_advance</field>
+        <field name="report_file">reema_accounting.report_contractor_advance</field>
+        <field name="print_report_name">'Advance Voucher - %s' % (object.name or 'Draft')</field>
+    </record>
+
+    <template id="report_contractor_advance">
+        <t t-call="web.html_container">
+            <style>
+                @media print {
+                    .contractor_advance_doc { page-break-after: always; }
+                    .contractor_advance_doc:last-child { page-break-after: auto; }
+                }
+                @page { margin: 12mm; }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page contractor_advance_doc">
+
+                        <!-- Voucher card: date + status first, then a separator,
+                             then the voucher body (contractor, amount, payment
+                             method, advance type), top to bottom like a real
+                             payment voucher rather than a two-column data sheet. -->
+                        <div style="border:1px solid #333; padding:14px 16px; margin-top:8px;">
+
+                            <div class="row">
+                                <div class="col-8">
+                                    <div style="font-size:16px; font-weight:700;">
+                                        Contractor Advance Voucher
+                                    </div>
+                                    <div style="font-size:12px; color:#555;">
+                                        <span t-if="o.name and o.name != 'New'" t-esc="o.name"/>
+                                        <span t-else="1">(Draft — Not Yet Posted)</span>
+                                    </div>
+                                </div>
+                                <div class="col-4 text-end">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+                                        <tr>
+                                            <td class="text-end"><strong>Date</strong></td>
+                                            <td class="text-end" style="width:110px;"><span t-field="o.date"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-end"><strong>Status</strong></td>
+                                            <td class="text-end">
+                                                <span t-attf-class="badge #{'text-bg-info' if o.state == 'draft' else 'text-bg-success' if o.state == 'posted' else 'text-bg-danger'}">
+                                                    <span t-field="o.state"/>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <hr style="margin:8px 0;"/>
+
+                            <div t-if="o.state == 'draft'" class="mb-2">
+                                <div style="border:1px solid #b45309; background:#fef3c7; color:#92400e; padding:6px 10px; font-size:12px; font-weight:700;">
+                                    NOT YET POSTED — FOR APPROVAL / SIGNATURE ONLY. No journal entry has been created; no funds have moved yet.
+                                </div>
+                            </div>
+                            <div t-if="o.state == 'cancelled'" class="mb-2">
+                                <div style="border:1px solid #b91c1c; background:#fee2e2; color:#7f1d1d; padding:6px 10px; font-size:12px; font-weight:700;">
+                                    CANCELLED<t t-if="o.reversal_move_id"> / REVERSED</t> — this voucher no longer represents an active advance.
+                                </div>
+                            </div>
+
+                            <!-- Mirrors the form view's two group blocks, same
+                                 left/right field split as on screen. -->
+                            <div class="row">
+                                <div class="col-6">
+                                    <table class="table table-sm table-borderless" style="font-size:13px;">
+                                        <tr>
+                                            <td style="width:45%;"><strong>Contractor</strong></td>
+                                            <td><span t-field="o.partner_id"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Description</strong></td>
+                                            <td><span t-field="o.purpose"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-6">
+                                    <table class="table table-sm table-borderless" style="font-size:13px;">
+                                        <tr>
+                                            <td style="width:45%;"><strong>Payment Method</strong></td>
+                                            <td><span t-field="o.journal_id"/></td>
+                                        </tr>
+                                        <tr t-if="o.journal_type == 'bank'">
+                                            <td><strong>Paid From Bank</strong></td>
+                                            <td><span t-field="o.bank_id"/></td>
+                                        </tr>
+                                        <tr t-if="o.journal_type == 'bank' and o.cheque_no">
+                                            <td><strong>Cheque / Ref No.</strong></td>
+                                            <td><span t-field="o.cheque_no"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Amount (PKR)</strong></td>
+                                            <td style="font-size:15px; font-weight:700;"><span t-field="o.amount"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+                                        <tr>
+                                            <td style="width:45%;"><strong>Advance Type</strong></td>
+                                            <td><span t-field="o.advance_type"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-6">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+                                        <tr t-if="o.advance_type == 'long_term'">
+                                            <td style="width:45%;"><strong>Deduction per Bill (PKR)</strong></td>
+                                            <td><span t-field="o.deduction_per_bill"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row" t-if="o.move_id or o.reversal_move_id">
+                                <div class="col-12">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+                                        <tr t-if="o.move_id">
+                                            <td style="width:22.5%;"><strong>Journal Entry</strong></td>
+                                            <td><span t-esc="o.move_id.name"/></td>
+                                        </tr>
+                                        <tr t-if="o.reversal_move_id">
+                                            <td><strong>Reversal Entry</strong></td>
+                                            <td><span t-esc="o.reversal_move_id.name"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row mt-5 pt-5">
+                                <div class="col-6">
+                                    <div style="border-top:1px solid #000; width:80%; margin-top:40px;"></div>
+                                    <div style="font-size:12px;">Received By (Contractor Signature)</div>
+                                </div>
+                                <div class="col-6">
+                                    <div style="border-top:1px solid #000; width:80%; margin-top:40px;"></div>
+                                    <div style="font-size:12px;">Approved By (Accounts)</div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

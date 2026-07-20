@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Contractor Bills, following the reema reporting
+        standard (see custom_addons/REPORTS.md): report_type="qweb-html", no
+        binding_model_id (kept out of the cog Print menu). Triggered by
+        action_print_contractor_bill(), which opens /report/html/... in a new
+        tab; the user prints with the browser (Ctrl+P) and closes the tab.
+        Serves a single bill (form) or several selected bills (list).
+    -->
+    <record id="action_report_contractor_bill" model="ir.actions.report">
+        <field name="name">Contractor Bill</field>
+        <field name="model">account.move</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_accounting.report_contractor_bill</field>
+        <field name="report_file">reema_accounting.report_contractor_bill</field>
+        <field name="print_report_name">'Contractor Bill - %s' % (object.name or 'Draft')</field>
+    </record>
+
+    <template id="report_contractor_bill">
+        <t t-call="web.html_container">
+            <!-- No in-page toolbar: user prints with Ctrl+P and closes the tab. -->
+            <style>
+                @media print {
+                    .contractor_bill_doc { page-break-after: always; }
+                    .contractor_bill_doc:last-child { page-break-after: auto; }
+                    /* Firefox drops background colors (table-striped zebra shading)
+                       and light border colors in print/print-preview unless told
+                       to keep them — Chrome prints them by default, which is why
+                       this only showed up as a Firefox difference. */
+                    .contractor_bill_doc, .contractor_bill_doc * {
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                        color-adjust: exact;
+                    }
+                }
+                @page { margin: 12mm; }
+                /* Vertical-space tightening: Bootstrap's table-sm still leaves
+                   ~5px cell padding and a 1rem margin-bottom per table — across
+                   5 tables (Bill Lines/Advances/QC/Misc/Totals) plus section
+                   headers, that adds up to real paper. */
+                .contractor_bill_doc table.table-sm > :not(caption) > * > * { padding: 2px 6px; }
+                .contractor_bill_doc table { margin-bottom: 6px; }
+                .contractor_bill_doc h5 { font-size: 13px; font-weight: 700; margin-top: 6px; margin-bottom: 2px; }
+                /* Row borders + the striping already separate lines well enough on
+                   their own — full-strength default borders on top of that reads
+                   as a grid and is too busy at this row density. */
+                .contractor_bill_doc table.table-sm { --bs-table-border-color: #eee; }
+                .contractor_bill_doc hr { opacity: .1; }
+                /* The subtotal row's own bottom border (every table row gets one
+                   by default) leaves a second line right under the dashed
+                   divider — drop it so only the intentional dashed line shows. */
+                .contractor_bill_doc table.table-sm tfoot td { border-bottom: 0; }
+                /* web.external_layout_folder always renders its own footer band
+                   (border-top + padding) even with no report_footer text set on
+                   the company — shows up as a stray empty line at the bottom of
+                   the page. Scoped to this report only (these rules only load
+                   when report_contractor_bill renders), doesn't touch other
+                   reports that share the same company layout. */
+                .footer.mt-auto { display: none; }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page contractor_bill_doc">
+
+                        <!-- Title: Bill number + contractor -->
+                        <div class="row mt-1 mb-1">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    <span t-esc="o.name or 'Draft Bill'"/>
+                                    <br/>
+                                    <span t-field="o.partner_id"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Basic details -->
+                        <div class="row mt-1">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Bill Date</strong></td>
+                                        <td><span t-field="o.invoice_date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Type</strong></td>
+                                        <td>Contractor Bill</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Status</strong></td>
+                                        <td><span t-field="o.state"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Approval</strong></td>
+                                        <td><span t-field="o.reema_bill_state"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:2px; margin-bottom:4px;"/>
+
+                        <!-- Bill Lines -->
+                        <h5>Bill Lines</h5>
+                        <table class="table table-sm table-striped" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Product</th>
+                                    <th>MO</th>
+                                    <th>Label</th>
+                                    <th>Account</th>
+                                    <t t-if="o.is_printing_bill">
+                                        <th class="text-end">Ball Qty</th>
+                                        <th class="text-end">Imp/Ball</th>
+                                    </t>
+                                    <th class="text-end">Qty</th>
+                                    <th>UOM</th>
+                                    <th class="text-end">Price</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="o.invoice_line_ids.filtered(lambda l: l.display_type == 'product')" t-as="l">
+                                    <tr>
+                                        <td><span t-field="l.reema_product_id"/></td>
+                                        <td><span t-field="l.reema_mo_id"/></td>
+                                        <td><span t-field="l.name"/></td>
+                                        <td><span t-field="l.account_id"/></td>
+                                        <t t-if="o.is_printing_bill">
+                                            <td class="text-end"><span t-out="('%.6f' % l.reema_balls_qty).rstrip('0').rstrip('.')"/></td>
+                                            <td class="text-end"><span t-out="('%.6f' % l.reema_impressions_per_ball).rstrip('0').rstrip('.')"/></td>
+                                        </t>
+                                        <td class="text-end"><span t-out="('%.6f' % l.quantity).rstrip('0').rstrip('.')"/></td>
+                                        <td><span t-field="l.reema_uom_id"/></td>
+                                        <td class="text-end"><span t-field="l.price_unit"/></td>
+                                        <td class="text-end"><span t-field="l.price_subtotal"/></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                            <tfoot>
+                                <tr class="fw-bold" style="border-top:1px dashed #999;">
+                                    <td t-att-colspan="9 if o.is_printing_bill else 7" class="text-end">Subtotal</td>
+                                    <td class="text-end"><span t-field="o.amount_total"/></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <!-- Advances -->
+                        <t t-if="o.reema_deduction_ids">
+                            <h5>Advances</h5>
+                            <table class="table table-sm table-striped" style="font-size:12px;">
+                                <thead>
+                                    <tr class="table-dark">
+                                        <th>Description</th>
+                                        <th>Recovery Account</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="o.reema_deduction_ids" t-as="d">
+                                        <tr>
+                                            <td><span t-field="d.description"/></td>
+                                            <td><span t-field="d.deduction_account_id"/></td>
+                                            <td class="text-end"><span t-field="d.amount"/></td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold" style="border-top:1px dashed #999;">
+                                        <td colspan="2" class="text-end">Subtotal</td>
+                                        <td class="text-end"><span t-field="o.reema_total_deductions"/></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </t>
+
+                        <!-- QC Charges: ILO repair/lost charges + shop-floor
+                             scrap — kept separate from Advances above (that one
+                             is a manual, unrelated advance recovery; this is charges
+                             computed from production/QC activity). -->
+                        <t t-if="o.reema_ilo_deduction_ids or o.reema_scrap_deduction_ids">
+                            <h5>QC Charges</h5>
+                            <table class="table table-sm table-striped" style="font-size:12px;">
+                                <thead>
+                                    <tr class="table-dark">
+                                        <th>Product</th>
+                                        <th>Reference</th>
+                                        <th>MO</th>
+                                        <th>Description</th>
+                                        <th class="text-end">Qty</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="o.reema_ilo_deduction_ids" t-as="d">
+                                        <tr>
+                                            <td><span t-field="d.reema_product_id"/></td>
+                                            <td><span t-field="d.name"/></td>
+                                            <td><span t-field="d.mo_id"/></td>
+                                            <td>
+                                                <span t-field="d.deduction_type"/> —
+                                                <span t-if="d.original_contractor_id" t-field="d.original_contractor_id"/>
+                                            </td>
+                                            <td class="text-end"><span t-field="d.qty"/></td>
+                                            <td class="text-end"><span t-field="d.amount"/></td>
+                                        </tr>
+                                    </t>
+                                    <t t-foreach="o.reema_scrap_deduction_ids" t-as="s">
+                                        <tr>
+                                            <td><span t-field="s.reema_product_id"/></td>
+                                            <td><span t-field="s.name"/></td>
+                                            <td><span t-field="s.mo_id"/></td>
+                                            <td><span t-field="s.reason_id"/></td>
+                                            <td class="text-end"><span t-field="s.qty"/></td>
+                                            <td class="text-end"><span t-field="s.amount"/></td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold" style="border-top:1px dashed #999;">
+                                        <td colspan="5" class="text-end">Subtotal</td>
+                                        <td class="text-end"><span t-field="o.reema_total_production_deductions"/></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </t>
+
+                        <!-- Misc — free-form, sign decides direction
+                             (positive adds to Net Payable, negative subtracts). -->
+                        <t t-if="o.reema_charge_ids">
+                            <h5>Misc</h5>
+                            <table class="table table-sm table-striped" style="font-size:12px;">
+                                <thead>
+                                    <tr class="table-dark">
+                                        <th>Description</th>
+                                        <th>Account</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="o.reema_charge_ids" t-as="c">
+                                        <tr>
+                                            <td><span t-field="c.name"/></td>
+                                            <td><span t-field="c.account_id"/></td>
+                                            <td class="text-end"><span t-field="c.amount"/></td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold" style="border-top:1px dashed #999;">
+                                        <td colspan="2" class="text-end">Subtotal</td>
+                                        <td class="text-end"><span t-field="o.reema_total_charges"/></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </t>
+
+                        <!-- Totals -->
+                        <div class="row mt-2">
+                            <div class="col-6 offset-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:55%;"><strong>Total</strong></td>
+                                        <td class="text-end"><span t-field="o.amount_total"/></td>
+                                    </tr>
+                                    <tr t-if="o.reema_total_deductions">
+                                        <td><strong>Total Advances</strong></td>
+                                        <td class="text-end"><span t-field="o.reema_total_deductions"/></td>
+                                    </tr>
+                                    <tr t-if="o.reema_total_production_deductions">
+                                        <td><strong>Total QC Charges</strong></td>
+                                        <td class="text-end"><span t-field="o.reema_total_production_deductions"/></td>
+                                    </tr>
+                                    <tr t-if="o.reema_total_charges">
+                                        <td><strong>Total Misc</strong></td>
+                                        <td class="text-end"><span t-field="o.reema_total_charges"/></td>
+                                    </tr>
+                                    <tr t-if="o.reema_total_deductions or o.reema_total_production_deductions or o.reema_total_charges">
+                                        <td><strong>Net Payable</strong></td>
+                                        <td class="text-end"><span t-field="o.reema_net_payable"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <t t-if="o.narration">
+                            <h5>Notes</h5>
+                            <div style="font-size:12px;" t-field="o.narration"/>
+                        </t>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

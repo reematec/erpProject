@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Category ────────────────────────────────────────────────── -->
+    <record id="module_category_reema_accounting" model="ir.module.category">
+        <field name="name">Reema Accounting</field>
+        <field name="sequence">22</field>
+        <field name="visible" eval="True"/>
+        <field name="description">Controls access to the Accounting app — journal entries, reconciliation, reports, contractor bills, and contractor advances.</field>
+    </record>
+
+    <!-- ── Roles (leaf → root so refs resolve) ────────────────────────
+         Odoo Community's own "Invoicing" category only exposes two raw
+         levels (Invoicing / Administrator) with no finer split available
+         without the Enterprise Accounting app. Both roles below grant the
+         same functional access today (they imply account.group_account_manager,
+         the only level that unlocks Journal Entries, Reconciliation, Reports
+         and the Accounting menu in Community). They are kept as two distinct
+         groups so future restrictions (e.g. locking Configuration/COA edits
+         to Manager only) can be layered on without re-touching user
+         assignments. ── -->
+
+    <!-- Level 2: Accountant (day-to-day bookkeeping) -->
+    <record id="group_reema_accountant" model="res.groups">
+        <field name="name">Accountant</field>
+        <field name="category_id" ref="module_category_reema_accounting"/>
+        <field name="comment">Day-to-day accounting: contractor bills &amp; advances, vendor/customer invoices, payments, journal entries, bank reconciliation, and financial reports.</field>
+        <field name="implied_ids" eval="[(4, ref('account.group_account_manager'))]"/>
+    </record>
+
+    <!-- Level 1: Accounting Manager -->
+    <record id="group_reema_accounting_manager" model="res.groups">
+        <field name="name">Accounting Manager</field>
+        <field name="category_id" ref="module_category_reema_accounting"/>
+        <field name="comment">Everything an Accountant can do. Reserved as the group for accounting-oversight actions added later. Includes all Accountant permissions.</field>
+        <field name="implied_ids" eval="[(4, ref('group_reema_accountant'))]"/>
+    </record>
+
+</odoo>

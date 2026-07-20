@@ -50,24 +50,19 @@
         <field name="name">reema.ilo.dispatch.list</field>
         <field name="model">reema.ilo.dispatch</field>
         <field name="arch" type="xml">
-            <list string="ILO Dispatches" decoration-warning="state in ('dispatched', 'sent')"
-                  decoration-success="state == 'closed'">
+            <list string="ILO Dispatches">
                 <field name="name" optional="show"/>
-                <field name="date" optional="show"/>
+                <field name="date" string="Date" optional="show"/>
                 <field name="mo_id" optional="show"/>
-                <field name="dispatch_type" optional="show"/>
+                <field name="dispatch_type" string="Dispatch" optional="show"/>
+                <field name="repair_source" string="From" optional="show"/>
                 <field name="product_id" options="{'no_open': True}" optional="hide"/>
-                <field name="contractor_id" options="{'no_open': True}" optional="show"/>
-                <field name="original_contractor_id" options="{'no_open': True}" optional="hide"/>
+                <field name="contractor_id" string="Contractor" options="{'no_open': True}" optional="show"/>
+                <field name="original_contractor_id" string="Original Contractor" options="{'no_open': True}" optional="show"/>
                 <field name="defect_type" optional="hide"/>
                 <field name="ball_size" optional="show"/>
-                <field name="construction_type" optional="show"/>
                 <field name="qty_balls" optional="show"/>
                 <field name="rate" optional="show"/>
-                <field name="state" widget="badge" optional="show"
-                       decoration-warning="state == 'dispatched'"
-                       decoration-info="state == 'sent'"
-                       decoration-success="state == 'closed'"/>
             </list>
         </field>
     </record>
@@ -108,6 +103,24 @@
         <field name="res_model">reema.ilo.dispatch</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('dispatch_type', '=', 'repair')]</field>
+        <field name="search_view_id" ref="view_reema_ilo_dispatch_search"/>
+    </record>
+
+    <!-- MO smart-button variants — active_id-scoped, opened as a new tab via
+         mrp_production._action_view_url_new_tab -->
+    <record id="action_reema_ilo_dispatch_from_mo" model="ir.actions.act_window">
+        <field name="name">ILO Dispatches</field>
+        <field name="res_model">reema.ilo.dispatch</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('mo_id', '=', active_id)]</field>
+        <field name="search_view_id" ref="view_reema_ilo_dispatch_search"/>
+    </record>
+
+    <record id="action_reema_ilo_repair_dispatch_from_mo" model="ir.actions.act_window">
+        <field name="name">ILO Repair Dispatches</field>
+        <field name="res_model">reema.ilo.dispatch</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('mo_id', '=', active_id), ('dispatch_type', '=', 'repair')]</field>
         <field name="search_view_id" ref="view_reema_ilo_dispatch_search"/>
     </record>
 
@@ -587,6 +600,7 @@
             <list string="ILO QC Scrap" create="0" edit="0" delete="0">
                 <field name="date"/>
                 <field name="mo_id"/>
+                <field name="workcenter_id" string="Hall"/>
                 <field name="contractor_id"/>
                 <field name="qty" string="Balls Scrapped" sum="Total"/>
                 <field name="defect_type"/>
@@ -613,11 +627,19 @@
         <field name="model">reema.ilo.contractor.deduction</field>
         <field name="arch" type="xml">
             <list string="ILO Contractor Deductions" create="0" edit="0" delete="0" default_order="date desc">
+                <header>
+                    <button name="action_apply_selected_to_bill" type="object"
+                            string="Add to Bill" class="btn-primary"
+                            invisible="not context.get('reema_pick_bill_id')"/>
+                </header>
                 <field name="name" string="Reference" optional="show"/>
                 <field name="date" optional="show"/>
                 <field name="original_contractor_id" optional="show"/>
+                <field name="charged_contractor_id" string="Charged To" optional="hide"/>
                 <field name="deduction_type" string="Type" widget="badge" optional="show"/>
+                <field name="reema_product_id" string="Product" optional="show"/>
                 <field name="mo_id" optional="show"/>
+                <field name="reema_po_id" string="PO" optional="hide"/>
                 <field name="qty" optional="show"/>
                 <field name="construction_type" optional="show"/>
                 <field name="rate" widget="zero_dash_float" optional="show"/>
@@ -661,6 +683,20 @@
         <field name="res_model">reema.ilo.contractor.deduction</field>
         <field name="view_mode">list</field>
         <field name="context">{'search_default_pending': 1}</field>
+        <field name="search_view_id" ref="view_reema_ilo_contractor_deduction_search"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_ilo_contractor_deduction_list')}),
+        ]"/>
+    </record>
+
+    <!-- MO smart-button variant — active_id-scoped, opened as a new tab via
+         mrp_production._action_view_url_new_tab. Lost-ball charges only. -->
+    <record id="action_reema_lost_balls_from_mo" model="ir.actions.act_window">
+        <field name="name">Lost Balls</field>
+        <field name="res_model">reema.ilo.contractor.deduction</field>
+        <field name="view_mode">list</field>
+        <field name="domain">[('mo_id', '=', active_id), ('deduction_type', '=', 'lost')]</field>
         <field name="search_view_id" ref="view_reema_ilo_contractor_deduction_search"/>
         <field name="view_ids" eval="[
             (5, 0, 0),

@@ -712,12 +712,4 @@ class MrpProductionIssuanceExt(models.Model):
             )
 
     def action_view_issuances(self):
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Material Issuances',
-            'res_model': 'reema.material.issuance',
-            'view_mode': 'list,form',
-            'domain': [('production_id', '=', self.id)],
-            'context': {'default_production_id': self.id},
-        }
+        return self._action_view_url_new_tab('reema_mrp.reema_material_issuance_action_from_mo')

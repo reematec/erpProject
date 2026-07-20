@@ -38,6 +38,40 @@ class ResPartnerExt(models.Model):
             return
         candidates.property_account_payable_id = shared_payable
 
+    def _get_or_create_advance_account(self):
+        """Return this contractor's individual advance account (1-1-3-xx),
+        auto-creating it on first use — mirrors _assign_customer_receivable
+        below. Called from the Advance Voucher on confirm, not from partner
+        create/write, since most contractors never need one."""
+        self.ensure_one()
+        if self.reema_advance_account_id:
+            return self.reema_advance_account_id
+        code = self._next_account_code(CONTRACTOR_ADVANCE_PREFIX)
+        account = self.env['account.account'].sudo().create({
+            'name': self.name + ' — Advances',
+            'code': code,
+            'account_type': 'asset_current',
+            'reconcile': True,
+            'partner_id': self.id,
+        })
+        self.reema_advance_account_id = account
+        return account
+
+    def _get_outstanding_advance(self):
+        """Sum of posted journal-line balances on this contractor's advance
+        account — what they still owe back to the company. Used by the
+        Advance Voucher (shown before issuing a new one) and by the
+        Contractor Bill's suggested-deduction hint."""
+        self.ensure_one()
+        account = self.reema_advance_account_id
+        if not account:
+            return 0.0
+        lines = self.env['account.move.line'].search([
+            ('account_id', '=', account.id),
+            ('move_id.state', '=', 'posted'),
+        ])
+        return sum(lines.mapped('balance'))
+
     def _assign_customer_receivable(self):
         """Auto-create individual receivable account (1-1-2-xx) for customers that don't have one yet."""
         candidates = self.filtered(

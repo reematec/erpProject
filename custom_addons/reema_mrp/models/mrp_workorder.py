@@ -30,7 +30,8 @@ class MrpWorkorder(models.Model):
         store=True, readonly=True,
     )
     scrap_ids = fields.One2many('reema.production.scrap', 'workorder_id', string='Scrap Entries')
-    qty_scrap_balls = fields.Float(string='Scrapped Balls', compute='_compute_qty_scrap_balls', store=True)
+    qty_scrap_balls = fields.Float(string='Scrapped Balls', compute='_compute_qty_scrap_balls')
+    qty_scrap_hall_unit = fields.Float(string='Scrapped', compute='_compute_qty_scrap_hall_unit')
     hall_uom_name = fields.Char(related='operation_id.piece_rate_id.uom_id.name', string='UOM', readonly=True)
     hall_unit_label = fields.Selection(related='workcenter_id.hall_unit', string='Logging Unit', readonly=True)
     state = fields.Selection(selection=[
@@ -158,6 +159,13 @@ class MrpWorkorder(models.Model):
         # Final QC has no such duplicate: a repair-return entry there is the ONLY
         # record of those balls being back (the Fail qty never created a batch
         # entry at all there), so it must count normally, not be excluded/netted.
+        # A ball reported lost during repair must permanently reduce this figure,
+        # not just temporarily like repair_outstanding above — repair_outstanding
+        # is (dispatched net of lost) minus received, so once a ball is declared
+        # lost it drops OUT of that number entirely (same as if it had come back),
+        # which would otherwise silently re-inflate Balls Done as though the ball
+        # were done again. qty_lost is subtracted here separately, on top of
+        # repair_outstanding, precisely so a lost ball never counts as done.
         Dispatch = self.env['reema.ilo.dispatch']
         for wo in self:
             entries = wo.batch_entry_ids
@@ -170,13 +178,45 @@ class MrpWorkorder(models.Model):
                     Dispatch._ilo_ledger_balance_by_type(wo.production_id.id, c.id, 'repair')
                     for c in contractors
                 )
-                total -= repair_outstanding
+                # Scoped to Initial-QC-sourced repairs only — Final-QC-sourced
+                # dispatches (and their own qty_lost) never touched this Ball
+                # Receive Point WO's own tally in the first place (see
+                # repair_source filters throughout _ilo_ledger_balance*), so a
+                # ball lost during a Final QC repair must not be subtracted here.
+                total_lost = sum(Dispatch.search([
+                    ('mo_id', '=', wo.production_id.id), ('dispatch_type', '=', 'repair'),
+                    ('repair_source', '!=', 'final_qc'),
+                ]).mapped('qty_lost'))
+                total -= repair_outstanding + total_lost
             wo.qty_balls_completed = total
 
     @api.depends('scrap_ids.qty_balls')
     def _compute_qty_scrap_balls(self):
+        # Two separate scrap sources feed a work order: general shop-floor scrap
+        # (reema.production.scrap, e.g. Shaping's mold/heat write-offs) and ILO QC
+        # scrap (reema.ilo.qc.scrap, Initial/Final QC only) — see reema.scrap.report
+        # for why they're kept as separate models. Combined here so a hall's own
+        # "Scrapped" figure actually explains the gap against its predecessor's
+        # completed count, instead of only ever showing the production-floor half.
+        IloScrap = self.env['reema.ilo.qc.scrap']
+        ilo_scrap_by_wo = {
+            g['workorder_id'][0]: g['qty']
+            for g in IloScrap.read_group(
+                [('workorder_id', 'in', self.ids)], ['qty:sum'], ['workorder_id'],
+            )
+        }
         for wo in self:
-            wo.qty_scrap_balls = sum(wo.scrap_ids.mapped('qty_balls'))
+            wo.qty_scrap_balls = sum(wo.scrap_ids.mapped('qty_balls')) + ilo_scrap_by_wo.get(wo.id, 0)
+
+    @api.depends('qty_scrap_balls')
+    def _compute_qty_scrap_hall_unit(self):
+        # qty_scrap_balls is normalized to balls so different halls' scrap can be
+        # summed/compared (see _compute_qty_scrap_balls above). For display, convert
+        # back to this hall's own logging unit — same as hall_qty (Target) does for
+        # qty_production — so a Cutting-hall user who scrapped 10 panels sees "10",
+        # not the ball-equivalent 0.56.
+        for wo in self:
+            wo.qty_scrap_hall_unit = wo._balls_to_units(wo.qty_scrap_balls)
 
     # Extend state computation: a work order blocked by a predecessor is also unblocked
     # when the predecessor sets batch_released=True (partial completion released to next hall).
@@ -196,7 +236,13 @@ class MrpWorkorder(models.Model):
                 for p in predecessors
             )
             if all_released:
-                wo.state = 'ready' if wo.production_availability == 'assigned' else 'waiting'
+                # NOT gated on production_availability: this system never reserves raw
+                # material stock (see mrp_production.action_confirm — reservations are
+                # explicitly cleared), so that flag is always 'confirmed', never
+                # 'assigned', across every MO. Using it here would mean this branch
+                # could never actually reach 'ready' — the predecessor's own
+                # batch_released is already the real material-availability signal.
+                wo.state = 'ready'
 
     def _set_qty_producing(self):
         # Odoo's default inverse propagates wo.qty_producing back to production_id.qty_producing.

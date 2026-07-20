@@ -1,4 +1,4 @@
-from odoo import models, fields, api, tools
+from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError
 
 
@@ -69,6 +69,42 @@ class ReemaIloDispatch(models.Model):
              'Initial QC (routes back to Initial QC once returned) or Final QC (Final '
              'QC handles its own repair loop end-to-end, never routes back to Initial QC).',
     )
+    repair_count = fields.Integer(
+        string='Number of Repairs', default=0,
+        help='Repair dispatches only: total individual repair marks across the balls '
+             'in this dispatch — a single ball can need more than one repair. Drives '
+             'the original contractor\'s deduction (charged immediately at dispatch '
+             'time) and the repair contractor\'s eventual payment (realized at Initial '
+             'QC Pass) — both at repair-count × rate, not ball count.',
+    )
+    repair_count_consumed = fields.Boolean(
+        string='Repair Count Consumed', default=False, copy=False,
+        help='True once this dispatch\'s repair_count has been pulled into a payable '
+             'Initial QC Pass entry for the repair contractor — prevents it being '
+             'counted into pay twice.',
+    )
+    qty_lost = fields.Integer(
+        string='Balls Lost', default=0,
+        help='Balls from this dispatch the contractor has reported as lost — never '
+             'coming back. Declared via Stitching Center Receive, not here directly. '
+             'Subtracted from every outstanding-balance calculation (same as a receipt '
+             'would be) so a lost ball does not block the rest of the batch forever; '
+             'generates a deduction charged to whoever lost it (the repair contractor '
+             'for a repair dispatch, the original contractor themselves for a '
+             'stitching dispatch) rather than reducing what was already charged for '
+             'the repair/stitching work itself.',
+    )
+    qty_scrap = fields.Integer(
+        string='Balls Scrapped', default=0,
+        help='Final-QC-sourced repair dispatches only: balls from this dispatch that '
+             'came back unrepairable and were written off at ReemaFinalQcReceiveWizard. '
+             'Subtracted from _final_qc_repair_outstanding same as qty_lost — a '
+             'scrapped ball is accounted for (surrendered, not kept by the repair '
+             'contractor to keep trying), unlike a rejected one, which stays outstanding. '
+             'Initial-QC-sourced repairs never set this: their receive step already '
+             'counts a physically-returned ball as accounted for regardless of the '
+             'later Pass/Fail/Scrap decision, so no separate netting is needed there.',
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -96,11 +132,16 @@ class ReemaIloDispatch(models.Model):
 
         Excludes Final-QC-sourced repairs — those are dispatched and returned
         entirely within Final QC's own loop (see is_final_qc), never through a
-        Ball Receive Point hall, so they can never appear as 'received' here."""
-        dispatched = sum(self.search([
+        Ball Receive Point hall, so they can never appear as 'received' here.
+
+        Nets out qty_lost — a ball reported lost is neither received nor still
+        genuinely awaiting return, so it must stop counting as outstanding (or a
+        single lost ball would block this work order from ever completing)."""
+        dispatches = self.search([
             ('mo_id', '=', mo_id), ('contractor_id', '=', contractor_id),
             ('repair_source', '!=', 'final_qc'),
-        ]).mapped('qty_balls'))
+        ])
+        dispatched = sum(dispatches.mapped('qty_balls')) - sum(dispatches.mapped('qty_lost'))
         received = sum(self.env['reema.wo.batch.entry'].search([
             ('workorder_id.production_id', '=', mo_id),
             ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
@@ -115,12 +156,14 @@ class ReemaIloDispatch(models.Model):
         stitching AND repairing someone else's balls on the same MO gets two
         independent numbers instead of one pooled total.
 
-        Excludes Final-QC-sourced repairs — see _ilo_ledger_balance."""
-        dispatched = sum(self.search([
+        Excludes Final-QC-sourced repairs — see _ilo_ledger_balance. Nets out
+        qty_lost — see _ilo_ledger_balance for why."""
+        dispatches = self.search([
             ('mo_id', '=', mo_id), ('contractor_id', '=', contractor_id),
             ('dispatch_type', '=', dispatch_type),
             ('repair_source', '!=', 'final_qc'),
-        ]).mapped('qty_balls'))
+        ])
+        dispatched = sum(dispatches.mapped('qty_balls')) - sum(dispatches.mapped('qty_lost'))
         received = sum(self.env['reema.wo.batch.entry'].search([
             ('workorder_id.production_id', '=', mo_id),
             ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
@@ -138,13 +181,17 @@ class ReemaIloDispatch(models.Model):
         valid target for a NEW receipt, otherwise a receipt can be logged
         against the wrong (already-closed) pairing while it still passes the
         pooled per-contractor balance check. Excludes Final-QC-sourced repairs
-        — see _ilo_ledger_balance."""
-        dispatched = sum(self.search([
+        — see _ilo_ledger_balance. Nets out qty_lost — see _ilo_ledger_balance
+        for why (this is also what lets the "fully received" QC-visibility gate
+        in _ilo_qc_pending_balance_repair ever clear when a ball has been
+        declared lost instead of physically returned)."""
+        dispatches = self.search([
             ('mo_id', '=', mo_id), ('contractor_id', '=', contractor_id),
             ('original_contractor_id', '=', original_contractor_id),
             ('dispatch_type', '=', 'repair'),
             ('repair_source', '!=', 'final_qc'),
-        ]).mapped('qty_balls'))
+        ])
+        dispatched = sum(dispatches.mapped('qty_balls')) - sum(dispatches.mapped('qty_lost'))
         received = sum(self.env['reema.wo.batch.entry'].search([
             ('workorder_id.production_id', '=', mo_id),
             ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
@@ -193,6 +240,88 @@ class ReemaIloDispatch(models.Model):
         return received - qc_processed - sent_to_repair - scrapped
 
     @api.model
+    def _ilo_qc_pending_balance_stitching(self, mo_id, original_contractor_id):
+        """Same ledger shape as _ilo_qc_pending_balance, scoped to first-time
+        (never-repaired) balls only. Historical rows predate the purpose split
+        on Initial QC decisions (ilo_dispatch_type left blank) — every one of
+        them was, by construction, a first-time decision (repair-purpose
+        decisions never existed before this split), so blank folds into this
+        bucket rather than being dropped or double-counted."""
+        received = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
+            ('original_contractor_id', '=', original_contractor_id),
+            ('ilo_dispatch_type', 'in', ('stitching', False)),
+        ]).mapped('qty'))
+        qc_processed = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_initial_qc', '=', True),
+            ('contractor_id', '=', original_contractor_id),
+            ('ilo_dispatch_type', 'in', ('stitching', False)),
+        ]).mapped('qty'))
+        sent_to_repair = sum(self.search([
+            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
+            ('original_contractor_id', '=', original_contractor_id),
+            ('repair_source', '!=', 'final_qc'),
+            ('batch_entry_id.ilo_dispatch_type', 'in', ('stitching', False)),
+        ]).mapped('qty_balls'))
+        scrapped = sum(self.env['reema.ilo.qc.scrap'].search([
+            ('mo_id', '=', mo_id), ('contractor_id', '=', original_contractor_id),
+            ('workorder_id.workcenter_id.is_initial_qc', '=', True),
+            ('batch_entry_id.ilo_dispatch_type', 'in', ('stitching', False)),
+        ]).mapped('qty'))
+        return received - qc_processed - sent_to_repair - scrapped
+
+    @api.model
+    def _ilo_qc_pending_balance_repair(self, mo_id, original_contractor_id, repair_contractor_id):
+        """Same ledger shape as _ilo_qc_pending_balance, scoped to one specific
+        repair contractor's returned work for one original contractor — this
+        is what lets Initial QC pay the repair contractor only for balls it
+        actually confirms are good, instead of at receive time. No blank
+        fallback here: a blank ilo_dispatch_type row can never belong to a
+        specific repair contractor (see _ilo_qc_pending_balance_stitching).
+
+        Nothing becomes visible to QC until this repair contractor has brought
+        back EVERYTHING dispatched to them for this original contractor on this
+        MO — partial receives are allowed and accumulate normally, they just
+        stay invisible to QC (and therefore unpayable) until the pair is fully
+        settled. User-confirmed design (2026-07-13): receive must stay
+        partial-friendly, the gate belongs here instead. Known accepted gap: a
+        new dispatch landing on this same pair while an earlier fully-received
+        batch is still unprocessed will re-lock the whole pool — intentionally
+        not handled, revisit only if it causes a real problem."""
+        if self._ilo_repair_balance_by_original(mo_id, repair_contractor_id, original_contractor_id) > 0:
+            return 0
+        received = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
+            ('original_contractor_id', '=', original_contractor_id),
+            ('contractor_id', '=', repair_contractor_id),
+            ('ilo_dispatch_type', '=', 'repair'),
+        ]).mapped('qty'))
+        qc_processed = sum(self.env['reema.wo.batch.entry'].search([
+            ('workorder_id.production_id', '=', mo_id),
+            ('workorder_id.workcenter_id.is_initial_qc', '=', True),
+            ('original_contractor_id', '=', original_contractor_id),
+            ('contractor_id', '=', repair_contractor_id),
+            ('ilo_dispatch_type', '=', 'repair'),
+        ]).mapped('qty'))
+        sent_to_repair_again = sum(self.search([
+            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
+            ('original_contractor_id', '=', original_contractor_id),
+            ('repair_source', '!=', 'final_qc'),
+            ('batch_entry_id.ilo_dispatch_type', '=', 'repair'),
+            ('batch_entry_id.contractor_id', '=', repair_contractor_id),
+        ]).mapped('qty_balls'))
+        scrapped = sum(self.env['reema.ilo.qc.scrap'].search([
+            ('mo_id', '=', mo_id), ('contractor_id', '=', original_contractor_id),
+            ('workorder_id.workcenter_id.is_initial_qc', '=', True),
+            ('batch_entry_id.ilo_dispatch_type', '=', 'repair'),
+            ('batch_entry_id.contractor_id', '=', repair_contractor_id),
+        ]).mapped('qty'))
+        return received - qc_processed - sent_to_repair_again - scrapped
+
+    @api.model
     def _ilo_repair_outstanding(self, mo_id, original_contractor_id):
         """Balls of original_contractor_id's production currently out at a
         repair contractor, not yet back. Zero = fully reconciled.
@@ -214,68 +343,30 @@ class ReemaIloDispatch(models.Model):
         return sent - returned
 
     @api.model
-    def _ilo_stitching_payable(self, mo_id, original_contractor_id):
-        """Net payable for the original stitching contractor: gross on every
-        ball that ultimately passed QC, minus the repair deduction for every
-        ball that needed fixing. 'finalized' means nothing is still pending
-        inspection or stuck out at repair — safe to actually pay."""
-        qty_passed = sum(self.env['reema.wo.batch.entry'].search([
-            ('workorder_id.production_id', '=', mo_id),
-            ('workorder_id.workcenter_id.is_initial_qc', '=', True),
-            ('contractor_id', '=', original_contractor_id),
-        ]).mapped('qty'))
-        stitch_dispatches = self.search([
-            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'stitching'),
-            ('contractor_id', '=', original_contractor_id),
-        ])
-        rate = stitch_dispatches[:1].rate or 0.0
-        repair_dispatches = self.search([
-            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
-            ('original_contractor_id', '=', original_contractor_id),
-        ])
-        qty_repaired = sum(repair_dispatches.mapped('qty_balls'))
-        deduction = sum(d.qty_balls * d.rate for d in repair_dispatches)
-        gross = qty_passed * rate
-        finalized = (
-            self._ilo_qc_pending_balance(mo_id, original_contractor_id) == 0
-            and self._ilo_repair_outstanding(mo_id, original_contractor_id) == 0
-        )
-        return {
-            'qty_passed': qty_passed, 'qty_repaired': qty_repaired,
-            'gross': gross, 'deduction': deduction, 'net': gross - deduction,
-            'finalized': finalized,
-        }
-
-    @api.model
-    def _ilo_repair_payable(self, mo_id, repair_contractor_id):
-        """Fee owed to whoever performed repair work, independent of whose
-        original production it was — based on repaired balls actually
-        physically returned (Ball Receive), not merely dispatched for repair."""
-        returned_qty = sum(self.env['reema.wo.batch.entry'].search([
-            ('workorder_id.production_id', '=', mo_id),
-            ('workorder_id.workcenter_id.is_ball_receive_point', '=', True),
-            ('contractor_id', '=', repair_contractor_id),
-            ('ilo_dispatch_type', '=', 'repair'),
-        ]).mapped('qty'))
-        repair_dispatches = self.search([
-            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
-            ('contractor_id', '=', repair_contractor_id),
-        ])
-        rate = repair_dispatches[:1].rate or 0.0
-        return {'qty': returned_qty, 'amount': returned_qty * rate}
-
-    @api.model
     def _final_qc_repair_outstanding(self, mo_id, repair_contractor_id, original_contractor_id):
         """Balls currently out at a Final-QC-sourced repair job for this exact
         (repair contractor, original contractor) pair on this MO, not yet received
         back at Final QC. Unambiguous — dispatch and receive are both tagged with
-        both contractor ids, unlike the pending-balance helper below."""
-        sent = sum(self.search([
+        both contractor ids, unlike the pending-balance helper below.
+
+        Nets out qty_lost AND qty_scrap — a ball reported lost or scrapped as
+        unrepairable is neither received nor still genuinely awaiting return, so
+        both must stop counting as outstanding (or a single such ball would
+        block this pair from ever reconciling). A rejected/still-defective
+        ball is deliberately NOT netted here — it stays with the repair
+        contractor to keep working, so it must remain outstanding. Mirrors
+        _ilo_repair_balance_by_original."""
+        dispatches = self.search([
             ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
             ('repair_source', '=', 'final_qc'),
             ('contractor_id', '=', repair_contractor_id),
             ('original_contractor_id', '=', original_contractor_id),
-        ]).mapped('qty_balls'))
+        ])
+        sent = (
+            sum(dispatches.mapped('qty_balls'))
+            - sum(dispatches.mapped('qty_lost'))
+            - sum(dispatches.mapped('qty_scrap'))
+        )
         returned = sum(self.env['reema.wo.batch.entry'].search([
             ('workorder_id.production_id', '=', mo_id),
             ('workorder_id.workcenter_id.is_final_qc', '=', True),
@@ -284,42 +375,6 @@ class ReemaIloDispatch(models.Model):
             ('original_contractor_id', '=', original_contractor_id),
         ]).mapped('qty'))
         return sent - returned
-
-    @api.model
-    def _final_qc_repair_pending_balance(self, mo_id, original_contractor_id):
-        """Balls returned from a Final-QC repair job for this original contractor,
-        not yet re-decided at Final QC. Same ledger shape as _ilo_qc_pending_balance,
-        but scoped to Final QC's own self-contained repair loop.
-
-        Caveat: Final QC's Pass/Fail/Scrap entries don't distinguish whether they
-        came from a repair return or a first-time (never-repaired) ball — those
-        aren't tracked per original contractor before reaching Final QC at all
-        (the halls in between don't carry that lineage). So this number is only
-        accurate if repair-returned balls are decided separately from fresh ones,
-        which is the expected operational practice (they arrive as a distinct
-        batch), not something the system enforces."""
-        returned = sum(self.env['reema.wo.batch.entry'].search([
-            ('workorder_id.production_id', '=', mo_id),
-            ('workorder_id.workcenter_id.is_final_qc', '=', True),
-            ('ilo_dispatch_type', '=', 'repair'),
-            ('original_contractor_id', '=', original_contractor_id),
-        ]).mapped('qty'))
-        qc_processed = sum(self.env['reema.wo.batch.entry'].search([
-            ('workorder_id.production_id', '=', mo_id),
-            ('workorder_id.workcenter_id.is_final_qc', '=', True),
-            ('contractor_id', '=', original_contractor_id),
-        ]).mapped('qty'))
-        sent_to_repair_again = sum(self.search([
-            ('mo_id', '=', mo_id), ('dispatch_type', '=', 'repair'),
-            ('repair_source', '=', 'final_qc'),
-            ('original_contractor_id', '=', original_contractor_id),
-        ]).mapped('qty_balls'))
-        scrapped = sum(self.env['reema.ilo.qc.scrap'].search([
-            ('mo_id', '=', mo_id),
-            ('workorder_id.workcenter_id.is_final_qc', '=', True),
-            ('contractor_id', '=', original_contractor_id),
-        ]).mapped('qty'))
-        return returned - qc_processed - sent_to_repair_again - scrapped
 
     def action_close(self):
         # Fulfillment is no longer tracked per dispatch — the (MO, contractor)
@@ -365,6 +420,7 @@ class ReemaIloBalance(models.Model):
                 FROM (
                     SELECT mo_id, contractor_id, dispatch_type, SUM(qty_balls) AS qty_dispatched
                     FROM reema_ilo_dispatch
+                    WHERE repair_source IS DISTINCT FROM 'final_qc'
                     GROUP BY mo_id, contractor_id, dispatch_type
                 ) d
                 JOIN mrp_production mp ON mp.id = d.mo_id
@@ -494,12 +550,37 @@ class ReemaIloContractorDeduction(models.Model):
     original_contractor_id = fields.Many2one(
         'res.partner', string='Original Contractor', required=True,
         domain="[('is_contractor', '=', True)]",
+        help='Whose batch/production this charge traces back to — for repair and '
+             'scrap charges this is also who pays it. For a lost-ball charge it is '
+             'kept as the true original contractor for accounting-trail purposes '
+             'even though charged_contractor_id (not this field) is who actually '
+             'pays, since a repair contractor can lose balls belonging to more than '
+             'one original contractor and the two must not be conflated.',
+    )
+    charged_contractor_id = fields.Many2one(
+        'res.partner', string='Charged To (if different)',
+        domain="[('is_contractor', '=', True)]",
+        help='Lost-ball charges only — the contractor actually responsible for the '
+             'loss and who pays it, when that differs from original_contractor_id '
+             '(a repair contractor losing another contractor\'s ball). Leave blank '
+             'for repair/scrap charges, where the original contractor always pays.',
+    )
+    billed_to_id = fields.Many2one(
+        'res.partner', string='Billed To', compute='_compute_billed_to_id', store=True,
+        help='charged_contractor_id if set, otherwise original_contractor_id — the '
+             'single field bill preparation actually searches on, so repair/scrap '
+             'and lost-ball charges can be looked up the same way regardless of '
+             'which contractor ends up paying.',
     )
     deduction_type = fields.Selection(
-        [('repair', 'Repair Charge'), ('scrap', 'Scrap Material Cost')],
+        [('repair', 'Repair Charge'), ('scrap', 'Scrap Material Cost'), ('lost', 'Lost Ball')],
         string='Type', required=True,
     )
     mo_id = fields.Many2one('mrp.production', string='Manufacturing Order')
+    reema_product_id = fields.Many2one('product.product', related='mo_id.product_id',
+                                       string='Product', store=True)
+    reema_po_id = fields.Many2one('reema.production.order', related='mo_id.reema_po_id',
+                                  string='PO', store=True)
     qty = fields.Integer(string='Qty', required=True)
     construction_type = fields.Selection(
         [('hs', 'HS'), ('hyb', 'HYB'), ('ms', 'MS'), ('thb', 'THB')],
@@ -524,6 +605,13 @@ class ReemaIloContractorDeduction(models.Model):
         'account.move', string='Applied to Bill', readonly=True, copy=False,
         help='The original contractor\'s vendor bill this deduction was added to.',
     )
+    account_id = fields.Many2one(
+        'account.account', string='Expense Account', readonly=True, copy=False,
+        help='Set from the billed work center\'s Labor Expense Account at billing '
+             'time (action_create_contractor_bill) — this deduction has no work '
+             'center of its own to derive it from. Used to post the actual negative '
+             'invoice line at bill confirmation (see AccountMoveDeductionExt.action_post).',
+    )
     repair_dispatch_id = fields.Many2one(
         'reema.ilo.dispatch', string='Repair Dispatch', readonly=True,
         help='Repair only — the dispatch this charge is for.',
@@ -539,9 +627,23 @@ class ReemaIloContractorDeduction(models.Model):
              'for cross-reference ("charged to X because Y did this repair, which is '
              '[billed/unbilled] as entry Z").',
     )
+    batch_entry_id = fields.Many2one(
+        'reema.wo.batch.entry', string='Originating Batch Entry', readonly=True,
+        help='Lost-ball charges only — the receive-side batch entry logged in the same '
+             'session this charge was created in. Repair/scrap charges are already '
+             'traceable via repair_dispatch_id/scrap_id, so this is only set for "lost" '
+             'deductions, letting deletion of that batch entry detect and block on it '
+             '(the Balls Lost adjustment it triggered on the dispatch record cannot be '
+             'auto-reversed).',
+    )
     date = fields.Date(string='Date', default=fields.Date.today)
     recorded_by = fields.Many2one('res.users', string='Recorded By', default=lambda self: self.env.user)
     notes = fields.Char(string='Notes')
+
+    @api.depends('charged_contractor_id', 'original_contractor_id')
+    def _compute_billed_to_id(self):
+        for ded in self:
+            ded.billed_to_id = ded.charged_contractor_id or ded.original_contractor_id
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -549,6 +651,38 @@ class ReemaIloContractorDeduction(models.Model):
             if vals.get('name', 'New') == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('reema.ilo.contractor.deduction') or 'New'
         return super().create(vals_list)
+
+    def action_return_to_pending(self):
+        for ded in self:
+            if ded.bill_id and (ded.bill_id.state != 'draft' or ded.bill_id.reema_bill_state != 'pending'):
+                raise UserError(
+                    f'Cannot remove {ded.name} from its bill: the bill is no '
+                    'longer in the drafting stage.'
+                )
+            ded.bill_id.message_post(body=_(
+                'ILO deduction removed: %(name)s — PKR %(amount).2f'
+            ) % {'name': ded.name, 'amount': ded.amount})
+        self.write({'state': 'pending', 'bill_id': False})
+
+    def action_apply_selected_to_bill(self):
+        bill = self.env['account.move'].browse(self.env.context.get('reema_pick_bill_id', []))
+        if not bill:
+            raise UserError('No bill to add these deductions to.')
+        if not self:
+            raise UserError('Select at least one deduction to add.')
+        if bill.state != 'draft' or bill.reema_bill_state != 'pending':
+            raise UserError('This bill is no longer in the drafting stage.')
+        account = bill.batch_entry_ids[:1]._reema_expense_account()
+        for ded in self:
+            ded.write({
+                'state': 'applied',
+                'bill_id': bill.id,
+                'account_id': ded.account_id.id or account.id,
+            })
+        bill.message_post(body=_(
+            'ILO deduction(s) added: %(lines)s'
+        ) % {'lines': ', '.join(f'{d.name} — PKR {d.amount:.2f}' for d in self)})
+        return {'type': 'ir.actions.act_window_close'}
 
 
 class ReemaIloQcScrap(models.Model):
@@ -558,6 +692,11 @@ class ReemaIloQcScrap(models.Model):
 
     mo_id = fields.Many2one('mrp.production', string='Manufacturing Order', required=True)
     workorder_id = fields.Many2one('mrp.workorder', string='Work Order', required=True)
+    workcenter_id = fields.Many2one(
+        'mrp.workcenter', related='workorder_id.workcenter_id', string='Hall', store=True,
+        help='Which hall logged this scrap — Initial QC and Final QC both write to this '
+             'model, so this is the only way to tell them apart in the combined list.',
+    )
     batch_entry_id = fields.Many2one(
         'reema.wo.batch.entry', string='Batch Entry',
         help='The pass-qty entry created in the same QC decision this scrap was '

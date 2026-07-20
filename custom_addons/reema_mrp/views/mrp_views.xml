@@ -32,6 +32,13 @@
     <record id="mrp.menu_mrp_routing_action" model="ir.ui.menu">
         <field name="active" eval="False"/>
     </record>
+    <!-- Hide Operations > Scrap and Operations > Unbuild Order -->
+    <record id="mrp.menu_mrp_scrap" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+    <record id="mrp.menu_mrp_unbuild" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
 
     <!-- Vendors: action + menu under Manufacturing > Configuration -->
     <record id="action_reema_vendors" model="ir.actions.act_window">
@@ -158,14 +165,6 @@
                         invisible="ilo_repair_qty_balls == 0">
                     <field name="ilo_repair_qty_balls" widget="statinfo" string="Repair"/>
                 </button>
-                <!-- Smart button: ILO balls scrapped at Initial QC -->
-                <button name="action_view_ilo_scrap"
-                        type="object"
-                        class="oe_stat_button"
-                        icon="fa-trash"
-                        invisible="ilo_scrap_qty == 0">
-                    <field name="ilo_scrap_qty" widget="statinfo" string="Scrapped"/>
-                </button>
                 <!-- Smart button: total scrap across all sources (ILO QC + production floor) -->
                 <button name="action_view_scrap_report"
                         type="object"
@@ -173,6 +172,14 @@
                         icon="fa-trash-o"
                         invisible="total_scrap_qty == 0">
                     <field name="total_scrap_qty" widget="statinfo" string="Total Scrap"/>
+                </button>
+                <!-- Smart button: balls a repair contractor reported lost (never coming back) -->
+                <button name="action_view_lost_balls"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-question-circle"
+                        invisible="ilo_lost_qty == 0">
+                    <field name="ilo_lost_qty" widget="statinfo" string="Lost"/>
                 </button>
             </xpath>
             <!-- Drop the core "Open Move" detail-operations icon: components aren't
@@ -360,10 +367,11 @@
                 <field name="contractor_ids" widget="many2many_tags" options="{'no_create': True, 'no_edit': True}"
                        invisible="workforce_type == 'employee'"/>
                 <field name="is_ball_receive_point" column_invisible="1"/>
+                <field name="hall_unit_label" string="UOM" readonly="1" optional="show"/>
                 <field name="hall_qty" string="Target" readonly="1" widget="trim_float"/>
                 <field name="qty_batch_completed" string="Completed" readonly="1" widget="trim_float"/>
-                <field name="hall_unit_label" string="UOM" readonly="1" optional="show"/>
                 <field name="qty_balls_completed" string="Balls Done" readonly="1" optional="show" widget="trim_float"/>
+                <field name="qty_scrap_hall_unit" string="Scrapped" readonly="1" optional="show" widget="zero_dash_float"/>
             </xpath>
             <!-- Place the Log-batch button adjacent to the native Start/Done buttons so all
                  action buttons share ONE button column (avoids a second reserved ~90px column) -->
@@ -740,18 +748,18 @@
                 <field name="expense_account_id"
                        options="{'no_create': True, 'no_edit': True}"
                        groups="base.group_erp_manager"
-                       invisible="workforce_type == 'employee'"/>
+                       invisible="workforce_type == 'employee' and not is_initial_qc and not is_final_qc"/>
                 <field name="is_qc_point"/>
+                <field name="is_initial_qc" string="Initial QC Point"
+                       help="Enable for the ILO Initial QC hall — logging a batch here opens the Pass/Fail-to-repair/Scrap modal instead of the normal one."/>
+                <field name="is_final_qc" string="Final QC Point"
+                       help="Enable for the ILO Final QC hall — logging a batch here (HS construction only) opens its own Pass/Fail-to-repair/Scrap modal with a self-contained repair loop, separate from Initial QC."/>
                 <field name="is_packing" string="Is Packing Station"
                        help="Enable if this work center is the packing stage. The MO's quantity-producing counter will be driven by batch entries logged here."/>
                 <field name="is_ilo" string="ILO Work Center"
                        help="Enable if this work center represents the ILO (hand stitching) external step. Completion will be gated on ILO receipt confirmation."/>
                 <field name="is_ball_receive_point" string="Ball Receive Point"
                        help="Enable for the dedicated hall where balls dispatched to an ILO contractor are logged back in — works for any construction type (HS, HYB, THB, etc). Must be its own work center, not shared with another step."/>
-                <field name="is_initial_qc" string="Initial QC Point"
-                       help="Enable for the ILO Initial QC hall — logging a batch here opens the Pass/Fail-to-repair/Scrap modal instead of the normal one."/>
-                <field name="is_final_qc" string="Final QC Point"
-                       help="Enable for the ILO Final QC hall — logging a batch here (HS construction only) opens its own Pass/Fail-to-repair/Scrap modal with a self-contained repair loop, separate from Initial QC."/>
                 <field name="is_printing"/>
                 <field name="scrap_enabled"/>
                 <field name="hall_unit"/>

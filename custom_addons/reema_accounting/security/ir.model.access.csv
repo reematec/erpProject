@@ -2,7 +2,17 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_reema_bill_deduction_user,reema.bill.deduction user,model_reema_bill_deduction,base.group_user,1,0,0,0
 access_reema_bill_deduction_accountant,reema.bill.deduction accountant,model_reema_bill_deduction,account.group_account_manager,1,1,1,1
 access_reema_bill_deduction_admin,reema.bill.deduction admin,model_reema_bill_deduction,base.group_system,1,1,1,1
+access_reema_bill_charge_user,reema.bill.charge user,model_reema_bill_charge,base.group_user,1,0,0,0
+access_reema_bill_charge_accountant,reema.bill.charge accountant,model_reema_bill_charge,account.group_account_manager,1,1,1,1
+access_reema_bill_charge_admin,reema.bill.charge admin,model_reema_bill_charge,base.group_system,1,1,1,1
 access_reema_cba_supervisor,reema.contractor.bill.approval supervisor,model_reema_contractor_bill_approval,reema_mrp.group_reema_supervisor,1,0,0,0
 access_reema_cba_prod_manager,reema.contractor.bill.approval prod manager,model_reema_contractor_bill_approval,reema_mrp.group_reema_production_manager,1,0,0,0
 access_reema_cba_accountant,reema.contractor.bill.approval accountant,model_reema_contractor_bill_approval,account.group_account_manager,1,1,1,1
 access_reema_cba_admin,reema.contractor.bill.approval admin,model_reema_contractor_bill_approval,base.group_system,1,1,1,1
+access_account_move_reema_supervisor,account.move reema supervisor,account.model_account_move,reema_mrp.group_reema_supervisor,1,1,0,1
+access_account_move_reema_prod_manager,account.move reema prod manager,account.model_account_move,reema_mrp.group_reema_production_manager,1,1,0,1
+access_account_move_line_reema_supervisor,account.move.line reema supervisor,account.model_account_move_line,reema_mrp.group_reema_supervisor,1,1,0,1
+access_account_move_line_reema_prod_manager,account.move.line reema prod manager,account.model_account_move_line,reema_mrp.group_reema_production_manager,1,1,0,1
+access_reema_contractor_advance_accountant,reema.contractor.advance accountant,model_reema_contractor_advance,account.group_account_manager,1,1,1,1
+access_reema_contractor_advance_admin,reema.contractor.advance admin,model_reema_contractor_advance,base.group_system,1,1,1,1
+access_reema_bank_account_accountant,reema.bank.account accountant,reema_invoice.model_reema_bank_account,account.group_account_manager,1,0,0,0
