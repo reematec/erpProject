@@ -50,7 +50,10 @@ class MrpProduction(models.Model):
             ) if mo.product_id else False
 
     ilo_dispatch_count = fields.Integer(compute='_compute_ilo_dispatch_count', string='ILO Dispatches')
-    ilo_repair_qty_balls = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='ILO Repair Balls')
+    # HS: outstanding ILO repair-dispatch balls. Hybrid/MS: outstanding
+    # reema.repair.job balls. Same smart button either way — an MO is one
+    # construction type or the other, never both, so there's no overlap.
+    repair_qty_balls = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='Repair Balls')
     ilo_scrap_qty = fields.Integer(compute='_compute_ilo_repair_scrap_qty', string='ILO Scrapped Balls')
     production_scrap_qty = fields.Integer(compute='_compute_scrap_qty', string='Production Scrapped Balls')
     total_scrap_qty = fields.Integer(compute='_compute_scrap_qty', string='Total Scrapped Balls')
@@ -77,10 +80,16 @@ class MrpProduction(models.Model):
     def _compute_ilo_repair_scrap_qty(self):
         Dispatch = self.env['reema.ilo.dispatch']
         Scrap = self.env['reema.ilo.qc.scrap']
+        Job = self.env['reema.repair.job']
         for rec in self:
-            rec.ilo_repair_qty_balls = sum(Dispatch.search([
-                ('mo_id', '=', rec.id), ('dispatch_type', '=', 'repair'),
-            ]).mapped('qty_balls'))
+            if rec.construction_type == 'hs':
+                rec.repair_qty_balls = sum(Dispatch.search([
+                    ('mo_id', '=', rec.id), ('dispatch_type', '=', 'repair'),
+                ]).mapped('qty_balls'))
+            else:
+                rec.repair_qty_balls = sum(Job.search([
+                    ('mo_id', '=', rec.id), ('state', '=', 'pending'),
+                ]).mapped('qty_remaining'))
             rec.ilo_scrap_qty = sum(Scrap.search([('mo_id', '=', rec.id)]).mapped('qty'))
 
     def _compute_scrap_qty(self):
@@ -114,8 +123,10 @@ class MrpProduction(models.Model):
     def action_view_ilo_dispatches(self):
         return self._action_view_url_new_tab('reema_mrp.action_reema_ilo_dispatch_from_mo')
 
-    def action_view_ilo_repairs(self):
-        return self._action_view_url_new_tab('reema_mrp.action_reema_ilo_repair_dispatch_from_mo')
+    def action_view_repairs(self):
+        if self.construction_type == 'hs':
+            return self._action_view_url_new_tab('reema_mrp.action_reema_ilo_repair_dispatch_from_mo')
+        return self._action_view_url_new_tab('reema_mrp.action_reema_repair_job_from_mo')
 
     def action_view_scrap_report(self):
         return self._action_view_url_new_tab('reema_mrp.action_reema_scrap_report_from_mo')

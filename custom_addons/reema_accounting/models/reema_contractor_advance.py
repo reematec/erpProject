@@ -133,9 +133,8 @@ class ReemaContractorAdvance(models.Model):
             })
             move.action_post()
             rec.write({'move_id': move.id, 'state': 'posted'})
-            rec.message_post(
+            rec._message_log(
                 body=_('Advance of %s posted to %s via %s.') % (rec.amount, advance_account.display_name, rec.journal_id.name),
-                subtype_xmlid='mail.mt_note',
             )
 
     def action_void(self):
@@ -160,9 +159,8 @@ class ReemaContractorAdvance(models.Model):
             }])
             reversal.action_post()
             rec.write({'reversal_move_id': reversal.id, 'state': 'cancelled'})
-            rec.message_post(
+            rec._message_log(
                 body=_('Advance voucher reversed by %s.') % self.env.user.name,
-                subtype_xmlid='mail.mt_note',
             )
 
     def action_print_advance_voucher(self):
@@ -171,5 +169,26 @@ class ReemaContractorAdvance(models.Model):
         return {
             'type': 'ir.actions.act_url',
             'url': '/report/html/reema_accounting.report_contractor_advance/%s' % ','.join(str(i) for i in self.ids),
+            'target': 'new',
+        }
+
+    def action_print_advance_overview(self):
+        # Bound to the list view header button, so Odoo calls this on the
+        # selected recordset (empty when no rows are ticked). Selected
+        # rows print one voucher per page (same report as the form's Print
+        # button); no selection prints every voucher as a single overview
+        # table instead.
+        if self:
+            return {
+                'type': 'ir.actions.act_url',
+                'url': '/report/html/reema_accounting.report_contractor_advance/%s' % ','.join(str(i) for i in self.ids),
+                'target': 'new',
+            }
+        records = self.search([])
+        if not records:
+            raise UserError(_('There are no advance vouchers to print.'))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/report/html/reema_accounting.report_contractor_advance_overview/%s' % ','.join(str(i) for i in records.ids),
             'target': 'new',
         }

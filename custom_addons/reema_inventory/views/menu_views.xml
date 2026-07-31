@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         INVENTORY > OPERATIONS — Bladder Winding
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_reema_bladder_winding_root"
+              name="Bladder Winding"
+              parent="stock.menu_stock_warehouse_mgmt"
+              sequence="5"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <menuitem id="menu_reema_bladder_winding_issue"
+              name="Issues"
+              parent="menu_reema_bladder_winding_root"
+              action="action_reema_bladder_winding_issue"
+              sequence="10"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <menuitem id="menu_reema_bladder_winding_receipt"
+              name="Receipts"
+              parent="menu_reema_bladder_winding_root"
+              action="action_reema_bladder_winding_receipt"
+              sequence="20"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <menuitem id="menu_reema_bladder_winding_balance"
+              name="Balance"
+              parent="menu_reema_bladder_winding_root"
+              action="action_reema_bladder_winding_balance"
+              sequence="30"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         INVENTORY > OPERATIONS — Bladder Filling
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_reema_bladder_filling_root"
+              name="Bladder Filling"
+              parent="stock.menu_stock_warehouse_mgmt"
+              sequence="6"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <menuitem id="menu_reema_bladder_filling_issue"
+              name="Issues"
+              parent="menu_reema_bladder_filling_root"
+              action="action_reema_bladder_filling_issue"
+              sequence="10"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <menuitem id="menu_reema_bladder_filling_receipt"
+              name="Receipts"
+              parent="menu_reema_bladder_filling_root"
+              action="action_reema_bladder_filling_receipt"
+              sequence="20"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <menuitem id="menu_reema_bladder_filling_balance"
+              name="Balance"
+              parent="menu_reema_bladder_filling_root"
+              action="action_reema_bladder_filling_balance"
+              sequence="30"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+</odoo>

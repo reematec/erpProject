@@ -136,7 +136,9 @@ class MrpWorkorder(models.Model):
         return qty_balls
 
     @api.depends('batch_entry_ids.qty_balls', 'batch_entry_ids.ilo_dispatch_type',
-                 'is_ball_receive_point', 'production_id')
+                 'batch_entry_ids.repair_job_id.qty_received',
+                 'is_ball_receive_point', 'production_id',
+                 'workcenter_id.is_initial_qc', 'workcenter_id.is_final_qc')
     def _compute_qty_balls_completed(self):
         # Same base reasoning as _compute_qty_batch_completed (exclude repair-return
         # entries to avoid double-counting a ball's original arrival and its later
@@ -188,6 +190,22 @@ class MrpWorkorder(models.Model):
                     ('repair_source', '!=', 'final_qc'),
                 ]).mapped('qty_lost'))
                 total -= repair_outstanding + total_lost
+            # Hybrid/machine-stitched Initial/Final QC: the Fail-quantity entry
+            # (repair_job_id set, see reema.repair.qc.wizard.action_confirm) is
+            # already counted in `total` above (its full original qty_balls) so
+            # it's correctly deducted from this hall's predecessor supply the
+            # moment it's logged — but only the portion actually CONFIRMED back
+            # (job.qty_received) should ever read as "done"/available to the
+            # next hall. Net out the rest (whatever hasn't been received yet,
+            # whether still pending or already written off as scrap — a
+            # scrapped ball must never flip back to "done", same reasoning as
+            # ILO's qty_lost above). This updates incrementally as partial
+            # receives come in, not just once the whole job is fully resolved —
+            # nothing stored, so nothing can go stale.
+            elif wo.workcenter_id.is_initial_qc or wo.workcenter_id.is_final_qc:
+                for entry in entries:
+                    if entry.repair_job_id:
+                        total -= entry.qty_balls - entry.repair_job_id.qty_received
             wo.qty_balls_completed = total
 
     @api.depends('scrap_ids.qty_balls')
@@ -220,7 +238,7 @@ class MrpWorkorder(models.Model):
 
     # Extend state computation: a work order blocked by a predecessor is also unblocked
     # when the predecessor sets batch_released=True (partial completion released to next hall).
-    @api.depends('blocked_by_workorder_ids.batch_released')
+    @api.depends('blocked_by_workorder_ids.batch_released', 'production_id.issuance_ids.state')
     def _compute_state(self):
         super()._compute_state()
         for wo in self:
@@ -235,13 +253,20 @@ class MrpWorkorder(models.Model):
                 p.state in ('done', 'cancel') or p.batch_released
                 for p in predecessors
             )
-            if all_released:
-                # NOT gated on production_availability: this system never reserves raw
-                # material stock (see mrp_production.action_confirm — reservations are
-                # explicitly cleared), so that flag is always 'confirmed', never
-                # 'assigned', across every MO. Using it here would mean this branch
-                # could never actually reach 'ready' — the predecessor's own
-                # batch_released is already the real material-availability signal.
+            if not all_released:
+                continue
+            # NOT gated on production_availability: this system never reserves raw
+            # material stock (see mrp_production.action_confirm — reservations are
+            # explicitly cleared), so that flag is always 'confirmed', never
+            # 'assigned', across every MO. The predecessor's own batch_released is
+            # the real process-sequencing signal — but it says nothing about whether
+            # THIS hall's own component has actually been issued from the store yet.
+            # Reuse the same check button_start enforces, so 'Ready' never lies about
+            # what pressing Start will do — if material isn't issued, fall back to
+            # 'waiting' ("No Stock" in this module's relabeled selection).
+            if wo._get_unissued_required_moves():
+                wo.state = 'waiting'
+            else:
                 wo.state = 'ready'
 
     def _set_qty_producing(self):
@@ -282,23 +307,27 @@ class MrpWorkorder(models.Model):
                     )
         return res
 
+    def _get_unissued_required_moves(self):
+        # Raw moves for THIS work order's own operation that still need material
+        # physically issued before the hall can start — used both to block
+        # button_start and to gate the 'ready' state (see _compute_state below),
+        # so the two never disagree with each other.
+        self.ensure_one()
+        if not self.operation_id:
+            return self.env['stock.move']
+        required_moves = self.production_id.move_raw_ids.filtered(
+            lambda m: m.operation_id == self.operation_id and m.state not in ('done', 'cancel')
+        )
+        return required_moves.filtered(
+            lambda move: not self.production_id.issuance_ids.filtered(
+                lambda i: i.raw_move_id == move
+                and i.state in ('partial', 'fully_issued', 'over_issued')
+            )
+        )
+
     def button_start(self, raise_on_invalid_state=False):
         for wo in self:
-            if not wo.operation_id:
-                continue
-            required_moves = wo.production_id.move_raw_ids.filtered(
-                lambda m: m.operation_id == wo.operation_id and m.state not in ('done', 'cancel')
-            )
-            if not required_moves:
-                continue
-            unissued = [
-                move.product_id.display_name
-                for move in required_moves
-                if not wo.production_id.issuance_ids.filtered(
-                    lambda i: i.raw_move_id == move
-                    and i.state in ('partial', 'fully_issued', 'over_issued')
-                )
-            ]
+            unissued = wo._get_unissued_required_moves().mapped('product_id.display_name')
             if unissued:
                 raise UserError(
                     f'Cannot start "{wo.name}" — the following materials have not been issued to this hall:\n'
@@ -340,7 +369,11 @@ class MrpWorkorder(models.Model):
                 'target': 'new',
                 'context': {'default_workorder_id': self.id},
             }
-        if self.workcenter_id.is_initial_qc:
+        # Initial QC's repair/scrap loop only applies to HS/ILO construction —
+        # hybrid/machine-stitched construction has its own equivalent screen
+        # (Repair Jobs), since there's no ILO dispatch lineage to source an
+        # "Original Contractor" from here.
+        if self.workcenter_id.is_initial_qc and self.production_id.construction_type == 'hs':
             return {
                 'type': 'ir.actions.act_window',
                 'name': 'Initial QC',
@@ -350,13 +383,28 @@ class MrpWorkorder(models.Model):
                 'context': {'default_workorder_id': self.id},
             }
         # Final QC's own repair/scrap loop only applies to HS/ILO construction —
-        # other construction types keep the plain generic batch-log wizard, since
-        # there's no original-contractor lineage to charge repair/scrap against.
+        # other construction types get the hybrid/machine-stitched equivalent below.
         if self.workcenter_id.is_final_qc and self.production_id.construction_type == 'hs':
             return {
                 'type': 'ir.actions.act_window',
                 'name': 'Final QC',
                 'res_model': 'reema.final.qc.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_workorder_id': self.id},
+            }
+        # Hybrid/machine-stitched Initial QC and Final QC both use the same
+        # fault-attribution screen — Shell Closing cuts the shell open/closes
+        # it again regardless of fault, but the actual fix is done by whichever
+        # hall's own work is at fault.
+        if (
+            (self.workcenter_id.is_initial_qc or self.workcenter_id.is_final_qc)
+            and self.production_id.construction_type != 'hs'
+        ):
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Quality Check',
+                'res_model': 'reema.repair.qc.wizard',
                 'view_mode': 'form',
                 'target': 'new',
                 'context': {'default_workorder_id': self.id},
@@ -404,6 +452,84 @@ class MrpWorkorder(models.Model):
             'view_mode': 'form',
             'target': 'new',
             'context': {'default_workorder_id': self.id},
+        }
+
+    qty_repair_balls = fields.Float(
+        string='Repairs', compute='_compute_repair_job_outstanding',
+        help='On the Initial/Final QC row: balls this QC stage currently has '
+             'out for repair, awaiting Resolve here. On any other hall\'s row: '
+             'balls currently out for repair because THIS hall\'s own work was '
+             'found at fault — informational only, resolved from the QC row, '
+             'not here. Live count, not stored: drops on its own once each '
+             'repair job is resolved.',
+    )
+    repair_job_outstanding = fields.Boolean(
+        compute='_compute_repair_job_outstanding',
+        help='True only on the Initial/Final QC row that has a Repair Job '
+             'pending — shows the button to view/resolve it. Never true on a '
+             'fault hall\'s own row; that hall only sees the count.',
+    )
+
+    def _compute_repair_job_outstanding(self):
+        Job = self.env['reema.repair.job']
+        for wo in self:
+            if not wo.production_id or wo.production_id.construction_type == 'hs':
+                wo.qty_repair_balls = 0.0
+                wo.repair_job_outstanding = False
+                continue
+            if wo.workcenter_id.is_initial_qc or wo.workcenter_id.is_final_qc:
+                # This QC stage's own outstanding jobs — the ones it raised
+                # and is responsible for resolving (Resolve button lives here).
+                jobs = Job.search([
+                    ('workorder_id', '=', wo.id),
+                    ('state', '=', 'pending'),
+                ])
+                wo.repair_job_outstanding = bool(jobs)
+            else:
+                # Fault hall's own row: informational count only, no button —
+                # resolving happens at the QC row that raised the job.
+                jobs = Job.search([
+                    ('fault_workcenter_id', '=', wo.workcenter_id.id),
+                    ('mo_id', '=', wo.production_id.id),
+                    ('state', '=', 'pending'),
+                ])
+                wo.repair_job_outstanding = False
+            wo.qty_repair_balls = sum(jobs.mapped('qty_remaining'))
+
+    def action_receive_repair_job(self):
+        """Jump straight to the pending Repair Job(s) raised at THIS Initial/
+        Final QC work order — resolving a job (Receive/Scrap) always happens
+        here, regardless of which hall's work was actually at fault (that
+        hall only shows a read-only count on its own row; the job list below
+        still shows a Fault Hall column so it's never hidden). Kept on the
+        same work order screen instead of a separate top-level menu.
+
+        Always opens the same list view, regardless of how many jobs are
+        pending — no form-view shortcut for a single result. A different
+        layout depending on count was confusing: the list is the ledger the
+        user actually wants to see every time, with Resolve right on each row.
+
+        Shows every repair job raised at this QC work order, not just the
+        pending ones — closed/scrapped jobs stay visible as history instead
+        of disappearing the moment they're resolved."""
+        self.ensure_one()
+        jobs = self.env['reema.repair.job'].search([
+            ('workorder_id', '=', self.id),
+        ])
+        if not jobs:
+            raise UserError('No repair jobs found for this work order.')
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Repair Jobs',
+            'res_model': 'reema.repair.job',
+            'view_mode': 'list,form',
+            'views': [
+                (self.env.ref('reema_mrp.view_reema_repair_job_list').id, 'list'),
+                (self.env.ref('reema_mrp.view_reema_repair_job_form').id, 'form'),
+            ],
+            'domain': [('id', 'in', jobs.ids)],
+            'search_view_id': self.env.ref('reema_mrp.view_reema_repair_job_search').id,
+            'target': 'new',
         }
 
     def button_pending(self):

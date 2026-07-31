@@ -27,6 +27,7 @@
         'views/reema_consumable_issuance_views.xml',
         'views/reema_consumable_return_views.xml',
         'views/reema_ilo_views.xml',
+        'views/reema_repair_views.xml',
         'views/reema_contractor_status_views.xml',
         'views/product_list_views.xml',
         'views/reema_products_report.xml',

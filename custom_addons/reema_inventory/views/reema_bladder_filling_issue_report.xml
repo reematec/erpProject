@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_bladder_filling_issue_slip">
+        <t t-call="web.html_container">
+            <style>
+                @media print {
+                    .bfi_doc { page-break-after: always; }
+                    .bfi_doc:last-child { page-break-after: auto; }
+                }
+                @page { margin: 12mm; }
+            </style>
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.external_layout">
+                    <div class="page bfi_doc">
+
+                        <!-- Title -->
+                        <div class="row mt-2 mb-2">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    <span t-field="doc.name"/>
+                                    <br/>
+                                    <span t-field="doc.vendor_id"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- Header details -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Issue Date</strong></td>
+                                        <td><span t-field="doc.date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Manufacturing Order</strong></td>
+                                        <td><t t-esc="doc.mo_id.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Filling Vendor</strong></td>
+                                        <td><t t-esc="doc.vendor_id.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Status</strong></td>
+                                        <td><t t-esc="dict(doc.fields_get(['state'])['state']['selection']).get(doc.state, doc.state)"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Bladder Account</strong></td>
+                                        <td><t t-esc="doc.account_id.display_name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Qty Sent</strong></td>
+                                        <td><span t-field="doc.qty"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Filling Weight</strong></td>
+                                        <td><t t-out="('%.2f' % doc.filling_weight).rstrip('0').rstrip('.')"/> g</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Rate / Bladder</strong></td>
+                                        <td>PKR <t t-out="('%.2f' % doc.rate)"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <p style="font-size:12px;" class="mt-2">
+                            <strong>Note:</strong> Bladders are to be returned filled with polyester fiber per the above spec.
+                        </p>
+
+                        <!-- Signatures -->
+                        <div class="row mt-5">
+                            <div class="col-6 text-center">
+                                <div style="border-top:1px solid #000; padding-top:4px; font-size:12px;">
+                                    Issued By (Store Keeper)
+                                </div>
+                            </div>
+                            <div class="col-6 text-center">
+                                <div style="border-top:1px solid #000; padding-top:4px; font-size:12px;">
+                                    Received By (Vendor / Driver)
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+    <record id="action_report_bladder_filling_issue" model="ir.actions.report">
+        <field name="name">Bladder Filling Issue Slip</field>
+        <field name="model">reema.bladder.filling.issue</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_inventory.report_bladder_filling_issue_slip</field>
+        <field name="report_file">reema_inventory.report_bladder_filling_issue_slip</field>
+        <field name="print_report_name">'Bladder Filling Issue - %s' % (object.name)</field>
+    </record>
+</odoo>

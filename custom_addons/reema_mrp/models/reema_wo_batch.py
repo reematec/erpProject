@@ -2,6 +2,7 @@ from markupsafe import Markup
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError
 from odoo.tools.float_utils import float_round, float_is_zero
+from .reema_repair import DEFECT_TYPE_SELECTION, EDGE_CASE_DEFECT_TYPES
 
 
 class ReemaWoBatchEntry(models.Model):
@@ -46,6 +47,13 @@ class ReemaWoBatchEntry(models.Model):
     ilo_dispatch_type = fields.Selection(
         [('stitching', 'Stitching'), ('repair', 'Repair')],
         string='ILO Flow Type',
+    )
+    repair_job_id = fields.Many2one(
+        'reema.repair.job', string='Repair Job', readonly=True,
+        help='Hybrid/machine-stitched QC only: set on the Fail-quantity entry logged '
+             'at Initial/Final QC when the ball is sent to Shell Closing for repair — '
+             'nets this quantity out of Balls Done until the repair job is received, '
+             'same live-balance approach as the ILO repair loop.',
     )
     repair_count = fields.Integer(
         string='Number of Repairs', default=0,
@@ -596,6 +604,14 @@ class ReemaWoBatchEntry(models.Model):
             ('is_billed', '=', False),
         ])
 
+        # Hybrid/machine-stitched repair penalties — same "enter cost manually"
+        # pattern for edge-case defect types; normal defect types already carry
+        # a computed amount (qty x flat Repair rate). See reema_repair.py.
+        pending_penalties = self.env['reema.repair.penalty'].search([
+            ('fault_contractor_id', '=', contractor.id),
+            ('is_billed', '=', False),
+        ])
+
         # Append to existing draft bill for this contractor if one exists
         existing_bill = self.env['account.move'].search([
             ('move_type', '=', 'in_invoice'),
@@ -631,6 +647,27 @@ class ReemaWoBatchEntry(models.Model):
             'account_id': self[:1]._reema_expense_account().id,
         })
         pending_scrap.write({'is_billed': True, 'bill_id': move.id})
+        pending_penalties.write({
+            'is_billed': True, 'bill_id': move.id,
+            'account_id': self[:1]._reema_expense_account().id,
+        })
+
+        # Opens as a new browser tab rather than navigating in-place, so the
+        # Batch Logs list the user was working from stays open. An act_window
+        # action dict can't do that (Odoo's action service only opens act_url
+        # as a new tab), so this addresses the stored Contractor Bills action
+        # by its real numeric id via the /odoo/action-<id>/<res_id> URL form.
+        try:
+            action_id = self.env.ref('reema_accounting.action_contractor_bills').id
+        except Exception:
+            action_id = False
+
+        if action_id:
+            return {
+                'type': 'ir.actions.act_url',
+                'url': f'/odoo/action-{action_id}/{move.id}',
+                'target': 'new',
+            }
 
         try:
             view_id = self.env.ref('reema_accounting.view_contractor_bill_form').id
@@ -759,6 +796,11 @@ class ReemaProductionScrap(models.Model):
     # is never charged to anyone. Set from the same contractor already
     # selected for the batch-log session, not chosen separately.
     contractor_id = fields.Many2one('res.partner', string='Contractor')
+    repair_job_id = fields.Many2one(
+        'reema.repair.job', string='Repair Job', ondelete='set null',
+        help='Set when this scrap entry came from a Repair Job partially '
+             'resolved as unrepairable, instead of a normal QC/floor scrap.',
+    )
     qty = fields.Integer(string='Qty Scrapped', required=True)
     # Balls-equivalent of qty, in this hall's logging unit — same conversion
     # reema.wo.batch.entry.qty_balls uses. A scrapped unit still consumed one
@@ -835,6 +877,11 @@ class ReemaScrapReport(models.Model):
     _auto = False
     _order = 'date desc'
 
+    name = fields.Char(
+        string='Reference', readonly=True,
+        help='The underlying scrap record\'s own reference — blank for ILO QC '
+             'scrap, which has no reference field of its own.',
+    )
     date = fields.Datetime(string='Date', readonly=True)
     mo_id = fields.Many2one('mrp.production', string='Manufacturing Order', readonly=True)
     workorder_id = fields.Many2one('mrp.workorder', string='Work Order', readonly=True)
@@ -865,6 +912,7 @@ class ReemaScrapReport(models.Model):
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW reema_scrap_report AS (
                 SELECT row_number() OVER (ORDER BY combined.date DESC) AS id,
+                       combined.name,
                        combined.date,
                        combined.mo_id,
                        combined.workorder_id,
@@ -877,6 +925,7 @@ class ReemaScrapReport(models.Model):
                        combined.recorded_by
                 FROM (
                     SELECT
+                        NULL::varchar           AS name,
                         s.date::timestamp      AS date,
                         s.mo_id                AS mo_id,
                         s.workorder_id         AS workorder_id,
@@ -901,6 +950,7 @@ class ReemaScrapReport(models.Model):
                     UNION ALL
 
                     SELECT
+                        p.name                   AS name,
                         p.date                  AS date,
                         p.mo_id                 AS mo_id,
                         p.workorder_id          AS workorder_id,
@@ -973,10 +1023,36 @@ class ReemaBatchEntryWizard(models.TransientModel):
         if self.hall_unit == 'panel' and self.panels_per_ball:
             self.qty = self.qty_balls_input * self.panels_per_ball
 
+    qty_predecessor_balance = fields.Float(
+        string='Available from Previous Hall', compute='_compute_qty_predecessor_balance', readonly=True,
+        help='What the previous hall has produced so far minus what\'s already '
+             'been processed here (good + scrap) — the real cap enforced below. '
+             'Blank/0 for halls with no predecessor (first hall in the routing).',
+    )
+
     @api.depends('workorder_id.qty_batch_completed', 'workorder_id.hall_qty')
     def _compute_qty_balance(self):
         for wiz in self:
             wiz.qty_balance = wiz.workorder_id.hall_qty - wiz.workorder_id.qty_batch_completed
+
+    @api.depends('workorder_id.qty_balls_completed', 'workorder_id.qty_scrap_balls',
+                 'workorder_id.blocked_by_workorder_ids.qty_balls_completed')
+    def _compute_qty_predecessor_balance(self):
+        # Separate from qty_balance (this hall's own remaining target) — this is
+        # the OTHER cap: what the previous hall has actually delivered so far,
+        # minus what's already been processed here. Same formula enforced as a
+        # hard error in action_confirm below, shown here so a user isn't
+        # surprised by that error — Balance alone (target-based) gave no hint
+        # that almost nothing may actually be available yet.
+        for wiz in self:
+            wo = wiz.workorder_id
+            predecessors = wo.blocked_by_workorder_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+            if not predecessors:
+                wiz.qty_predecessor_balance = 0.0
+                continue
+            predecessor_output = sum(predecessors.mapped('qty_balls_completed'))
+            already_processed = wo.qty_balls_completed + wo.qty_scrap_balls
+            wiz.qty_predecessor_balance = max(0.0, wo._balls_to_units(predecessor_output - already_processed))
 
     @api.depends('qty', 'workorder_id.qty_batch_completed', 'workorder_id.hall_qty')
     def _compute_qty_warning(self):
@@ -2287,6 +2363,239 @@ class ReemaFinalQcReceiveWizard(models.TransientModel):
         )
 
 
+class ReemaRepairQcWizard(models.TransientModel):
+    """Initial QC / Final QC decision screen for hybrid / machine-stitched
+    construction — the equivalent of ReemaIloQcWizard/ReemaFinalQcWizard, but
+    for balls made entirely in-house. A Fail here creates a reema.repair.job
+    (sent to Shell Closing for rework) instead of an ILO dispatch. A Scrap
+    here uses the plain, existing reema.production.scrap flow — real scrap is
+    unrelated to fault attribution."""
+    _name = 'reema.repair.qc.wizard'
+    _description = 'Quality Check — Pass / Repair / Scrap (Hybrid / Machine-Stitched)'
+
+    workorder_id = fields.Many2one('mrp.workorder', string='Work Order',
+                                   required=True, readonly=True)
+    workorder_name = fields.Char(related='workorder_id.name', string='Work Order', readonly=True)
+    mo_id = fields.Many2one(related='workorder_id.production_id', string='Manufacturing Order', readonly=True)
+    workcenter_name = fields.Char(related='workorder_id.workcenter_id.name', string='Hall', readonly=True)
+    workcenter_id = fields.Many2one(related='workorder_id.workcenter_id', readonly=True)
+    qty_pass = fields.Integer(string='Pass Qty')
+    qty_fail = fields.Integer(string='Fail Qty (Balls)')
+    available_fault_workcenter_ids = fields.Many2many(
+        'mrp.workcenter', compute='_compute_available_fault_workcenter_ids',
+        string='Halls on this MO',
+    )
+    available_fault_contractor_ids = fields.Many2many(
+        'res.partner', compute='_compute_available_fault_contractor_ids',
+        string='Contractors at this Hall',
+    )
+    fault_workcenter_id = fields.Many2one(
+        'mrp.workcenter', string='Fault Hall',
+        domain="[('id', 'in', available_fault_workcenter_ids)]",
+        help='Which hall\'s work is at fault — restricted to halls that '
+             'actually have a work order on this MO.',
+    )
+    fault_contractor_id = fields.Many2one(
+        'res.partner', string='Fault Contractor',
+        domain="[('id', 'in', available_fault_contractor_ids)]",
+        help='The contractor charged for this fault.',
+    )
+    defect_type = fields.Selection(DEFECT_TYPE_SELECTION, string='Defect Type')
+    repair_count = fields.Integer(
+        string='Number of Repairs',
+        help='Total individual faulty panels/repairs across the Fail Qty balls — '
+             'a ball can need more than one repair. Must be at least Fail Qty.',
+    )
+    available_repair_contractor_ids = fields.Many2many(
+        'res.partner', compute='_compute_available_repair_contractor_ids',
+        string='Shell Closing Contractors',
+    )
+    repair_contractor_id = fields.Many2one(
+        'res.partner', string='Repair Contractor (Shell Closing)',
+        domain="[('id', 'in', available_repair_contractor_ids)]",
+    )
+    qty_scrap = fields.Integer(string='Scrap / Write-off Qty')
+    scrap_enabled = fields.Boolean(default=True)
+    scrap_reason_id = fields.Many2one(
+        'reema.scrap.reason', string='Scrap Reason',
+        domain="['|', ('workcenter_ids', '=', False), ('workcenter_ids', 'in', [workcenter_id])]",
+    )
+    notes = fields.Char(string='Notes')
+
+    @api.depends('mo_id')
+    def _compute_available_fault_workcenter_ids(self):
+        for wiz in self:
+            wiz.available_fault_workcenter_ids = wiz.mo_id.workorder_ids.mapped('workcenter_id') if wiz.mo_id else self.env['mrp.workcenter']
+
+    @api.depends('mo_id', 'fault_workcenter_id')
+    def _compute_available_fault_contractor_ids(self):
+        # Scoped to the SELECTED fault hall's own work order on this MO, not
+        # just "any contractor who logged anything on this MO" — otherwise a
+        # contractor who never touched the blamed hall could still be charged
+        # for its fault.
+        for wiz in self:
+            if not wiz.mo_id or not wiz.fault_workcenter_id:
+                wiz.available_fault_contractor_ids = self.env['res.partner']
+                continue
+            wiz.available_fault_contractor_ids = self.env['reema.wo.batch.entry'].search([
+                ('mo_id', '=', wiz.mo_id.id),
+                ('workorder_id.workcenter_id', '=', wiz.fault_workcenter_id.id),
+            ]).mapped('contractor_id')
+
+    @api.onchange('fault_workcenter_id')
+    def _onchange_fault_workcenter_id(self):
+        # A contractor valid for the previous fault hall may not be valid for
+        # a newly picked one — clear rather than leave a stale selection.
+        self.fault_contractor_id = False
+
+    @api.depends('mo_id')
+    def _compute_available_repair_contractor_ids(self):
+        for wiz in self:
+            shell_wo = self.env['mrp.workorder'].search([
+                ('production_id', '=', wiz.mo_id.id),
+                ('workcenter_id.is_shell_closing', '=', True),
+            ], limit=1) if wiz.mo_id else self.env['mrp.workorder']
+            wiz.available_repair_contractor_ids = shell_wo.contractor_ids
+
+    def action_confirm(self):
+        self.ensure_one()
+        if self.qty_pass < 0 or self.qty_fail < 0 or self.qty_scrap < 0:
+            raise UserError('Quantities cannot be negative.')
+        total = self.qty_pass + self.qty_fail + self.qty_scrap
+        if total <= 0:
+            raise UserError('Enter at least one quantity before confirming.')
+
+        # Fault attribution is required for BOTH a Fail (repair) and a direct
+        # Scrap — a ball scrapped straight at QC still came from some hall's
+        # work, and leaving it unattributed meant nobody was ever accountable
+        # for it (unlike a Fail, which always charges the fault contractor).
+        if self.qty_fail > 0 or self.qty_scrap > 0:
+            if not self.fault_workcenter_id:
+                raise UserError('Select the fault hall before logging a Fail or Scrap quantity.')
+            fault_wo = self.env['mrp.workorder'].search([
+                ('production_id', '=', self.mo_id.id),
+                ('workcenter_id', '=', self.fault_workcenter_id.id),
+            ], limit=1)
+            if not fault_wo:
+                raise UserError(
+                    f'{self.fault_workcenter_id.name} has no work order on this MO — '
+                    'it cannot be the fault hall.'
+                )
+            if not self.fault_contractor_id:
+                raise UserError('Select the fault contractor before logging a Fail or Scrap quantity.')
+            if not self.env['reema.wo.batch.entry'].search_count([
+                ('workorder_id', '=', fault_wo.id),
+                ('contractor_id', '=', self.fault_contractor_id.id),
+            ]):
+                raise UserError(
+                    f'{self.fault_contractor_id.name} has no logged work at '
+                    f'{self.fault_workcenter_id.name} on this MO — cannot charge them for this fault.'
+                )
+
+        if self.qty_fail > 0:
+            if not self.defect_type:
+                raise UserError('Select a defect type before logging a Fail quantity.')
+            if self.repair_count <= 0:
+                raise UserError('Enter the number of repairs before logging a Fail quantity.')
+            if self.repair_count < self.qty_fail:
+                raise UserError(
+                    'Number of Repairs cannot be less than Fail Qty — each failed ball '
+                    'needs at least one repair.'
+                )
+            if not self.repair_contractor_id:
+                raise UserError('Select the Shell Closing repair contractor before logging a Fail quantity.')
+            is_edge_case = self.defect_type in EDGE_CASE_DEFECT_TYPES
+            rate = self.env['reema.repair.job']._repair_rate()
+            if not is_edge_case and not rate:
+                raise UserError(
+                    'No "Repair" piece rate is configured on the Shell Closing work center. '
+                    'Create one under Manufacturing → Configuration → Piece Rates before '
+                    'logging a Fail quantity.'
+                )
+        if self.qty_scrap > 0 and not self.scrap_reason_id:
+            raise UserError('Select a reason for the scrapped quantity.')
+
+        wo = self.workorder_id
+        # Cap: cannot log more than what has physically arrived from the
+        # previous hall — same guard every other hall's batch-log wizard uses.
+        total_logged = self.qty_pass + self.qty_fail + self.qty_scrap
+        self_balls = wo._units_to_balls(total_logged)
+        already_processed = wo.qty_balls_completed + wo.qty_scrap_balls
+        for pred in wo.blocked_by_workorder_ids:
+            if pred.state in ('done', 'cancel'):
+                continue
+            available_balls = pred.qty_balls_completed - already_processed
+            if self_balls > available_balls + 0.001:
+                raise UserError(
+                    f'Cannot log {total_logged} balls.\n\n'
+                    f'{pred.workcenter_id.name} has completed '
+                    f'{pred.qty_balls_completed:.1f} balls equivalent.\n\n'
+                    f'{already_processed:.1f} balls equivalent already processed here.\n\n'
+                    f'Maximum you can log now: {wo._balls_to_units(available_balls):.1f}.'
+                )
+        mo = wo.production_id
+
+        self.env['reema.wo.batch.entry'].create({
+            'workorder_id': wo.id,
+            'qty': self.qty_pass,
+            'notes': self.notes,
+            'payment_excluded': True,
+            'exclusion_reason': 'QC pass — no piece-rate payment at this hall',
+        })
+
+        if self.qty_fail > 0:
+            is_edge_case = self.defect_type in EDGE_CASE_DEFECT_TYPES
+            rate = self.env['reema.repair.job']._repair_rate()
+            job = self.env['reema.repair.job'].create({
+                'mo_id': mo.id,
+                'workorder_id': wo.id,
+                'fault_workcenter_id': self.fault_workcenter_id.id,
+                'fault_contractor_id': self.fault_contractor_id.id,
+                'repair_contractor_id': self.repair_contractor_id.id,
+                'qty_balls': self.qty_fail,
+                'repair_count': self.repair_count,
+                'defect_type': self.defect_type,
+                'notes': self.notes,
+            })
+            self.env['reema.repair.penalty'].create({
+                'repair_job_id': job.id,
+                'qty': self.repair_count,
+                'rate': 0.0 if is_edge_case else rate.rate,
+                'amount': 0.0 if is_edge_case else self.repair_count * rate.rate,
+                'notes': 'Priced manually at billing time.' if is_edge_case else False,
+            })
+            # Records the Fail quantity as consumed from this hall's predecessor
+            # right away (so it can't be silently re-drawn/double-logged later),
+            # while repair_job_id lets _compute_qty_balls_completed net it back out
+            # of Balls Done until the repair job is received — otherwise these
+            # balls would never get a batch entry at all here and could never
+            # flow to the next hall, even once the repair comes back.
+            self.env['reema.wo.batch.entry'].create({
+                'workorder_id': wo.id,
+                'qty': self.qty_fail,
+                'notes': self.notes,
+                'payment_excluded': True,
+                'exclusion_reason': 'Sent to Shell Closing for repair — pending return',
+                'repair_job_id': job.id,
+            })
+
+        if self.qty_scrap > 0:
+            self.env['reema.production.scrap'].create({
+                'workorder_id': wo.id,
+                'contractor_id': self.fault_contractor_id.id,
+                'qty': self.qty_scrap,
+                'reason_id': self.scrap_reason_id.id,
+                'notes': self.notes,
+            })
+
+        mo._message_log(
+            body=f'{wo.workcenter_id.name} — {self.qty_pass} passed'
+                 + (f', {self.qty_fail} sent to repair ({self.fault_contractor_id.name} at fault)' if self.qty_fail else '')
+                 + (f', {self.qty_scrap} scrapped ({self.fault_contractor_id.name} at fault)' if self.qty_scrap else '')
+                 + '.'
+        )
+
+
 class AccountMoveLineExt(models.Model):
     _inherit = 'account.move.line'
 
@@ -2407,12 +2716,16 @@ class AccountMoveExt(models.Model):
     reema_has_pending_scrap_deductions = fields.Boolean(
         compute='_compute_reema_has_pending_deductions',
     )
+    reema_has_pending_repair_penalties = fields.Boolean(
+        compute='_compute_reema_has_pending_deductions',
+    )
 
     def _compute_reema_has_pending_deductions(self):
         for move in self:
             if not move.partner_id:
                 move.reema_has_pending_ilo_deductions = False
                 move.reema_has_pending_scrap_deductions = False
+                move.reema_has_pending_repair_penalties = False
                 continue
             move.reema_has_pending_ilo_deductions = bool(
                 self.env['reema.ilo.contractor.deduction'].search_count([
@@ -2422,6 +2735,11 @@ class AccountMoveExt(models.Model):
             move.reema_has_pending_scrap_deductions = bool(
                 self.env['reema.production.scrap'].search_count([
                     ('contractor_id', '=', move.partner_id.id), ('is_billed', '=', False),
+                ], limit=1)
+            )
+            move.reema_has_pending_repair_penalties = bool(
+                self.env['reema.repair.penalty'].search_count([
+                    ('fault_contractor_id', '=', move.partner_id.id), ('is_billed', '=', False),
                 ], limit=1)
             )
 
@@ -2450,6 +2768,20 @@ class AccountMoveExt(models.Model):
             'search_view_id': self.env.ref('reema_mrp.view_reema_production_scrap_search').id,
             'target': 'new',
             'domain': [('contractor_id', '=', self.partner_id.id), ('is_billed', '=', False)],
+            'context': {'reema_pick_bill_id': self.id},
+        }
+
+    def action_add_pending_repair_penalties(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Add Pending Repair Penalties',
+            'res_model': 'reema.repair.penalty',
+            'view_mode': 'list',
+            'views': [(self.env.ref('reema_mrp.view_reema_repair_penalty_list').id, 'list')],
+            'search_view_id': self.env.ref('reema_mrp.view_reema_repair_penalty_search').id,
+            'target': 'new',
+            'domain': [('fault_contractor_id', '=', self.partner_id.id), ('is_billed', '=', False)],
             'context': {'reema_pick_bill_id': self.id},
         }
     # pending (supervisor drafting, unnumbered, freely editable/deletable)

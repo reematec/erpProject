@@ -55,7 +55,10 @@
                                     </tr>
                                     <tr>
                                         <td><strong>Status</strong></td>
-                                        <td><t t-esc="dict(o._fields['state'].selection).get(o.state, o.state)"/></td>
+                                        <td>
+                                            <t t-esc="dict(o._fields['state'].selection).get(o.state, o.state)"/>
+                                            <t t-if="o.state == 'confirmed' and o.needs_approval"> — Approval Pending</t>
+                                        </td>
                                     </tr>
                                     <tr t-if="o.date_expected">
                                         <td><strong>Expected Delivery</strong></td>
@@ -78,10 +81,13 @@
                                     </tr>
                                 </table>
                                 <address class="mb-0">
-                                    <span t-field="o.partner_id.name"/><br/>
-                                    <t t-if="o.partner_id.street"><span t-field="o.partner_id.street"/><br/></t>
-                                    <t t-if="o.partner_id.city"><span t-field="o.partner_id.city"/>, </t>
-                                    <t t-if="o.partner_id.country_id"><span t-field="o.partner_id.country_id.name"/></t>
+                                    <span t-field="o.partner_id.name"/>
+                                    <t t-if="o.partner_id.street"><br/><span t-field="o.partner_id.street"/></t>
+                                    <t t-if="o.partner_id.city or o.partner_id.country_id"><br/>
+                                        <t t-if="o.partner_id.city"><span t-field="o.partner_id.city"/></t>
+                                        <t t-if="o.partner_id.city and o.partner_id.country_id">, </t>
+                                        <t t-if="o.partner_id.country_id"><span t-field="o.partner_id.country_id.name"/></t>
+                                    </t>
                                     <t t-if="o.partner_id.phone"><br/>Tel: <span t-field="o.partner_id.phone"/></t>
                                 </address>
                             </div>

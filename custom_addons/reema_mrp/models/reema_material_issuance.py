@@ -662,13 +662,34 @@ class StockMoveReemaExt(models.Model):
         )
         if existing:
             return False
-        self.env['reema.material.issuance'].create({
+        issuance = self.env['reema.material.issuance'].create({
             'production_id': self.raw_material_production_id.id,
             'raw_move_id': self.id,
             'authorized_qty': self.product_uom_qty,
             'authorized_by': self.env.uid,
             'state': 'authorized',
         })
+        # Inbox notification to store keepers — new authorization ready to issue
+        store_group = self.env.ref('reema_mrp.group_reema_store', raise_if_not_found=False)
+        notify_users = (store_group.users if store_group else self.env['res.users'])
+        notify_users -= self.env.user
+        notify_partners = notify_users.mapped('partner_id')
+        if notify_partners:
+            issuance.sudo().with_context(
+                mail_notify_force_send=False,
+                mail_auto_delete=False,
+            ).message_post(
+                body=Markup(
+                    f'<b>New material issuance authorized</b> — {issuance.name}<br/>'
+                    f'Product: <b>{issuance.product_id.display_name}</b><br/>'
+                    f'Qty: <b>{issuance.authorized_qty:.3f} {issuance.product_uom_id.name}</b><br/>'
+                    f'MO: {issuance.production_id.name}<br/>'
+                    f'Authorized by: {self.env.user.name}'
+                ),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+                partner_ids=notify_partners.ids,
+            )
         return False
 
     def action_view_issuance(self):

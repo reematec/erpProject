@@ -59,6 +59,16 @@ class MrpWorkcenter(models.Model):
              'Unlike Initial QC, Final QC runs its own self-contained repair loop — a '
              'failed ball is dispatched straight to a repair contractor and received '
              'back here directly, never routed back to Initial QC.')
+    is_shell_closing = fields.Boolean(
+        string='Shell Closing Work Center', default=False,
+        help='Enable for the Shell Closing hall.\n\n'
+             'Used to find "the Shell Closing contractor for this MO" and "the '
+             'Shell Closing Repair piece rate" for the hybrid/machine-stitched '
+             'repair-penalty system (Repair Jobs) — Shell Closing is always the '
+             'hall that reopens and reworks a ball, regardless of which hall\'s '
+             'fault caused the defect.\n\n'
+             'This must be its own dedicated work center — do not enable it on a '
+             'hall shared with other steps.')
     is_printing = fields.Boolean(
         string='Printing Work Center', default=False,
         help='Enable for screen-printing (silk-screen) halls.\n\n'

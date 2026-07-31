@@ -24,21 +24,25 @@
                     <div class="page pi_doc">
 
                         <!-- ── Title ──────────────────────────────────────── -->
-                        <div class="row mt-2 mb-3">
-                            <div class="col-12 text-center">
-                                <h3 class="mb-0 text-uppercase">Pro Forma Invoice</h3>
-                                <h5 class="mb-0"><span t-field="o.name"/></h5>
+                        <div class="row mt-2 mb-2">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    Pro Forma Invoice
+                                    <br/>
+                                    <span t-field="o.name"/> &#160;
+                                    <span t-field="o.state" widget="badge"/>
+                                </div>
                             </div>
                         </div>
 
                         <hr style="margin-top:4px;"/>
 
                         <!-- ── Addresses ──────────────────────────────────── -->
-                        <div class="row mb-3" style="line-height:1.6;">
+                        <div class="row mt-3" style="font-size:13px; line-height:1.5;">
                             <t t-set="comp" t-value="o.env.company"/>
                             <div class="col-6">
                                 <strong>From:</strong>
-                                <div style="margin-top:6px;">
+                                <div>
                                     <span t-field="comp.name"/><br/>
                                     <t t-if="comp.street"><span t-field="comp.street"/><br/></t>
                                     <t t-if="comp.street2"><span t-field="comp.street2"/><br/></t>
@@ -49,7 +53,7 @@
                             <t t-set="p" t-value="o.partner_id"/>
                             <div class="col-6">
                                 <strong>Client:</strong>
-                                <div style="margin-top:6px;">
+                                <div>
                                     <span t-field="p.name"/><br/>
                                     <t t-if="p.street"><span t-field="p.street"/><br/></t>
                                     <t t-if="p.street2"><span t-field="p.street2"/><br/></t>
@@ -60,9 +64,9 @@
                         </div>
 
                         <!-- ── Order / Shipping Details ───────────────────── -->
-                        <div class="row mb-2">
+                        <div class="row mt-2">
                             <div class="col-6">
-                                <table class="table table-sm table-borderless">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
                                     <tr>
                                         <td style="width:45%;"><strong>PI Date</strong></td>
                                         <td><span t-field="o.date"/></td>
@@ -82,7 +86,7 @@
                                 </table>
                             </div>
                             <div class="col-6">
-                                <table class="table table-sm table-borderless">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
                                     <tr>
                                         <td style="width:45%;"><strong>Shipping Method</strong></td>
                                         <td><span t-field="o.transport_method"/></td>
@@ -112,7 +116,7 @@
                         </div>
 
                         <!-- ── Line Items ─────────────────────────────────── -->
-                        <table class="table table-sm mt-2">
+                        <table class="table table-sm table-striped mt-3" style="font-size:12px;">
                             <thead>
                                 <tr class="table-dark">
                                     <th style="width:14%;">Sample Code</th>
@@ -162,9 +166,9 @@
                         </table>
 
                         <!-- ── Totals ─────────────────────────────────────── -->
-                        <div class="row">
+                        <div class="row mt-1">
                             <div class="col-5 offset-7">
-                                <table class="table table-sm">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
                                     <tr>
                                         <td><strong>Total Qty</strong></td>
                                         <td class="text-end"><span t-field="o.total_qty"/></td>
@@ -188,11 +192,11 @@
                         </div>
 
                         <!-- ── Packing (left) + Bank (right) ─────────────── -->
-                        <div class="row mt-4" style="line-height:1.6;">
+                        <div class="row mt-2" style="font-size:13px; line-height:1.5;">
 
                             <div class="col-6" t-if="o.carton_qty or o.carton_size or o.total_cbm or o.gross_weight or o.net_weight">
-                                <strong>Packing Details</strong>
-                                <div style="margin-top:6px;">
+                                <h5 class="mb-1">Packing Details</h5>
+                                <div>
                                     <t t-if="o.carton_qty">No. of Cartons: <span t-field="o.carton_qty"/><br/></t>
                                     <t t-if="o.carton_size">Carton Size: <span t-field="o.carton_size"/><br/></t>
                                     <t t-if="o.total_cbm">Total CBM: <span t-field="o.total_cbm"/><br/></t>
@@ -202,8 +206,8 @@
                             </div>
 
                             <div class="col-6" t-if="o.bank_name">
-                                <strong>Bank Details</strong>
-                                <div style="margin-top:6px;">
+                                <h5 class="mb-1">Bank Details</h5>
+                                <div>
                                     Bank: <span t-field="o.bank_name"/><br/>
                                     <t t-if="o.bank_title">Account Title: <span t-field="o.bank_title"/><br/></t>
                                     <t t-if="o.account_num">Account No: <span t-field="o.account_num"/><br/></t>

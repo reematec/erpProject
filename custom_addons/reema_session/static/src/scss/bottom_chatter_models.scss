@@ -1,0 +1,8 @@
+// See bottom_chatter_models.js: .o_form_sheet_bg has a fixed max-width
+// (form_controller.scss) sized for sitting next to an aside chatter. When
+// the chatter is forced below instead, that cap leaves an empty gutter on
+// the right where the chatter used to be, so lift it for these forms only.
+.o_reema_full_width_sheet .o_form_sheet_bg {
+    max-width: none;
+    margin-right: 0;
+}

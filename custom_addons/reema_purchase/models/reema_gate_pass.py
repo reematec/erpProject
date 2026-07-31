@@ -186,11 +186,38 @@ class ReemaGatePassLine(models.Model):
         for rec in self:
             rec.display_product = rec.product_id.display_name or rec.product_name or ''
 
+    @api.onchange('product_id')
+    def _onchange_product_id(self):
+        # A line added or re-picked by hand (as opposed to auto-created by the
+        # header's po_id onchange) never got linked to its PO line, leaving
+        # po_line_id/expected_qty at 0 even when the product matches a PO line
+        # exactly — that 0 then flows straight through into the GRN's PO Qty.
+        po = self.gate_pass_id.po_id
+        if not self.product_id or not po:
+            return
+        po_line = po.line_ids.filtered(lambda l: l.product_id == self.product_id)[:1]
+        if po_line:
+            self.po_line_id = po_line.id
+            self.expected_qty = po_line.product_qty
+            self.product_uom_id = po_line.product_uom_id
+        else:
+            self.po_line_id = False
+            self.expected_qty = 0.0
+
     @api.constrains('product_id', 'product_name')
     def _check_product(self):
         for rec in self:
             if not rec.product_id and not rec.product_name:
                 raise ValidationError(_('Each line must have either a product selected or a custom product name.'))
+
+    @api.constrains('received_qty')
+    def _check_received_qty(self):
+        for rec in self:
+            if rec.received_qty <= 0:
+                raise ValidationError(
+                    _('Physically Arrived Qty must be greater than zero for "%s".')
+                    % (rec.display_product or _('this line'))
+                )
 
 
 class ReemaGatePassLineAttribute(models.Model):

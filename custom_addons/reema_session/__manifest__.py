@@ -9,11 +9,17 @@ Expires) so that closing the browser discards the cookie and logs the user out.
     """,
     'author': 'Reema Tec',
     'depends': ['base', 'web', 'mail'],
-    'data': [],
+    'data': [
+        'views/ir_model_chatter_views.xml',
+    ],
     'assets': {
         'web.assets_backend': [
             'reema_session/static/src/js/list_column_widths.js',
-            'reema_session/static/src/js/no_autosave_new_forms.js',
+            'reema_session/static/src/js/leave_with_unsaved_changes_dialog.js',
+            'reema_session/static/src/js/no_autosave_forms.js',
+            'reema_session/static/src/js/bottom_chatter_models.js',
+            'reema_session/static/src/scss/bottom_chatter_models.scss',
+            'reema_session/static/src/xml/leave_with_unsaved_changes_dialog.xml',
             'reema_session/static/src/xml/discuss_inbox_order.xml',
         ],
     },

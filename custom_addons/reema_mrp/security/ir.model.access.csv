@@ -76,3 +76,13 @@ access_reema_mo_status_info_wizard_user,reema.mo.status.info.wizard user,model_r
 access_reema_contractor_wo_status_user,reema.contractor.wo.status user,model_reema_contractor_wo_status,base.group_user,1,0,0,0
 access_reema_ilo_balance_user,reema.ilo.balance user,model_reema_ilo_balance,base.group_user,1,0,0,0
 access_reema_ilo_flow_user,reema.ilo.flow user,model_reema_ilo_flow,base.group_user,1,0,0,0
+access_reema_repair_job_user,reema.repair.job user,model_reema_repair_job,base.group_user,1,0,0,0
+access_reema_repair_job_admin,reema.repair.job admin,model_reema_repair_job,base.group_system,1,1,1,1
+access_reema_repair_job_manager,reema.repair.job manager,model_reema_repair_job,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_repair_job_supervisor,reema.repair.job supervisor,model_reema_repair_job,reema_mrp.group_reema_supervisor,1,1,1,0
+access_reema_repair_penalty_user,reema.repair.penalty user,model_reema_repair_penalty,base.group_user,1,0,0,0
+access_reema_repair_penalty_admin,reema.repair.penalty admin,model_reema_repair_penalty,base.group_system,1,1,1,1
+access_reema_repair_penalty_manager,reema.repair.penalty manager,model_reema_repair_penalty,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_repair_penalty_supervisor,reema.repair.penalty supervisor,model_reema_repair_penalty,reema_mrp.group_reema_supervisor,1,1,1,0
+access_reema_repair_qc_wizard_user,reema.repair.qc.wizard user,model_reema_repair_qc_wizard,base.group_user,1,1,1,1
+access_reema_repair_resolve_wizard_user,reema.repair.resolve.wizard user,model_reema_repair_resolve_wizard,base.group_user,1,1,1,1

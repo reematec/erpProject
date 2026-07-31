@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         ISSUE
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <record id="view_reema_bladder_filling_issue_form" model="ir.ui.view">
+        <field name="name">reema.bladder.filling.issue.form</field>
+        <field name="model">reema.bladder.filling.issue</field>
+        <field name="arch" type="xml">
+            <form string="Bladder Filling Issue">
+                <header>
+                    <button name="action_confirm" string="Confirm" type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Confirm this Issue? This checks on-hand stock and moves the bladders to the Bladder Filling location — quantities cannot be changed afterwards."/>
+                    <button name="action_reopen" string="Reopen" type="object"
+                            class="btn-warning"
+                            invisible="state != 'closed'"
+                            groups="reema_mrp.group_reema_production_manager"
+                            confirm="Reopen this Issue for further receipts?"/>
+                    <button name="action_print" string="Print" type="object"
+                            invisible="state == 'draft'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,dispatched,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_receipts" type="object"
+                                class="oe_stat_button" icon="fa-truck">
+                            <field name="receipt_count" widget="statinfo" string="Receipts"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Issue Info">
+                            <field name="date" string="Issue Date" readonly="state != 'draft'"/>
+                            <field name="vendor_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}" readonly="state != 'draft'"/>
+                            <field name="mo_id" options="{'no_create': True, 'no_edit': True}" readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Bladder Spec">
+                            <field name="account_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}" readonly="state != 'draft'"/>
+                            <field name="qty" readonly="state != 'draft'"/>
+                            <field name="filling_weight" readonly="state != 'draft'"/>
+                            <field name="rate" readonly="state != 'draft'"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Vendor Ledger — All MOs">
+                            <field name="qty_issued_vendor"/>
+                            <field name="qty_filled"/>
+                            <field name="qty_accounted"/>
+                            <field name="qty_outstanding"/>
+                        </group>
+                        <group string="Other">
+                            <field name="issued_by" options="{'no_create': True, 'no_edit': True}"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="notes"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_bladder_filling_issue_list" model="ir.ui.view">
+        <field name="name">reema.bladder.filling.issue.list</field>
+        <field name="model">reema.bladder.filling.issue</field>
+        <field name="arch" type="xml">
+            <list string="Bladder Filling Issues"
+                  decoration-muted="state == 'draft'"
+                  decoration-warning="state == 'dispatched'"
+                  decoration-success="state == 'closed'">
+                <field name="name" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="mo_id" optional="show" options="{'no_create': True, 'no_edit': True}"/>
+                <field name="vendor_id" optional="show" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="account_id" optional="show" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="filling_weight" optional="show"/>
+                <field name="qty" string="Sent" optional="show"/>
+                <field name="qty_filled" string="Filled" optional="show"/>
+                <field name="qty_outstanding" string="Outstanding" optional="show"/>
+                <field name="rate" optional="hide"/>
+                <field name="state" widget="badge" optional="hide"
+                       decoration-muted="state == 'draft'"
+                       decoration-warning="state == 'dispatched'"
+                       decoration-success="state == 'closed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_bladder_filling_issue_search" model="ir.ui.view">
+        <field name="name">reema.bladder.filling.issue.search</field>
+        <field name="model">reema.bladder.filling.issue</field>
+        <field name="arch" type="xml">
+            <search string="Search Bladder Filling Issues">
+                <field name="name"/>
+                <field name="mo_id"/>
+                <field name="vendor_id"/>
+                <field name="account_id"/>
+                <separator/>
+                <filter string="Draft" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Pending Return" name="dispatched" domain="[('state','=','dispatched')]"/>
+                <filter string="Closed" name="closed" domain="[('state','=','closed')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Manufacturing Order" name="group_mo" context="{'group_by': 'mo_id'}"/>
+                    <filter string="Vendor" name="group_vendor" context="{'group_by': 'vendor_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_bladder_filling_issue" model="ir.actions.act_window">
+        <field name="name">Bladder Filling Issues</field>
+        <field name="res_model">reema.bladder.filling.issue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_bladder_filling_issue_search"/>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         RECEIPT
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <record id="view_reema_bladder_filling_receipt_form" model="ir.ui.view">
+        <field name="name">reema.bladder.filling.receipt.form</field>
+        <field name="model">reema.bladder.filling.receipt</field>
+        <field name="arch" type="xml">
+            <form string="Bladder Filling Receipt">
+                <header>
+                    <button name="action_receive" string="Confirm Receipt" type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Confirm this receipt? Quantities cannot be changed afterwards."/>
+                    <button name="action_reset_to_draft" string="Reset to Draft" type="object"
+                            class="btn-warning"
+                            invisible="state != 'received'"
+                            groups="reema_mrp.group_reema_production_manager"
+                            confirm="Reset this receipt to Draft?"/>
+                    <button name="action_print" string="Print" type="object"
+                            invisible="state != 'received'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,received"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Receipt Info">
+                            <field name="issue_id" options="{'no_create': True, 'no_edit': True}"
+                                   readonly="state == 'received'"/>
+                            <field name="mo_id"/>
+                            <field name="vendor_id" options="{'no_open': True}"/>
+                            <field name="vendor_pass_number" readonly="state == 'received'"/>
+                            <field name="date" readonly="state == 'received'"/>
+                        </group>
+                        <group string="Bladder Spec">
+                            <field name="account_id" options="{'no_open': True}"/>
+                            <field name="filling_weight"/>
+                            <field name="rate"/>
+                            <field name="filled_account_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                                   readonly="state == 'received'"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Quantities">
+                            <field name="qty_filled" readonly="state == 'received'"/>
+                            <field name="qty_damaged" readonly="state == 'received'"/>
+                            <field name="qty_lost" readonly="state == 'received'"/>
+                        </group>
+                        <group string="Payment">
+                            <field name="amount"/>
+                            <field name="received_by" options="{'no_create': True, 'no_edit': True, 'no_open': True}" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="notes" readonly="state == 'received'"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_bladder_filling_receipt_list" model="ir.ui.view">
+        <field name="name">reema.bladder.filling.receipt.list</field>
+        <field name="model">reema.bladder.filling.receipt</field>
+        <field name="arch" type="xml">
+            <list string="Bladder Filling Receipts"
+                  decoration-warning="state == 'draft'"
+                  decoration-success="state == 'received'">
+                <field name="name" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="issue_id" optional="show" options="{'no_create': True, 'no_edit': True}"/>
+                <field name="mo_id" optional="show"/>
+                <field name="vendor_id" optional="show" options="{'no_open': True}"/>
+                <field name="filled_account_id" optional="show" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="qty_filled" string="Filled" optional="show"/>
+                <field name="qty_damaged" string="Damaged" optional="show"/>
+                <field name="qty_lost" string="Lost" optional="show"/>
+                <field name="amount" optional="show"/>
+                <field name="vendor_pass_number" optional="hide"/>
+                <field name="state" widget="badge" optional="hide"
+                       decoration-warning="state == 'draft'"
+                       decoration-success="state == 'received'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_bladder_filling_receipt_search" model="ir.ui.view">
+        <field name="name">reema.bladder.filling.receipt.search</field>
+        <field name="model">reema.bladder.filling.receipt</field>
+        <field name="arch" type="xml">
+            <search string="Search Bladder Filling Receipts">
+                <field name="name"/>
+                <field name="issue_id"/>
+                <field name="mo_id"/>
+                <field name="vendor_id"/>
+                <separator/>
+                <filter string="Draft" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Received" name="received" domain="[('state','=','received')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Issue" name="group_issue" context="{'group_by': 'issue_id'}"/>
+                    <filter string="Vendor" name="group_vendor" context="{'group_by': 'vendor_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_bladder_filling_receipt" model="ir.actions.act_window">
+        <field name="name">Bladder Filling Receipts</field>
+        <field name="res_model">reema.bladder.filling.receipt</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_bladder_filling_receipt_search"/>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         BALANCE (read-only ledger)
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <record id="view_reema_bladder_filling_balance_list" model="ir.ui.view">
+        <field name="name">reema.bladder.filling.balance.list</field>
+        <field name="model">reema.bladder.filling.balance</field>
+        <field name="arch" type="xml">
+            <list string="Bladder Filling Balance" create="false" edit="false" delete="false">
+                <header>
+                    <button name="action_print" string="Print" type="object"
+                            display="always" class="btn-secondary"/>
+                </header>
+                <field name="mo_id"/>
+                <field name="vendor_id"/>
+                <field name="qty_issued"/>
+                <field name="qty_filled"/>
+                <field name="qty_damaged"/>
+                <field name="qty_lost"/>
+                <field name="qty_outstanding"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reema_bladder_filling_balance" model="ir.actions.act_window">
+        <field name="name">Bladder Filling Balance</field>
+        <field name="res_model">reema.bladder.filling.balance</field>
+        <field name="view_mode">list</field>
+    </record>
+
+</odoo>

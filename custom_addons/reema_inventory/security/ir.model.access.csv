@@ -1,0 +1,13 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reema_bwi_store,reema.bladder.winding.issue store,model_reema_bladder_winding_issue,reema_mrp.group_reema_store,1,1,1,0
+access_reema_bwi_manager,reema.bladder.winding.issue manager,model_reema_bladder_winding_issue,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_bwr_store,reema.bladder.winding.receipt store,model_reema_bladder_winding_receipt,reema_mrp.group_reema_store,1,1,1,0
+access_reema_bwr_manager,reema.bladder.winding.receipt manager,model_reema_bladder_winding_receipt,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_bwb_store,reema.bladder.winding.balance store,model_reema_bladder_winding_balance,reema_mrp.group_reema_store,1,0,0,0
+access_reema_bwb_manager,reema.bladder.winding.balance manager,model_reema_bladder_winding_balance,reema_mrp.group_reema_production_manager,1,0,0,0
+access_reema_bfi_store,reema.bladder.filling.issue store,model_reema_bladder_filling_issue,reema_mrp.group_reema_store,1,1,1,0
+access_reema_bfi_manager,reema.bladder.filling.issue manager,model_reema_bladder_filling_issue,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_bfr_store,reema.bladder.filling.receipt store,model_reema_bladder_filling_receipt,reema_mrp.group_reema_store,1,1,1,0
+access_reema_bfr_manager,reema.bladder.filling.receipt manager,model_reema_bladder_filling_receipt,reema_mrp.group_reema_production_manager,1,1,1,1
+access_reema_bfb_store,reema.bladder.filling.balance store,model_reema_bladder_filling_balance,reema_mrp.group_reema_store,1,0,0,0
+access_reema_bfb_manager,reema.bladder.filling.balance manager,model_reema_bladder_filling_balance,reema_mrp.group_reema_production_manager,1,0,0,0

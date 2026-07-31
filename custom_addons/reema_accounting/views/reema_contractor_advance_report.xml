@@ -167,4 +167,70 @@
             </t>
         </t>
     </template>
+
+    <!--
+        Overview report — triggered by action_print_advance_overview() when
+        the "Print" list header button is clicked with no rows selected. A
+        single table of every advance voucher, following the reema table
+        report styling (table-dark header, text-end numerics), unlike the
+        per-voucher one-page-each report above.
+    -->
+    <record id="action_report_contractor_advance_overview" model="ir.actions.report">
+        <field name="name">Contractor Advances Overview</field>
+        <field name="model">reema.contractor.advance</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_accounting.report_contractor_advance_overview</field>
+        <field name="report_file">reema_accounting.report_contractor_advance_overview</field>
+        <field name="print_report_name">'Contractor Advances Overview'</field>
+    </record>
+
+    <template id="report_contractor_advance_overview">
+        <t t-call="web.html_container">
+            <style>
+                @page { margin: 12mm; }
+            </style>
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div style="font-size:15px; font-weight:700;">
+                        Contractor Advances — Overview
+                    </div>
+                    <hr style="margin-top:4px;"/>
+
+                    <table class="table table-sm table-striped" style="font-size:12px;">
+                        <thead>
+                            <tr class="table-dark">
+                                <th>Voucher No.</th>
+                                <th>Contractor</th>
+                                <th>Date</th>
+                                <th>Payment Method</th>
+                                <th>Type</th>
+                                <th class="text-end">Amount (PKR)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="docs" t-as="o">
+                                <td><span t-esc="o.name"/></td>
+                                <td><span t-field="o.partner_id"/></td>
+                                <td><span t-field="o.date"/></td>
+                                <td><span t-field="o.journal_id"/></td>
+                                <td><span t-field="o.advance_type"/></td>
+                                <td class="text-end"><span t-field="o.amount"/></td>
+                                <td><span t-field="o.state"/></td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="5" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end"><strong t-esc="'%.2f' % total_amount"/></td>
+                                <td/>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div t-if="not docs" class="text-muted mt-3">No advance vouchers found.</div>
+                </div>
+            </t>
+        </t>
+    </template>
 </odoo>

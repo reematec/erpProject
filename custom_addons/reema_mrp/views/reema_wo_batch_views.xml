@@ -16,6 +16,7 @@
                     <group string="Progress">
                         <field name="hall_qty" string="Target" readonly="1"/>
                         <field name="qty_balance" readonly="1"/>
+                        <field name="qty_predecessor_balance" string="Available from Previous Hall" readonly="1"/>
                     </group>
                 </group>
                 <group>
@@ -99,7 +100,7 @@
                     <field name="qty" string="Quantity Received" autofocus="1"/>
                     <field name="qty_lost" string="Balls Reported Lost"/>
                 </group>
-                <field name="notes" placeholder="Optional notes..."/>
+                <field name="notes" placeholder="Optional notes..." class="w-100"/>
                 <footer>
                     <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
@@ -160,7 +161,7 @@
                     </group>
                 </group>
                 <group col="1">
-                    <field name="notes" placeholder="Optional notes..." nolabel="1"/>
+                    <field name="notes" placeholder="Optional notes..." nolabel="1" class="w-100"/>
                 </group>
                 <footer>
                     <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
@@ -208,7 +209,7 @@
                         <field name="scrap_defect_type" required="qty_scrap != 0"/>
                     </group>
                 </group>
-                <field name="notes" placeholder="Optional notes..."/>
+                <field name="notes" placeholder="Optional notes..." class="w-100"/>
                 <footer>
                     <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
@@ -248,7 +249,56 @@
                 <div class="alert alert-danger mb-0 mt-2" role="alert" invisible="not qty_warning">
                     <field name="qty_warning" readonly="1" nolabel="1"/>
                 </div>
-                <field name="notes" placeholder="Optional notes..."/>
+                <field name="notes" placeholder="Optional notes..." class="w-100"/>
+                <footer>
+                    <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Quality Check wizard (Hybrid / Machine-Stitched Initial + Final QC) -->
+    <record id="view_reema_repair_qc_wizard_form" model="ir.ui.view">
+        <field name="name">reema.repair.qc.wizard.form</field>
+        <field name="model">reema.repair.qc.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Quality Check">
+                <group string="Work Order">
+                    <field name="workorder_id" invisible="1"/>
+                    <field name="mo_id" invisible="1"/>
+                    <field name="workcenter_id" invisible="1"/>
+                    <field name="workorder_name" readonly="1"/>
+                    <field name="workcenter_name" readonly="1"/>
+                </group>
+                <group>
+                    <field name="qty_pass" string="Pass Qty" autofocus="1"/>
+                </group>
+                <separator string="Only if there's a fault — repair or scrap"/>
+                <group>
+                    <group string="Fault">
+                        <field name="available_fault_workcenter_ids" invisible="1"/>
+                        <field name="available_fault_contractor_ids" invisible="1"/>
+                        <field name="fault_workcenter_id" required="qty_fail != 0 or qty_scrap != 0"
+                               options="{'no_create': True, 'no_edit': True}"/>
+                        <field name="fault_contractor_id" required="qty_fail != 0 or qty_scrap != 0"
+                               options="{'no_create': True, 'no_edit': True}"/>
+                    </group>
+                    <group string="Repair">
+                        <field name="qty_fail" string="Fail Qty (Balls)"/>
+                        <field name="repair_count" string="Number of Repairs" required="qty_fail != 0"/>
+                        <field name="defect_type" required="qty_fail != 0"/>
+                        <field name="available_repair_contractor_ids" invisible="1"/>
+                        <field name="repair_contractor_id" required="qty_fail != 0"
+                               options="{'no_create': True, 'no_edit': True}"/>
+                    </group>
+                    <group string="Scrap">
+                        <field name="qty_scrap" string="Scrap / Write-off Qty"/>
+                        <field name="scrap_reason_id" string="Scrap Reason" required="qty_scrap != 0"
+                               options="{'no_create': True, 'no_edit': True}"/>
+                    </group>
+                </group>
+                <field name="notes" placeholder="Optional notes..." class="w-100"/>
                 <footer>
                     <button name="action_confirm" type="object" string="Save" class="btn-primary" data-hotkey="s"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
@@ -284,6 +334,8 @@
                 <field name="contractor_id" string="Contractor" optional="show"/>
                 <field name="original_contractor_id" string="Original Contractor" optional="hide"/>
                 <field name="ilo_dispatch_type" string="ILO Flow" optional="hide"/>
+                <field name="repair_job_id" string="Repair Job" optional="hide"
+                       options="{'no_create': True, 'no_edit': True}"/>
                 <field name="reema_po_id" string="PO" optional="show"/>
                 <field name="mo_id" string="MO" optional="show"/>
                 <field name="process_name" string="Process" optional="show"/>
@@ -673,16 +725,17 @@
         <field name="model">reema.scrap.report</field>
         <field name="arch" type="xml">
             <list string="Total Scrap" create="0" edit="0" delete="0" default_order="date desc">
-                <field name="date"/>
-                <field name="mo_id"/>
-                <field name="workcenter_id" string="Hall"/>
-                <field name="source" widget="badge"/>
+                <field name="name" string="Reference" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="mo_id" optional="show"/>
+                <field name="workcenter_id" string="Hall" optional="show"/>
+                <field name="source" widget="badge" optional="show"/>
                 <field name="contractor_id" string="Charged To" optional="show"/>
-                <field name="qty" string="Qty Scrapped" sum="Total"/>
-                <field name="hall_unit" string="UOM"/>
-                <field name="reason"/>
-                <field name="recorded_by"/>
-                <field name="notes"/>
+                <field name="qty" string="Qty Scrapped" sum="Total" optional="show"/>
+                <field name="hall_unit" string="UOM" optional="show"/>
+                <field name="reason" optional="show"/>
+                <field name="recorded_by" optional="show"/>
+                <field name="notes" optional="show"/>
             </list>
         </field>
     </record>

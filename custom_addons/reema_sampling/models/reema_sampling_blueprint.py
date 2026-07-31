@@ -254,7 +254,7 @@ class ReemaSamplingBlueprint(models.Model):
         for blueprint in self:
             bom = False
             if blueprint.bom_count == 0:
-                bom = self.env['mrp.bom'].create({
+                bom = self.env['mrp.bom'].sudo().create({
                     'product_tmpl_id': blueprint.product_tmpl_id.id,
                     'product_uom_id': blueprint.product_tmpl_id.uom_id.id,
                     'type': 'normal',
@@ -400,10 +400,16 @@ class ReemaSamplingShipWizard(models.TransientModel):
 
     def action_confirm(self):
         self.ensure_one()
-        self.blueprint_id.write({
-            'state': 'shipped',
-            'reference_piece_kept': self.reference_piece_kept == 'yes',
-        })
+        bp = self.blueprint_id
+        vals = {'reference_piece_kept': self.reference_piece_kept == 'yes'}
+        # Don't downgrade an already-approved sample back to 'shipped' — the
+        # customer already approved it (e.g. from photos); this ship just
+        # sends the physical piece afterward and shouldn't undo that outcome.
+        if bp.state != 'sample_approved':
+            vals['state'] = 'shipped'
+        bp.write(vals)
+        if bp.state == 'sample_approved':
+            bp.message_post(body='<b>Sample shipped to customer</b> (sample was already approved).')
 
 
 class ReemaSamplingKnifeLine(models.Model):

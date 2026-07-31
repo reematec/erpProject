@@ -64,5 +64,10 @@
         <xpath expr="//ul[@name='company_address_list']/li[last()]" position="replace"/>
         <xpath expr="//ul[@name='company_address_list']/li[last()]" position="replace"/>
 
+        <!-- Footer is empty on every Reema report (no report_footer text, HTML
+             reports don't show page numbers) — drop the block entirely so no
+             stray border-top line prints at the bottom of the page. -->
+        <xpath expr="//div[contains(@t-attf-class, 'footer')]" position="replace"/>
+
     </template>
 </odoo>

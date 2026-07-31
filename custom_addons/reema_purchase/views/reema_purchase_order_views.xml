@@ -8,7 +8,7 @@
         <field name="arch" type="xml">
             <form string="Purchase Order">
                 <header>
-                    <button name="action_submit" string="Submit for Confirmation"
+                    <button name="action_submit" string="Submit"
                             type="object" class="btn-primary"
                             invisible="state != 'draft'"
                             confirm="Submit this Purchase Order for Production Manager confirmation?"/>
@@ -33,6 +33,93 @@
                             groups="reema_purchase.group_reema_purchase_manager"
                             invisible="state not in ('submitted', 'confirmed')"
                             confirm="Reset this PO back to Draft?"/>
+                    <!-- Pure static HTML, not an Odoo <button> — an Odoo header
+                         button (type="object"/"action") always triggers
+                         record.save() before running, even for a plain info
+                         popup with no relation to the record's data. Bootstrap's
+                         dropdown JS is already bundled in web.assets_backend, so
+                         data-bs-toggle="dropdown" works with zero custom JS and
+                         zero server round-trip. -->
+                    <div class="dropdown d-inline-block align-middle" groups="base.group_user">
+                        <a href="#" class="btn btn-link p-1" data-bs-toggle="dropdown"
+                           aria-expanded="false" title="Status reference"
+                           style="text-decoration:none;">
+                            <i class="fa fa-info-circle" style="font-size:16px;"/>
+                        </a>
+                        <div class="dropdown-menu p-3" style="width:600px; max-width:90vw;">
+                            <table class="table table-sm table-bordered" style="font-size:13px;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width:140px">Status</th>
+                                        <th>What it means</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="badge text-bg-info">Draft</span></td>
+                                        <td>PO is being prepared. All fields editable. Needs at least one order line before it can be submitted.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge text-bg-warning text-dark">Waiting Confirmation</span></td>
+                                        <td>Submitted by the buyer. Fields remain editable. Purchase Manager needs to confirm it.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge text-bg-primary">Confirmed</span></td>
+                                        <td>Purchase Manager confirmed the PO. If no line needs Owner approval it is already active; otherwise it waits for Owner approval (see the notice banner above the form).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge text-bg-success">Approved</span></td>
+                                        <td>Owner approved. PO is <strong>active</strong> — Inward Gate Passes and GRNs can now be recorded against it. Final status.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge text-bg-danger">Cancelled</span></td>
+                                        <td>PO cancelled. Cannot be cancelled once a GRN exists against it. Final status.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <table class="table table-sm table-bordered mt-2 mb-0" style="font-size:13px;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width:140px">Button</th>
+                                        <th style="width:150px">Available when</th>
+                                        <th>What it does</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Submit</strong></td>
+                                        <td>Draft</td>
+                                        <td>Needs at least one order line. Moves to Waiting Confirmation and notifies Purchase Managers to confirm it.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Confirm PO</strong></td>
+                                        <td>Waiting Confirmation<br/><em>(Purchase Manager)</em></td>
+                                        <td>Moves to Confirmed. Notifies Owners for approval if any line needs it; otherwise the PO is active immediately.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Approve PO</strong></td>
+                                        <td>Confirmed, needs approval<br/><em>(Owner)</em></td>
+                                        <td>Moves to Approved. The PO becomes active.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Print</strong></td>
+                                        <td>Any state</td>
+                                        <td>Opens the PO document as an HTML preview in a new tab for printing.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Cancel PO</strong></td>
+                                        <td>Draft / Waiting Confirmation / Confirmed</td>
+                                        <td>Cancels the PO. Blocked if a GRN already exists against it.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Reset to Draft</strong></td>
+                                        <td>Waiting Confirmation / Confirmed<br/><em>(Purchase Manager)</em></td>
+                                        <td>Reverts the PO back to Draft for corrections.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,submitted,confirmed,approved"/>
                 </header>

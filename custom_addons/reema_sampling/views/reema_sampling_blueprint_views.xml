@@ -31,13 +31,17 @@
                             confirm="Mark this sample as completed? This means the physical sample is ready for review."
                             confirm-label="Yes, Mark Completed"
                             cancel-label="Go Back"/>
-                    <!-- Completed → Shipped (send physical sample to customer for review) -->
+                    <!-- Completed → Shipped (send physical sample to customer for review).
+                         Also available once already Sample Approved: the customer may
+                         approve from photos/images first and only later ask for the
+                         physical piece to be sent — this does not change the approved
+                         state, it just records that a shipment went out. -->
                     <button name="action_shipped"
                             string="Ship to Customer"
                             type="object"
                             class="oe_highlight"
                             groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"
-                            invisible="state != 'completed'"/>
+                            invisible="state not in ('completed', 'sample_approved')"/>
                     <!-- Completed / Shipped → Sample Approved -->
                     <button name="action_sample_approved"
                             string="Sample Approved"
@@ -148,9 +152,10 @@
                     <!--
                         Attachments are sensitive IP. The secure_file_preview widget
                         (inline image/PDF thumbnails + click-to-modal, NO download path)
-                        is shown to EVERY user. Sampling editors/admin additionally keep
-                        the native upload widgets alongside it for upload/delete/download.
-                        See secure_preview.js.
+                        is always shown, to every user, so editors see a live thumbnail
+                        the moment they pick a file too. Sampling editors/admin
+                        additionally keep the native upload widgets alongside it for
+                        upload/delete/download. See secure_preview.js.
                     -->
                     <group string="Attachments &amp; Layouts">
                         <field name="layout_file_mimetype" invisible="1"/>
@@ -161,18 +166,17 @@
                                 <field name="layout_file" filename="layout_filename"
                                        invisible="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
                                 <field name="layout_filename" invisible="1"/>
-                                <!-- Viewers: secure inline thumbnail + modal, no download -->
-                                <field name="layout_file" widget="secure_file_preview"
-                                       nolabel="1" readonly="1" invisible="is_sampling_user and state not in ('shipped', 'sample_approved')"/>
+                                <!-- Secure inline thumbnail + modal, no download; shown to everyone -->
+                                <field name="layout_file" widget="secure_file_preview" nolabel="1" readonly="1"/>
                             </div>
                         </group>
                         <group>
                             <!-- Editors/admin: native attach/remove -->
                             <field name="final_sample_images" widget="many2many_binary"
                                    string="Final Sample Images" invisible="not is_sampling_user or state in ('shipped', 'sample_approved')"/>
-                            <!-- Viewers: secure inline thumbnail + modal, no download -->
+                            <!-- Secure inline thumbnail + modal, no download; shown to everyone -->
                             <field name="final_sample_images" widget="secure_file_preview"
-                                   string="Final Sample Images" readonly="1" invisible="is_sampling_user and state not in ('shipped', 'sample_approved')"/>
+                                   string="Final Sample Images" readonly="1"/>
                         </group>
                     </group>
 

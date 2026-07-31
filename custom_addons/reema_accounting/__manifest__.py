@@ -26,6 +26,7 @@
     'assets': {
         'web.assets_backend': [
             'reema_accounting/static/src/js/contractor_bill_delete_last_line.js',
+            'reema_accounting/static/src/js/zero_dash_monetary_field.js',
         ],
     },
     'installable': True,

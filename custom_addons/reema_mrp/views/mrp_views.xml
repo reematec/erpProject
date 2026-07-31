@@ -39,6 +39,10 @@
     <record id="mrp.menu_mrp_unbuild" model="ir.ui.menu">
         <field name="active" eval="False"/>
     </record>
+    <!-- Move Bills of Materials from Products to Operations -->
+    <record id="mrp.menu_mrp_bom_form_action" model="ir.ui.menu">
+        <field name="parent_id" ref="mrp.menu_mrp_manufacturing"/>
+    </record>
 
     <!-- Vendors: action + menu under Manufacturing > Configuration -->
     <record id="action_reema_vendors" model="ir.actions.act_window">
@@ -157,13 +161,14 @@
                         invisible="ilo_dispatch_count == 0">
                     <field name="ilo_dispatch_count" widget="statinfo" string="ILO"/>
                 </button>
-                <!-- Smart button: ILO balls sent for repair -->
-                <button name="action_view_ilo_repairs"
+                <!-- Smart button: balls sent for repair (ILO dispatch for HS,
+                     reema.repair.job for hybrid/MS) -->
+                <button name="action_view_repairs"
                         type="object"
                         class="oe_stat_button"
                         icon="fa-wrench"
-                        invisible="ilo_repair_qty_balls == 0">
-                    <field name="ilo_repair_qty_balls" widget="statinfo" string="Repair"/>
+                        invisible="repair_qty_balls == 0">
+                    <field name="repair_qty_balls" widget="statinfo" string="Repair"/>
                 </button>
                 <!-- Smart button: total scrap across all sources (ILO QC + production floor) -->
                 <button name="action_view_scrap_report"
@@ -371,6 +376,7 @@
                 <field name="hall_qty" string="Target" readonly="1" widget="trim_float"/>
                 <field name="qty_batch_completed" string="Completed" readonly="1" widget="trim_float"/>
                 <field name="qty_balls_completed" string="Balls Done" readonly="1" optional="show" widget="trim_float"/>
+                <field name="qty_repair_balls" string="Repairs" readonly="1" optional="show" widget="zero_dash_float"/>
                 <field name="qty_scrap_hall_unit" string="Scrapped" readonly="1" optional="show" widget="zero_dash_float"/>
             </xpath>
             <!-- Place the Log-batch button adjacent to the native Start/Done buttons so all
@@ -387,6 +393,12 @@
                         title="Receive repaired ball back at Final QC"
                         groups="reema_mrp.group_reema_supervisor,base.group_system"
                         invisible="state != 'progress' or not final_qc_repair_outstanding"/>
+                <field name="repair_job_outstanding" column_invisible="1"/>
+                <button name="action_receive_repair_job" type="object"
+                        icon="fa-wrench"
+                        title="Repair jobs raised at this QC stage — view/resolve"
+                        groups="reema_mrp.group_reema_supervisor,base.group_system"
+                        invisible="not repair_job_outstanding"/>
             </xpath>
             <!-- Reema tracks one shared WO status, not Odoo's per-user clock-in/out.
                  The native invisible conditions key off is_user_working (true only for
@@ -527,6 +539,8 @@
             </xpath>
             <!-- Hide BoM Overview smart button — not used in our flow -->
             <xpath expr="//div[@name='button_box']/button[@icon='fa-bars']" position="replace"/>
+            <!-- Hide Operations Performance smart button — not used in our flow -->
+            <xpath expr="//div[@name='button_box']/button[@icon='fa-clock-o']" position="replace"/>
             <!-- Hide the Archived ribbon — archiving is disabled -->
             <xpath expr="//widget[@name='web_ribbon']" position="replace"/>
             <!-- BOM Type is always "Manufacture this Product" in our flow; hide the
@@ -612,6 +626,8 @@
                        widget="many2one_new_tab"
                        invisible="sample_id == False"
                        options="{'no_create': True, 'no_edit': True}"/>
+                <field name="construction_type" readonly="1"
+                       invisible="sample_id == False"/>
                 <field name="sample_layout_file" widget="image"
                        options="{'size': [120, 120]}"
                        invisible="not sample_id or not sample_layout_file"
@@ -659,6 +675,7 @@
                 <field name="sample_layout_file" widget="image"
                        options="{'size': [40, 40]}" string="Layout" optional="show"/>
                 <field name="reema_reference" string="BOM Ref"/>
+                <field name="construction_type" optional="show"/>
                 <field name="bom_status" widget="badge"
                        decoration-warning="bom_status == 'draft'"
                        decoration-success="bom_status == 'ready'"/>
@@ -754,6 +771,8 @@
                        help="Enable for the ILO Initial QC hall — logging a batch here opens the Pass/Fail-to-repair/Scrap modal instead of the normal one."/>
                 <field name="is_final_qc" string="Final QC Point"
                        help="Enable for the ILO Final QC hall — logging a batch here (HS construction only) opens its own Pass/Fail-to-repair/Scrap modal with a self-contained repair loop, separate from Initial QC."/>
+                <field name="is_shell_closing" string="Shell Closing Work Center"
+                       help="Enable for the Shell Closing hall — used to find the Shell Closing contractor and repair piece rate for the hybrid/machine-stitched repair-penalty system. Must be its own dedicated work center."/>
                 <field name="is_packing" string="Is Packing Station"
                        help="Enable if this work center is the packing stage. The MO's quantity-producing counter will be driven by batch entries logged here."/>
                 <field name="is_ilo" string="ILO Work Center"
@@ -833,6 +852,7 @@
                 <field name="is_ball_receive_point" optional="hide"/>
                 <field name="is_initial_qc" optional="hide"/>
                 <field name="is_final_qc" optional="hide"/>
+                <field name="is_shell_closing" optional="hide"/>
                 <field name="is_printing" optional="hide"/>
             </xpath>
         </field>

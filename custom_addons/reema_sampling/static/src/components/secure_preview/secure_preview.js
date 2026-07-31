@@ -3,6 +3,7 @@
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { url } from "@web/core/utils/urls";
+import { isBinarySize } from "@web/core/utils/binary";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 import { loadPDFJSAssets } from "@web/libs/pdfjs";
 import { Dialog } from "@web/core/dialog/dialog";
@@ -17,6 +18,24 @@ import {
 } from "@odoo/owl";
 
 const WORKER_SRC = "/web/static/lib/pdfjs/build/pdf.worker.js";
+
+const EXTENSION_MIMETYPES = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    svg: "image/svg+xml",
+    pdf: "application/pdf",
+};
+
+/** Best-effort mimetype guess from a filename, used only for a freshly picked
+ * (not yet saved) file whose real mimetype isn't computed server-side yet. */
+function guessMimetypeFromFilename(name) {
+    const ext = (name || "").split(".").pop().toLowerCase();
+    return EXTENSION_MIMETYPES[ext] || "";
+}
 
 /**
  * Render a PDF (from `src`) into `container` using the bundled pdf.js, which
@@ -143,7 +162,20 @@ export class SecureFilePreview extends Component {
         const record = props.record;
         const fieldName = props.name;
         if (this.fieldType === "binary") {
-            if (!record.data[fieldName] || !record.resId) {
+            const value = record.data[fieldName];
+            if (!value) {
+                return [];
+            }
+            const name = record.data[`${fieldName}_filename`] || "file";
+            if (!isBinarySize(value)) {
+                // Freshly picked, not yet saved: the field holds the actual
+                // base64 payload client-side, so preview it directly — a
+                // server fetch by resId would still return the old file.
+                const mimetype = guessMimetypeFromFilename(name);
+                const dataUrl = `data:${mimetype};base64,${value}`;
+                return [{ url: dataUrl, downloadUrl: dataUrl, mimetype, name }];
+            }
+            if (!record.resId) {
                 return [];
             }
             return [
@@ -160,7 +192,7 @@ export class SecureFilePreview extends Component {
                         download: "true",
                     }),
                     mimetype: record.data[`${fieldName}_mimetype`] || "",
-                    name: record.data[`${fieldName}_filename`] || "file",
+                    name,
                 },
             ];
         }

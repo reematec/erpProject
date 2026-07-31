@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ═══════════════════════════════════════════════
+         REPAIR JOBS — hybrid / machine-stitched fault repair loop.
+         A ball sent back to Shell Closing for rework, tracked
+         Pending -> Returned -> Closed.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_repair_job_list" model="ir.ui.view">
+        <field name="name">reema.repair.job.list</field>
+        <field name="model">reema.repair.job</field>
+        <field name="arch" type="xml">
+            <list string="Repair Jobs" create="0" edit="0" delete="0" default_order="date desc"
+                  decoration-muted="state != 'pending'">
+                <field name="name" string="Reference" optional="show"/>
+                <field name="date" optional="show" options="{'show_time': False}"/>
+                <field name="mo_id" optional="show"/>
+                <field name="repair_source" string="Found At" widget="badge" optional="show"/>
+                <field name="fault_workcenter_id" string="Fault Hall" optional="show"/>
+                <field name="fault_contractor_id" string="Fault Contractor" optional="show"/>
+                <field name="defect_type" optional="show"/>
+                <field name="repair_contractor_id" string="Shell Closing Contractor" optional="show"/>
+                <field name="qty_balls" string="Balls" sum="Total" optional="show"/>
+                <field name="repair_count" string="Repairs" sum="Total" optional="show"/>
+                <field name="qty_received" string="Received" optional="show" sum="Total"/>
+                <field name="qty_scrapped" string="Scrapped" optional="show" sum="Total"/>
+                <field name="qty_remaining" string="Remaining" sum="Total" optional="show"/>
+                <field name="state" widget="badge" optional="show"
+                       decoration-warning="state == 'pending'"
+                       decoration-success="state == 'closed'"
+                       decoration-danger="state == 'scrapped'"/>
+                <button name="action_open_resolve_wizard" type="object" string="Resolve"
+                        class="btn-link" invisible="state != 'pending'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_repair_job_form" model="ir.ui.view">
+        <field name="name">reema.repair.job.form</field>
+        <field name="model">reema.repair.job</field>
+        <field name="arch" type="xml">
+            <form string="Repair Job">
+                <header>
+                    <button name="action_open_resolve_wizard" type="object" string="Resolve"
+                            class="btn-primary" invisible="state != 'pending'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="pending,closed,scrapped"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Work Order">
+                            <field name="mo_id" readonly="1" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="workorder_id" readonly="1" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="repair_source" string="Found At" readonly="1"/>
+                        </group>
+                        <group string="Fault">
+                            <field name="available_fault_contractor_ids" invisible="1"/>
+                            <field name="fault_workcenter_id" readonly="1" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="fault_contractor_id" readonly="1" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="defect_type" readonly="1"/>
+                            <field name="is_edge_case" invisible="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Repair">
+                            <field name="available_repair_contractor_ids" invisible="1"/>
+                            <field name="repair_contractor_id" string="Shell Closing Contractor" readonly="1"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="qty_balls" string="Balls Affected" readonly="1"/>
+                            <field name="repair_count" string="Number of Repairs" readonly="1"/>
+                        </group>
+                        <group string="Progress">
+                            <field name="qty_received" string="Received So Far"/>
+                            <field name="qty_scrapped" string="Scrapped So Far"/>
+                            <field name="qty_remaining"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Tracking">
+                            <field name="date" readonly="1"/>
+                            <field name="reported_by" readonly="1" options="{'no_open': True}"/>
+                            <field name="closed_date" readonly="1" invisible="state == 'pending'"/>
+                            <field name="batch_entry_id" readonly="1" options="{'no_open': True}" invisible="state != 'closed'"/>
+                        </group>
+                    </group>
+                    <field name="scrap_ids" invisible="not scrap_ids">
+                        <list create="0" edit="0" delete="0">
+                            <field name="date"/>
+                            <field name="qty"/>
+                            <field name="reason_id"/>
+                            <field name="notes"/>
+                        </list>
+                    </field>
+                    <field name="notes" placeholder="Optional notes..." class="w-100"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_repair_resolve_wizard_form" model="ir.ui.view">
+        <field name="name">reema.repair.resolve.wizard.form</field>
+        <field name="model">reema.repair.resolve.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Resolve Repair Job">
+                <group>
+                    <field name="repair_job_id" invisible="1"/>
+                    <field name="fault_workcenter_id" string="Fault Hall" readonly="1" options="{'no_open': True}"/>
+                    <field name="fault_contractor_id" readonly="1" options="{'no_open': True}"/>
+                    <field name="qty_balls" readonly="1"/>
+                    <field name="qty_remaining" readonly="1"/>
+                </group>
+                <group>
+                    <group string="Received">
+                        <field name="qty_received" string="Balls Received Now"/>
+                    </group>
+                    <group string="Scrapped">
+                        <field name="qty_scrapped" string="Balls Scrapped Now"/>
+                        <field name="scrap_reason_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"
+                               required="qty_scrapped &gt; 0"/>
+                    </group>
+                </group>
+                <field name="notes" placeholder="Optional notes..." class="w-100"/>
+                <footer>
+                    <button name="action_confirm" type="object" string="Confirm" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_repair_job_search" model="ir.ui.view">
+        <field name="name">reema.repair.job.search</field>
+        <field name="model">reema.repair.job</field>
+        <field name="arch" type="xml">
+            <search string="Repair Jobs">
+                <field name="name"/>
+                <field name="mo_id"/>
+                <field name="fault_contractor_id"/>
+                <field name="repair_contractor_id"/>
+                <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]"/>
+                <filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+                <filter name="scrapped" string="Scrapped" domain="[('state', '=', 'scrapped')]"/>
+                <separator/>
+                <filter name="edge_case" string="Edge Case" domain="[('is_edge_case', '=', True)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_fault_hall" string="Fault Hall" context="{'group_by': 'fault_workcenter_id'}"/>
+                    <filter name="group_fault_contractor" string="Fault Contractor" context="{'group_by': 'fault_contractor_id'}"/>
+                    <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- No standalone menu for Repair Jobs — reached either from the fault
+         hall's own row in the MO's Work Orders tab (action_receive_repair_job
+         on mrp.workorder), or from the MO's own "Repair" smart button below
+         (active_id-scoped, same pattern as the ILO smart buttons) — never
+         from a separate top-level menu. -->
+
+    <record id="action_reema_repair_job_from_mo" model="ir.actions.act_window">
+        <field name="name">Repair Jobs</field>
+        <field name="res_model">reema.repair.job</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('mo_id', '=', active_id)]</field>
+        <field name="search_view_id" ref="view_reema_repair_job_search"/>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════
+         REPAIR PENALTIES — charge against the at-fault contractor,
+         created alongside each Repair Job. Pending until applied
+         as a line on that contractor's next bill.
+    ═══════════════════════════════════════════════ -->
+
+    <record id="view_reema_repair_penalty_list" model="ir.ui.view">
+        <field name="name">reema.repair.penalty.list</field>
+        <field name="model">reema.repair.penalty</field>
+        <field name="arch" type="xml">
+            <list string="Repair Penalties" create="0" edit="0" delete="0" default_order="date desc">
+                <header>
+                    <button name="action_apply_selected_to_bill" type="object"
+                            string="Add to Bill" class="btn-primary"
+                            invisible="not context.get('reema_pick_bill_id')"/>
+                </header>
+                <field name="name" string="Reference"/>
+                <field name="date"/>
+                <field name="reema_product_id" string="Product"/>
+                <field name="mo_id"/>
+                <field name="reema_po_id" string="PO" optional="hide"/>
+                <field name="fault_contractor_id" string="Charged To"/>
+                <field name="defect_type"/>
+                <field name="qty" string="Repairs" sum="Total"/>
+                <field name="rate" widget="zero_dash_float" optional="show"/>
+                <field name="amount" string="Amount (PKR)" optional="show" sum="Total"/>
+                <field name="is_billed" string="Billed" widget="boolean_toggle" optional="show"/>
+                <field name="recorded_by" optional="hide"/>
+                <field name="notes" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_repair_penalty_search" model="ir.ui.view">
+        <field name="name">reema.repair.penalty.search</field>
+        <field name="model">reema.repair.penalty</field>
+        <field name="arch" type="xml">
+            <search string="Repair Penalties">
+                <field name="name"/>
+                <field name="mo_id"/>
+                <field name="fault_contractor_id"/>
+                <filter name="unbilled" string="Unbilled" domain="[('is_billed', '=', False)]"/>
+                <filter name="billed" string="Billed" domain="[('is_billed', '=', True)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_contractor" string="Charged To" context="{'group_by': 'fault_contractor_id'}"/>
+                    <filter name="group_defect" string="Defect Type" context="{'group_by': 'defect_type'}"/>
+                    <filter name="group_mo" string="Manufacturing Order" context="{'group_by': 'mo_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- No standalone menu/action for Repair Penalties either — the
+         fault-contractor charge is applied to a bill from within the bill's
+         own screen (see reema_wo_batch.py's bill-picking flow, which opens
+         view_reema_repair_penalty_list/search directly by view id), not from
+         a separate top-level menu. -->
+
+</odoo>

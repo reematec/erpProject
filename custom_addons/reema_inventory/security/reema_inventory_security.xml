@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Admin needs to see the Bladder Winding screens for oversight/testing —
+         menu is gated to Store Keeper/Production Manager, admin has neither by
+         default. Mirrors reema_purchase's explicit grant of group_reema_owner
+         to base.user_admin. -->
+    <record id="reema_mrp.group_reema_store" model="res.groups">
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+    </record>
+    <record id="reema_mrp.group_reema_production_manager" model="res.groups">
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+    </record>
+
+</odoo>

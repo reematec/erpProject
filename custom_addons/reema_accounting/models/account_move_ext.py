@@ -31,14 +31,14 @@ class ReemaBillDeduction(models.Model):
                 vals['deduction_account_id'] = bill.partner_id._get_or_create_advance_account().id
         records = super().create(vals_list)
         for rec in records:
-            rec.bill_id.message_post(body=_(
+            rec.bill_id._message_log(body=_(
                 'Advance deduction added: %(desc)s — PKR %(amount).2f'
             ) % {'desc': rec.description, 'amount': rec.amount})
         return records
 
     def unlink(self):
         for rec in self:
-            rec.bill_id.message_post(body=_(
+            rec.bill_id._message_log(body=_(
                 'Advance deduction removed: %(desc)s — PKR %(amount).2f'
             ) % {'desc': rec.description, 'amount': rec.amount})
         return super().unlink()
@@ -67,14 +67,14 @@ class ReemaBillCharge(models.Model):
     def create(self, vals_list):
         records = super().create(vals_list)
         for rec in records:
-            rec.bill_id.message_post(body=_(
+            rec.bill_id._message_log(body=_(
                 'Misc charge added: %(desc)s — PKR %(amount).2f'
             ) % {'desc': rec.name, 'amount': rec.amount})
         return records
 
     def unlink(self):
         for rec in self:
-            rec.bill_id.message_post(body=_(
+            rec.bill_id._message_log(body=_(
                 'Misc charge removed: %(desc)s — PKR %(amount).2f'
             ) % {'desc': rec.name, 'amount': rec.amount})
         return super().unlink()
@@ -126,6 +126,11 @@ class AccountMoveDeductionExt(models.Model):
     )
     reema_scrap_deduction_ids = fields.One2many(
         'reema.production.scrap', 'bill_id', string='Scrap Deductions',
+    )
+    # Hybrid/machine-stitched repair penalties — same "pulled in automatically,
+    # not typed in here" reasoning as the two fields above. See reema_repair.py.
+    reema_repair_penalty_ids = fields.One2many(
+        'reema.repair.penalty', 'bill_id', string='Repair Penalties',
     )
     reema_total_production_deductions = fields.Float(
         string='Total Production Deductions',
@@ -179,8 +184,8 @@ class AccountMoveDeductionExt(models.Model):
 
     @api.depends(
         'reema_deduction_ids.amount', 'reema_ilo_deduction_ids.amount',
-        'reema_scrap_deduction_ids.amount', 'reema_charge_ids.amount',
-        'invoice_line_ids.price_subtotal',
+        'reema_scrap_deduction_ids.amount', 'reema_repair_penalty_ids.amount',
+        'reema_charge_ids.amount', 'invoice_line_ids.price_subtotal',
     )
     def _compute_reema_deductions(self):
         for move in self:
@@ -197,6 +202,7 @@ class AccountMoveDeductionExt(models.Model):
             production = (
                 sum(move.reema_ilo_deduction_ids.mapped('amount'))
                 + sum(move.reema_scrap_deduction_ids.mapped('amount'))
+                + sum(move.reema_repair_penalty_ids.mapped('amount'))
             )
             # Charges already carry their own sign per row (positive adds,
             # negative subtracts), so a plain sum nets them correctly.
@@ -290,10 +296,53 @@ class AccountMoveDeductionExt(models.Model):
             'target': 'new',
         }
 
+    def _get_starting_sequence(self):
+        # EXTENDS account (sequence.mixin) — core always uses a 4-digit year
+        # (see account_move.py's "%04d" % move_date.year). Accountant
+        # explicitly wants a 2-digit year on every journal (Journal Vouchers,
+        # Vendor Bills, Customer Invoices, Stock Valuation, Bank, Cash), not
+        # just Bank/Cash where this was first fixed. Only called when
+        # there's no matching previous entry to derive the format from
+        # (first entry ever for that journal, or a new year) — mid-year
+        # continuations already match the 2-digit-year regex from a prior
+        # entry and don't hit this method. For journals that already have
+        # 2026 entries in the old 4-digit format (Customer Invoices, Stock
+        # Valuation), this only takes effect starting 2027 unless those
+        # existing entries are renamed to the new format first.
+        starting_sequence = super()._get_starting_sequence()
+        move_date = self.date or self.invoice_date or fields.Date.context_today(self)
+        parts = starting_sequence.split('/')
+        if len(parts) >= 2:
+            parts[1] = move_date.strftime('%y')
+            starting_sequence = '/'.join(parts)
+        return starting_sequence
+
+    def action_force_register_payment(self):
+        # Both the bill form's Pay button and the Ready to Pay list's Pay
+        # buttons (row-level and bulk) funnel through this method before
+        # opening the account.payment.register wizard. Contractor bills get
+        # a dedicated wizard view (view_account_payment_register_form_
+        # reema_contractor in account_menu_views.xml): Amount/Memo locked,
+        # no Currency picker, no Recipient Bank — once a bill is approved
+        # and posted, the payable amount shouldn't change at payment time;
+        # any correction has to happen before that, through the approval
+        # flow. Other vendor bills / customer invoices keep opening the
+        # standard core wizard, untouched.
+        action = super().action_force_register_payment()
+        if isinstance(action, dict) and self.filtered('batch_entry_ids'):
+            view = self.env.ref(
+                'reema_accounting.view_account_payment_register_form_reema_contractor',
+                raise_if_not_found=False,
+            )
+            if view:
+                action['views'] = [(view.id, 'form')]
+        return action
+
     def action_post(self):
         for move in self:
             if not (move.reema_deduction_ids or move.reema_ilo_deduction_ids
-                    or move.reema_scrap_deduction_ids or move.reema_charge_ids):
+                    or move.reema_scrap_deduction_ids or move.reema_repair_penalty_ids
+                    or move.reema_charge_ids):
                 continue
             # Remove any lines injected by a previous post (reset-to-draft → re-post).
             # Must search line_ids, not invoice_line_ids — its domain now excludes
@@ -335,6 +384,16 @@ class AccountMoveDeductionExt(models.Model):
                 })
                 for s in move.reema_scrap_deduction_ids
             ]
+            new_lines += [
+                (0, 0, {
+                    'name': f'{p.name} — Repair Penalty ({dict(p._fields["defect_type"].selection)[p.defect_type]})',
+                    'account_id': p.account_id.id,
+                    'quantity': 1.0,
+                    'price_unit': -p.amount,
+                    'reema_is_deduction_line': True,
+                })
+                for p in move.reema_repair_penalty_ids
+            ]
             # Charges already carry their own sign (positive adds, negative
             # subtracts) — unlike the deduction lines above, not negated here.
             new_lines += [
@@ -348,7 +407,7 @@ class AccountMoveDeductionExt(models.Model):
                 for c in move.reema_charge_ids
             ]
             move.write({'line_ids': new_lines})
-            move.message_post(body=_(
+            move._message_log(body=_(
                 'Bill posted with deductions/charges applied — Total: PKR %(total).2f, '
                 'Advances: PKR %(adv).2f, QC Charges: PKR %(qc).2f, Misc: PKR %(misc).2f, '
                 'Net Payable: PKR %(net).2f'

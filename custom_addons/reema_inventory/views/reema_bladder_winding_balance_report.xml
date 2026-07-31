@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_bladder_winding_balance">
+        <t t-call="web.html_container">
+            <style>
+                @page { margin: 12mm; }
+            </style>
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div style="font-size:15px; font-weight:700;">
+                        Bladder Winding Balance
+                    </div>
+                    <hr style="margin-top:4px;"/>
+
+                    <table class="table table-sm table-striped" style="font-size:12px;">
+                        <thead>
+                            <tr class="table-dark">
+                                <th>Manufacturing Order</th>
+                                <th>Winding Vendor</th>
+                                <th class="text-end">Issued</th>
+                                <th class="text-end">Wound</th>
+                                <th class="text-end">Damaged</th>
+                                <th class="text-end">Lost</th>
+                                <th class="text-end">Outstanding</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="docs" t-as="o">
+                                <td><t t-esc="o.mo_id.name"/></td>
+                                <td><t t-esc="o.vendor_id.name"/></td>
+                                <td class="text-end"><span t-field="o.qty_issued"/></td>
+                                <td class="text-end"><span t-field="o.qty_wound"/></td>
+                                <td class="text-end"><span t-field="o.qty_damaged"/></td>
+                                <td class="text-end"><span t-field="o.qty_lost"/></td>
+                                <td class="text-end"><span t-field="o.qty_outstanding"/></td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="2" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end"><strong t-esc="total_issued"/></td>
+                                <td class="text-end"><strong t-esc="total_wound"/></td>
+                                <td class="text-end"><strong t-esc="total_damaged"/></td>
+                                <td class="text-end"><strong t-esc="total_lost"/></td>
+                                <td class="text-end"><strong t-esc="total_outstanding"/></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div t-if="not docs" class="text-muted mt-3">No rows found.</div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <record id="action_report_bladder_winding_balance" model="ir.actions.report">
+        <field name="name">Bladder Winding Balance</field>
+        <field name="model">reema.bladder.winding.balance</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_inventory.report_bladder_winding_balance</field>
+        <field name="report_file">reema_inventory.report_bladder_winding_balance</field>
+        <field name="print_report_name">'Bladder Winding Balance'</field>
+    </record>
+</odoo>

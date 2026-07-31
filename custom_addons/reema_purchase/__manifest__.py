@@ -22,7 +22,6 @@
     'assets': {
         'web.assets_backend': [
             'reema_purchase/static/src/views/po_list_view.js',
-            'reema_purchase/static/src/js/gate_pass_form.js',
         ],
     },
     'installable': True,

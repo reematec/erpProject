@@ -1,3 +1,4 @@
+from markupsafe import Markup
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
@@ -584,7 +585,7 @@ class MrpBomReemaExt(models.Model):
                                    default=lambda self: _('New'))
     has_active_mo = fields.Boolean(compute='_compute_has_active_mo', string='Has Active MO')
     impressions_per_ball = fields.Float(
-        string='Impressions / Ball', digits=(10, 2), default=0.0,
+        string='Impressions / Ball', digits=(10, 2), default=0.0, tracking=True,
         help='Total silk-screen impressions per finished ball for this design — a '
              'design-level constant. Applied at the printing work center, where '
              'pay = rate × qty_balls × impressions_per_ball.')
@@ -596,9 +597,17 @@ class MrpBomReemaExt(models.Model):
        help='Draft: auto-created from sample approval, not yet reviewed by PM. '
             'Ready: reviewed, can be used in Manufacturing Orders.')
 
+    # Header fields worth an audit trail: these (plus product_qty/product_uom_id
+    # below) are exactly the fields _BOM_PROTECTED_FIELDS locks once an MO is
+    # confirmed — if they can change pre-lock, they should be logged.
+    product_tmpl_id = fields.Many2one(tracking=True)
+    product_id = fields.Many2one(tracking=True)
+    product_qty = fields.Float(tracking=True)
+    product_uom_id = fields.Many2one(tracking=True)
+
     # Defaults tuned to our flow (Miscellaneous tab is admin-only in the view).
-    ready_to_produce = fields.Selection(default='asap')   # When components for 1st operation are available
-    consumption = fields.Selection(default='warning')     # Allowed with warning
+    ready_to_produce = fields.Selection(default='asap', tracking=True)   # When components for 1st operation are available
+    consumption = fields.Selection(default='warning', tracking=True)     # Allowed with warning
 
     # The sampling blueprint for this product. The blueprint _inherits product.template,
     # so its display name is the product name; shown on the form (as "Product") so clicking
@@ -607,6 +616,7 @@ class MrpBomReemaExt(models.Model):
         'reema.sampling.blueprint', string='Sample',
         compute='_compute_sample_id')
     sample_layout_file = fields.Binary(related='sample_id.layout_file', string='Sample Layout')
+    construction_type = fields.Selection(related='sample_id.construction_type', string='Construction Type')
 
     @api.depends('product_tmpl_id')
     def _compute_sample_id(self):
@@ -681,6 +691,11 @@ class MrpBomReemaExt(models.Model):
                 )
         return super().create(vals_list)
 
+    # Which one2many fields to diff-log on write — mail.thread's tracking=True
+    # can't auto-diff one2many lines the way it does scalar fields, so we
+    # snapshot before/after and post the difference ourselves.
+    _BOM_LINE_TRACK_FIELDS = {'bom_line_ids', 'operation_ids', 'byproduct_ids'}
+
     def write(self, vals):
         if self._operation_changes_blocked(vals):
             for bom in self:
@@ -690,7 +705,66 @@ class MrpBomReemaExt(models.Model):
                         f"BOM {bom.reema_reference} is locked — a Manufacturing Order exists for it. "
                         f"Cancel the MO first, then make your changes."
                     )
-        return super().write(vals)
+        track = self._BOM_LINE_TRACK_FIELDS & vals.keys()
+        before = {bom.id: bom._bom_lines_snapshot() for bom in self} if track else {}
+        res = super().write(vals)
+        if track:
+            for bom in self:
+                bom._log_bom_line_changes(before[bom.id])
+        return res
+
+    def _bom_lines_snapshot(self):
+        """Point-in-time {line_id: (fields...)} maps for components, operations
+        and by-products — diffed against a later snapshot to log what changed."""
+        self.ensure_one()
+        return {
+            'components': {
+                l.id: (l.product_id.display_name, l.product_qty, l.product_uom_id.name)
+                for l in self.bom_line_ids
+            },
+            'operations': {
+                o.id: (o.name, o.workcenter_id.display_name, o.time_cycle_manual,
+                       o.piece_rate_id.display_name or '—')
+                for o in self.operation_ids
+            },
+            'byproducts': {
+                b.id: (b.product_id.display_name, b.product_qty, b.product_uom_id.name)
+                for b in self.byproduct_ids
+            },
+        }
+
+    def _log_bom_line_changes(self, before):
+        self.ensure_one()
+        after = self._bom_lines_snapshot()
+        messages = (
+            self._diff_bom_lines('Component', before['components'], after['components'],
+                                  lambda d: f"{d[0]} — qty {d[1]} {d[2]}")
+            + self._diff_bom_lines('Operation', before['operations'], after['operations'],
+                                    lambda d: f"{d[0]} ({d[1]}), cycle {d[2]} min, rate {d[3]}")
+            + self._diff_bom_lines('By-product', before['byproducts'], after['byproducts'],
+                                    lambda d: f"{d[0]} — qty {d[1]} {d[2]}")
+        )
+        if messages:
+            # message_post treats a plain str body as text and HTML-escapes it
+            # wholesale (tags show up literally); Markup marks it as trusted
+            # HTML instead. The dynamic parts (product/workcenter/rate names)
+            # still go through Markup.format(), which auto-escapes any
+            # non-Markup argument, so this stays safe against stray '<'/'&'
+            # in a name.
+            self.message_post(body=Markup('<br/>').join(messages))
+
+    @staticmethod
+    def _diff_bom_lines(label, before, after, fmt):
+        lines = []
+        for line_id, data in after.items():
+            if line_id not in before:
+                lines.append(Markup('<b>{} added:</b> {}').format(label, fmt(data)))
+            elif before[line_id] != data:
+                lines.append(Markup('<b>{} changed:</b> {} → {}').format(label, fmt(before[line_id]), fmt(data)))
+        for line_id, data in before.items():
+            if line_id not in after:
+                lines.append(Markup('<b>{} removed:</b> {}').format(label, fmt(data)))
+        return lines
 
     def unlink(self):
         for bom in self:

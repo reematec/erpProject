@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+
+  <t t-name="reema_session.LeaveWithUnsavedChangesDialog">
+    <Dialog size="'md'" title="'Unsaved Changes'" modalRef="modalRef">
+      <p class="text-prewrap">You have unsaved changes on this record. What would you like to do?</p>
+      <t t-set-slot="footer">
+        <button class="btn btn-primary" t-on-click="onClickSave">Save</button>
+        <button class="btn btn-secondary" t-on-click="onClickDiscard">Discard</button>
+        <button class="btn btn-link" t-on-click="onClickStay">Cancel</button>
+      </t>
+    </Dialog>
+  </t>
+
+</templates>

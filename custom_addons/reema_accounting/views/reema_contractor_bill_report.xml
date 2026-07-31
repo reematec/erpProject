@@ -149,40 +149,11 @@
                             </tfoot>
                         </table>
 
-                        <!-- Advances -->
-                        <t t-if="o.reema_deduction_ids">
-                            <h5>Advances</h5>
-                            <table class="table table-sm table-striped" style="font-size:12px;">
-                                <thead>
-                                    <tr class="table-dark">
-                                        <th>Description</th>
-                                        <th>Recovery Account</th>
-                                        <th class="text-end">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <t t-foreach="o.reema_deduction_ids" t-as="d">
-                                        <tr>
-                                            <td><span t-field="d.description"/></td>
-                                            <td><span t-field="d.deduction_account_id"/></td>
-                                            <td class="text-end"><span t-field="d.amount"/></td>
-                                        </tr>
-                                    </t>
-                                </tbody>
-                                <tfoot>
-                                    <tr class="fw-bold" style="border-top:1px dashed #999;">
-                                        <td colspan="2" class="text-end">Subtotal</td>
-                                        <td class="text-end"><span t-field="o.reema_total_deductions"/></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </t>
-
                         <!-- QC Charges: ILO repair/lost charges + shop-floor
-                             scrap — kept separate from Advances above (that one
+                             scrap — kept separate from Advances below (that one
                              is a manual, unrelated advance recovery; this is charges
                              computed from production/QC activity). -->
-                        <t t-if="o.reema_ilo_deduction_ids or o.reema_scrap_deduction_ids">
+                        <t t-if="o.reema_ilo_deduction_ids or o.reema_scrap_deduction_ids or o.reema_repair_penalty_ids">
                             <h5>QC Charges</h5>
                             <table class="table table-sm table-striped" style="font-size:12px;">
                                 <thead>
@@ -217,6 +188,19 @@
                                             <td><span t-field="s.reason_id"/></td>
                                             <td class="text-end"><span t-field="s.qty"/></td>
                                             <td class="text-end"><span t-field="s.amount"/></td>
+                                        </tr>
+                                    </t>
+                                    <t t-foreach="o.reema_repair_penalty_ids" t-as="p">
+                                        <tr>
+                                            <td><span t-field="p.reema_product_id"/></td>
+                                            <td><span t-field="p.name"/></td>
+                                            <td><span t-field="p.mo_id"/></td>
+                                            <td>
+                                                Repair Penalty —
+                                                <span t-field="p.defect_type"/>
+                                            </td>
+                                            <td class="text-end"><span t-field="p.qty"/></td>
+                                            <td class="text-end"><span t-field="p.amount"/></td>
                                         </tr>
                                     </t>
                                 </tbody>
@@ -259,7 +243,42 @@
                             </table>
                         </t>
 
-                        <!-- Totals -->
+                        <!-- Advances -->
+                        <t t-if="o.reema_deduction_ids">
+                            <h5>Advances</h5>
+                            <table class="table table-sm table-striped" style="font-size:12px;">
+                                <thead>
+                                    <tr class="table-dark">
+                                        <th>Description</th>
+                                        <th>Recovery Account</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="o.reema_deduction_ids" t-as="d">
+                                        <tr>
+                                            <td><span t-field="d.description"/></td>
+                                            <td><span t-field="d.deduction_account_id"/></td>
+                                            <td class="text-end"><span t-field="d.amount"/></td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold" style="border-top:1px dashed #999;">
+                                        <td colspan="2" class="text-end">Subtotal</td>
+                                        <td class="text-end"><span t-field="o.reema_total_deductions"/></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </t>
+
+                        <!-- Totals: QC Charges and Advances are always deducted
+                             from Total, so their rows carry an explicit "−"
+                             sign (the stored fields are plain positive
+                             magnitudes and would otherwise read as additions).
+                             Misc can go either way (see the entry alert above),
+                             so its sign is shown explicitly too rather than
+                             relying on the reader to infer it. -->
                         <div class="row mt-2">
                             <div class="col-6 offset-6">
                                 <table class="table table-sm table-borderless" style="font-size:13px;">
@@ -267,19 +286,23 @@
                                         <td style="width:55%;"><strong>Total</strong></td>
                                         <td class="text-end"><span t-field="o.amount_total"/></td>
                                     </tr>
-                                    <tr t-if="o.reema_total_deductions">
-                                        <td><strong>Total Advances</strong></td>
-                                        <td class="text-end"><span t-field="o.reema_total_deductions"/></td>
-                                    </tr>
                                     <tr t-if="o.reema_total_production_deductions">
                                         <td><strong>Total QC Charges</strong></td>
-                                        <td class="text-end"><span t-field="o.reema_total_production_deductions"/></td>
+                                        <td class="text-end">− <span t-esc="'{:,.2f}'.format(o.reema_total_production_deductions)"/></td>
                                     </tr>
                                     <tr t-if="o.reema_total_charges">
                                         <td><strong>Total Misc</strong></td>
-                                        <td class="text-end"><span t-field="o.reema_total_charges"/></td>
+                                        <td class="text-end">
+                                            <t t-if="o.reema_total_charges &gt;= 0">+ <span t-esc="'{:,.2f}'.format(o.reema_total_charges)"/></t>
+                                            <t t-else="">− <span t-esc="'{:,.2f}'.format(-o.reema_total_charges)"/></t>
+                                        </td>
                                     </tr>
-                                    <tr t-if="o.reema_total_deductions or o.reema_total_production_deductions or o.reema_total_charges">
+                                    <tr t-if="o.reema_total_deductions">
+                                        <td><strong>Total Advances</strong></td>
+                                        <td class="text-end">− <span t-esc="'{:,.2f}'.format(o.reema_total_deductions)"/></td>
+                                    </tr>
+                                    <tr t-if="o.reema_total_deductions or o.reema_total_production_deductions or o.reema_total_charges"
+                                        style="border-top:1px dashed #999;">
                                         <td><strong>Net Payable</strong></td>
                                         <td class="text-end"><span t-field="o.reema_net_payable"/></td>
                                     </tr>
