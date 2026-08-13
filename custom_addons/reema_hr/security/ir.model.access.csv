@@ -1,0 +1,14 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reema_hr_attendance_user,reema.hr.attendance user,model_reema_hr_attendance,reema_hr.group_reema_hr_user,1,1,1,0
+access_reema_hr_attendance_manager,reema.hr.attendance manager,model_reema_hr_attendance,reema_hr.group_reema_hr_manager,1,1,1,1
+access_reema_hr_attendance_generate_wizard,reema.hr.attendance.generate.wizard,model_reema_hr_attendance_generate_wizard,reema_hr.group_reema_hr_user,1,1,1,1
+access_reema_hr_employee_advance_user,reema.hr.employee.advance user,model_reema_hr_employee_advance,reema_hr.group_reema_hr_user,1,1,1,0
+access_reema_hr_employee_advance_manager,reema.hr.employee.advance manager,model_reema_hr_employee_advance,reema_hr.group_reema_hr_manager,1,1,1,1
+access_reema_hr_employee_advance_line_user,reema.hr.employee.advance.line user,model_reema_hr_employee_advance_line,reema_hr.group_reema_hr_user,1,1,1,0
+access_reema_hr_employee_advance_line_manager,reema.hr.employee.advance.line manager,model_reema_hr_employee_advance_line,reema_hr.group_reema_hr_manager,1,1,1,1
+access_reema_hr_payslip_user,reema.hr.payslip user,model_reema_hr_payslip,reema_hr.group_reema_hr_user,1,1,1,0
+access_reema_hr_payslip_manager,reema.hr.payslip manager,model_reema_hr_payslip,reema_hr.group_reema_hr_manager,1,1,1,1
+access_reema_hr_payslip_pay_wizard,reema.hr.payslip.pay.wizard,model_reema_hr_payslip_pay_wizard,reema_hr.group_reema_hr_user,1,1,1,1
+access_reema_hr_payslip_generate_wizard,reema.hr.payslip.generate.wizard,model_reema_hr_payslip_generate_wizard,reema_hr.group_reema_hr_user,1,1,1,1
+access_reema_hr_public_holiday_user,reema.hr.public.holiday user,model_reema_hr_public_holiday,reema_hr.group_reema_hr_user,1,0,0,0
+access_reema_hr_public_holiday_manager,reema.hr.public.holiday manager,model_reema_hr_public_holiday,reema_hr.group_reema_hr_manager,1,1,1,1

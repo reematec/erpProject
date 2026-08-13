@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_reema_hr_attendance"
+              name="Attendance"
+              parent="hr.menu_hr_root"
+              action="action_reema_hr_attendance"
+              sequence="15"
+              groups="reema_hr.group_reema_hr_user"/>
+
+    <menuitem id="menu_reema_hr_payroll_root"
+              name="Payroll"
+              parent="hr.menu_hr_root"
+              sequence="16"
+              groups="reema_hr.group_reema_hr_user"/>
+
+    <menuitem id="menu_reema_hr_employee_advance"
+              name="Salary Advances &amp; Loans"
+              parent="menu_reema_hr_payroll_root"
+              action="action_reema_hr_employee_advance"
+              sequence="10"/>
+
+    <menuitem id="menu_reema_hr_payslip"
+              name="Payslips"
+              parent="menu_reema_hr_payroll_root"
+              action="action_reema_hr_payslip"
+              sequence="30"/>
+
+    <menuitem id="menu_reema_hr_settings"
+              name="HR Settings"
+              parent="hr.menu_human_resources_configuration"
+              action="action_reema_hr_company_settings"
+              sequence="90"
+              groups="reema_hr.group_reema_hr_manager"/>
+
+    <menuitem id="menu_reema_hr_public_holiday"
+              name="Calendar Overrides"
+              parent="hr.menu_human_resources_configuration"
+              action="action_reema_hr_public_holiday"
+              sequence="91"
+              groups="reema_hr.group_reema_hr_manager"/>
+
+</odoo>

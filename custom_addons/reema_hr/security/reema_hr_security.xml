@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="module_category_reema_hr" model="ir.module.category">
+        <field name="name">Reema HR</field>
+        <field name="sequence">22</field>
+        <field name="visible" eval="True"/>
+        <field name="description">Controls access to Attendance, Salary Advances, Employee Loans and Payslips.</field>
+    </record>
+
+    <record id="group_reema_hr_user" model="res.groups">
+        <field name="name">HR User</field>
+        <field name="category_id" ref="module_category_reema_hr"/>
+        <field name="comment">Can view/edit employees, mark attendance, and post advances, loans and payslips.</field>
+        <field name="implied_ids" eval="[
+            (4, ref('base.group_user')),
+            (4, ref('hr.group_hr_user')),
+        ]"/>
+    </record>
+
+    <record id="group_reema_hr_manager" model="res.groups">
+        <field name="name">HR Manager</field>
+        <field name="category_id" ref="module_category_reema_hr"/>
+        <field name="comment">Full HR access — includes all HR User permissions plus HR settings (shift timing, grace period, standard salary days).</field>
+        <field name="implied_ids" eval="[(4, ref('reema_hr.group_reema_hr_user'))]"/>
+    </record>
+
+</odoo>

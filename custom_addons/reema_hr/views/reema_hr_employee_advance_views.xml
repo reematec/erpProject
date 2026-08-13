@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_reema_hr_employee_advance_list" model="ir.ui.view">
+        <field name="name">reema.hr.employee.advance.list</field>
+        <field name="model">reema.hr.employee.advance</field>
+        <field name="arch" type="xml">
+            <list string="Advances/Loans">
+                <field name="name" string="Voucher No."/>
+                <field name="employee_id"/>
+                <field name="date"/>
+                <field name="advance_type" widget="badge"
+                       decoration-info="advance_type == 'advance'"
+                       decoration-warning="advance_type == 'loan'"/>
+                <field name="journal_id" string="Payment Method" optional="show"/>
+                <field name="amount" sum="Total"/>
+                <field name="installment_amount" optional="show"/>
+                <field name="balance_remaining" optional="show"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-success="state == 'posted'"
+                       decoration-muted="state == 'closed'"
+                       decoration-danger="state == 'cancelled'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_hr_employee_advance_form" model="ir.ui.view">
+        <field name="name">reema.hr.employee.advance.form</field>
+        <field name="model">reema.hr.employee.advance</field>
+        <field name="arch" type="xml">
+            <form string="Employee Advance / Loan">
+                <header>
+                    <button name="action_confirm" string="Post" type="object" class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Post this voucher? Once posted the recovery schedule is fixed and it becomes read-only."
+                            confirm-label="Yes, Post" cancel-label="Go Back"/>
+                    <button name="action_void" string="Void" type="object"
+                            invisible="state != 'draft'"
+                            confirm="Void this draft? It will be marked Cancelled."
+                            confirm-label="Yes, Void" cancel-label="Go Back"/>
+                    <button name="action_reset_to_draft" string="Reset to Draft" type="object"
+                            invisible="state != 'cancelled'"/>
+                    <button name="action_reverse" string="Reverse" type="object" class="btn-danger"
+                            invisible="state != 'posted'"
+                            confirm="Reverse this voucher? A reversing journal entry will be posted and it will be marked Cancelled. Only possible if no installment has been recovered yet."
+                            confirm-label="Yes, Reverse" cancel-label="Go Back"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,posted,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="employee_id" readonly="state != 'draft'"
+                                   context="{'active_test': False}"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="journal_id" readonly="state != 'draft'"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="purpose" readonly="state != 'draft'"/>
+                            <field name="advance_type" readonly="state != 'draft'" widget="radio"/>
+                        </group>
+                        <group>
+                            <field name="amount" readonly="state != 'draft'"/>
+                            <field name="installment_amount" readonly="state != 'draft'"
+                                   invisible="advance_type != 'loan'"
+                                   required="advance_type == 'loan'"/>
+                            <field name="installments_count" readonly="1" invisible="advance_type != 'loan'"/>
+                            <field name="advance_account_id" readonly="1"/>
+                            <field name="outstanding_advance_loan" readonly="1"/>
+                            <field name="balance_remaining" readonly="1" invisible="state != 'posted'"/>
+                            <field name="move_id" readonly="1" invisible="not move_id"/>
+                        </group>
+                    </group>
+                    <notebook invisible="state == 'draft'">
+                        <page string="Installment Schedule">
+                            <field name="line_ids" readonly="1">
+                                <list>
+                                    <field name="sequence"/>
+                                    <field name="amount"/>
+                                    <field name="state" widget="badge"
+                                           decoration-warning="state == 'due'"
+                                           decoration-success="state == 'paid'"/>
+                                    <field name="payslip_id" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reema_hr_employee_advance" model="ir.actions.act_window">
+        <field name="name">Salary Advances &amp; Loans</field>
+        <field name="res_model">reema.hr.employee.advance</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

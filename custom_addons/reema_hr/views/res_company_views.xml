@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_reema_hr_company_form" model="ir.ui.view">
+        <field name="name">res.company.reema.hr.form</field>
+        <field name="model">res.company</field>
+        <field name="arch" type="xml">
+            <form string="HR Settings">
+                <sheet>
+                    <group string="Attendance &amp; Payroll Settings">
+                        <field name="reema_hr_shift_start" widget="float_time"/>
+                        <field name="reema_hr_grace_minutes"/>
+                        <field name="reema_hr_hours_per_day"/>
+                        <field name="reema_hr_standard_days_per_month"/>
+                        <field name="reema_hr_weekly_off_day"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reema_hr_company_settings" model="ir.actions.act_window">
+        <field name="name">HR Settings</field>
+        <field name="res_model">res.company</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_reema_hr_company_form"/>
+        <field name="target">current</field>
+        <field name="res_id" eval="ref('base.main_company')"/>
+    </record>
+
+</odoo>

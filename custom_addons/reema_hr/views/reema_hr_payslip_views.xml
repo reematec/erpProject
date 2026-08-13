@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_reema_hr_payslip_generate_wizard_form" model="ir.ui.view">
+        <field name="name">reema.hr.payslip.generate.wizard.form</field>
+        <field name="model">reema.hr.payslip.generate.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Generate Payslips">
+                <group>
+                    <field name="date_from"/>
+                    <field name="date_to"/>
+                    <field name="employee_ids" widget="many2many_tags"
+                           options="{'no_create': True, 'no_edit': True}"/>
+                </group>
+                <footer>
+                    <button string="Generate" type="object" name="action_generate" class="btn-primary"/>
+                    <button string="Cancel" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reema_hr_payslip_generate_wizard" model="ir.actions.act_window">
+        <field name="name">Generate Payslips</field>
+        <field name="res_model">reema.hr.payslip.generate.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'active_test': False}</field>
+    </record>
+
+    <record id="view_reema_hr_payslip_list" model="ir.ui.view">
+        <field name="name">reema.hr.payslip.list</field>
+        <field name="model">reema.hr.payslip</field>
+        <field name="arch" type="xml">
+            <list string="Payslips">
+                <header>
+                    <button name="%(action_reema_hr_payslip_generate_wizard)d" string="Generate Payslips"
+                            type="action" class="btn-secondary" display="always"/>
+                    <button name="action_open_pay_wizard" string="Pay Selected"
+                            type="object" class="btn-primary"/>
+                </header>
+                <field name="name" string="Payslip No."/>
+                <field name="employee_id"/>
+                <field name="date_from"/>
+                <field name="date_to"/>
+                <field name="gross_pay" optional="show"/>
+                <field name="late_deduction" optional="show"/>
+                <field name="advance_loan_deduction" optional="show"/>
+                <field name="eobi_deduction" optional="show"/>
+                <field name="pessi_deduction" optional="show"/>
+                <field name="net_pay" sum="Total"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-warning="state == 'confirmed'"
+                       decoration-success="state == 'paid'"
+                       decoration-danger="state == 'cancelled'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_hr_payslip_form" model="ir.ui.view">
+        <field name="name">reema.hr.payslip.form</field>
+        <field name="model">reema.hr.payslip</field>
+        <field name="arch" type="xml">
+            <form string="Payslip">
+                <header>
+                    <button name="action_recompute" string="Recompute" type="object"
+                            invisible="state != 'draft'"/>
+                    <button name="action_confirm" string="Confirm" type="object" class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Confirm this payslip? Attendance-based pay and outstanding advances/loans will be locked in and a journal entry posted."
+                            confirm-label="Yes, Confirm" cancel-label="Go Back"/>
+                    <button name="action_open_pay_wizard" string="Pay" type="object" class="btn-primary"
+                            invisible="state != 'confirmed'"/>
+                    <button name="action_cancel" string="Cancel Payslip" type="object"
+                            invisible="state not in ('draft', 'confirmed')"
+                            confirm="Cancel this payslip? Any recovered advances/loan installments will be released back to pending."
+                            confirm-label="Yes, Cancel" cancel-label="Go Back"/>
+                    <button name="action_reset_to_draft" string="Reset to Draft" type="object"
+                            invisible="state != 'cancelled'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed,paid"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="employee_id" readonly="state != 'draft'"
+                                   context="{'active_test': False}"
+                                   options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                            <field name="date_from" readonly="state != 'draft'"/>
+                            <field name="date_to" readonly="state != 'draft'"/>
+                            <field name="daily_rate" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="present_days" readonly="1"/>
+                            <field name="half_days" readonly="1"/>
+                            <field name="absent_days" readonly="1"/>
+                            <field name="leave_days" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Pay">
+                            <field name="gross_pay" readonly="1"/>
+                            <field name="late_deduction" readonly="1"/>
+                            <field name="net_salary_expense" readonly="1"/>
+                        </group>
+                        <group string="Deductions">
+                            <field name="pending_advance_loan_amount" readonly="1" invisible="state != 'draft'"/>
+                            <field name="advance_loan_deduction" readonly="1"/>
+                            <field name="eobi_deduction" readonly="1"/>
+                            <field name="pessi_deduction" readonly="1"/>
+                            <field name="net_pay" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook invisible="state == 'draft'">
+                        <page string="Recovered Advances/Loans" invisible="not advance_loan_line_recovered_ids">
+                            <field name="advance_loan_line_recovered_ids" readonly="1">
+                                <list>
+                                    <field name="advance_id"/>
+                                    <field name="advance_type" widget="badge"/>
+                                    <field name="sequence"/>
+                                    <field name="amount"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Journal Entries">
+                            <group>
+                                <field name="move_id" readonly="1"/>
+                                <field name="payment_move_id" readonly="1" invisible="not payment_move_id"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_hr_payslip_search" model="ir.ui.view">
+        <field name="name">reema.hr.payslip.search</field>
+        <field name="model">reema.hr.payslip</field>
+        <field name="arch" type="xml">
+            <search string="Payslips">
+                <field name="employee_id"/>
+                <field name="date_from"/>
+                <filter string="Draft" name="filter_draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Confirmed" name="filter_confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter string="Paid" name="filter_paid" domain="[('state', '=', 'paid')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Employee" name="group_employee" context="{'group_by': 'employee_id'}"/>
+                    <filter string="Period" name="group_period" context="{'group_by': 'date_from'}"/>
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_hr_payslip" model="ir.actions.act_window">
+        <field name="name">Payslips</field>
+        <field name="res_model">reema.hr.payslip</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="view_reema_hr_payslip_pay_wizard_form" model="ir.ui.view">
+        <field name="name">reema.hr.payslip.pay.wizard.form</field>
+        <field name="model">reema.hr.payslip.pay.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Pay Payslips">
+                <group>
+                    <field name="payslip_ids" widget="many2many_tags" readonly="1"/>
+                    <field name="journal_id" options="{'no_create': True, 'no_edit': True}"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="total_amount" readonly="1"/>
+                </group>
+                <footer>
+                    <button string="Pay" type="object" name="action_confirm" class="btn-primary"
+                            confirm="Post payment for the selected payslip(s)?"
+                            confirm-label="Yes, Pay" cancel-label="Go Back"/>
+                    <button string="Cancel" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

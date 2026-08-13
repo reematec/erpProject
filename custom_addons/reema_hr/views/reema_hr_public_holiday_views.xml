@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_reema_hr_public_holiday_list" model="ir.ui.view">
+        <field name="name">reema.hr.public.holiday.list</field>
+        <field name="model">reema.hr.public.holiday</field>
+        <field name="arch" type="xml">
+            <list string="Calendar Overrides" default_group_by="date:month">
+                <field name="date"/>
+                <field name="status" widget="badge"
+                       decoration-info="status == 'holiday'"
+                       decoration-success="status == 'working'"/>
+                <field name="name" string="Description"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_hr_public_holiday_form" model="ir.ui.view">
+        <field name="name">reema.hr.public.holiday.form</field>
+        <field name="model">reema.hr.public.holiday</field>
+        <field name="arch" type="xml">
+            <form string="Calendar Override">
+                <sheet>
+                    <group>
+                        <field name="date"/>
+                        <field name="status"/>
+                        <field name="name" string="Description"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_hr_public_holiday_search" model="ir.ui.view">
+        <field name="name">reema.hr.public.holiday.search</field>
+        <field name="model">reema.hr.public.holiday</field>
+        <field name="arch" type="xml">
+            <search string="Calendar Overrides">
+                <field name="date"/>
+                <field name="name"/>
+                <filter string="Public Holidays" name="filter_holiday" domain="[('status', '=', 'holiday')]"/>
+                <filter string="Working Day Overrides" name="filter_working" domain="[('status', '=', 'working')]"/>
+                <group expand="1" string="Group By">
+                    <filter string="Month" name="group_month" context="{'group_by': 'date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_hr_public_holiday" model="ir.actions.act_window">
+        <field name="name">Calendar Overrides</field>
+        <field name="res_model">reema.hr.public.holiday</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_hr_public_holiday_search"/>
+    </record>
+
+</odoo>
