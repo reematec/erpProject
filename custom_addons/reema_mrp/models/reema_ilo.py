@@ -659,7 +659,7 @@ class ReemaIloContractorDeduction(models.Model):
                     f'Cannot remove {ded.name} from its bill: the bill is no '
                     'longer in the drafting stage.'
                 )
-            ded.bill_id.message_post(body=_(
+            ded.bill_id.sudo().message_post(body=_(
                 'ILO deduction removed: %(name)s — PKR %(amount).2f'
             ) % {'name': ded.name, 'amount': ded.amount})
         self.write({'state': 'pending', 'bill_id': False})
@@ -679,7 +679,7 @@ class ReemaIloContractorDeduction(models.Model):
                 'bill_id': bill.id,
                 'account_id': ded.account_id.id or account.id,
             })
-        bill.message_post(body=_(
+        bill.sudo().message_post(body=_(
             'ILO deduction(s) added: %(lines)s'
         ) % {'lines': ', '.join(f'{d.name} — PKR {d.amount:.2f}' for d in self)})
         return {'type': 'ir.actions.act_window_close'}

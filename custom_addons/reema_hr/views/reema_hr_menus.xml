@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <menuitem id="menu_reema_hr_attendance"
-              name="Attendance"
-              parent="hr.menu_hr_root"
-              action="action_reema_hr_attendance"
-              sequence="15"
-              groups="reema_hr.group_reema_hr_user"/>
-
     <menuitem id="menu_reema_hr_payroll_root"
               name="Payroll"
               parent="hr.menu_hr_root"
-              sequence="16"
+              sequence="15"
               groups="reema_hr.group_reema_hr_user"/>
+
+    <menuitem id="menu_reema_hr_attendance"
+              name="Attendance"
+              parent="menu_reema_hr_payroll_root"
+              action="action_reema_hr_attendance"
+              sequence="5"/>
 
     <menuitem id="menu_reema_hr_employee_advance"
               name="Salary Advances &amp; Loans"

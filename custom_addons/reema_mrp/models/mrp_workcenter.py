@@ -69,6 +69,19 @@ class MrpWorkcenter(models.Model):
              'fault caused the defect.\n\n'
              'This must be its own dedicated work center — do not enable it on a '
              'hall shared with other steps.')
+    is_thb_binding = fields.Boolean(
+        string='THB Binding Work Center', default=False,
+        help='Enable for the THB Binding hall (Thermo Bonded construction).\n\n'
+             'This is the single hall that consumes all THB materials and produces '
+             'the complete ball. It always does the physical rework for any THB '
+             'repair, regardless of which hall\'s fault caused the defect — but '
+             'unlike Shell Closing (MS/HYB), it is never paid a separate repair fee '
+             'for that: a fault traced back to THB Binding itself gets no penalty '
+             '(they redo their own mistake for free), and a fault traced to another '
+             'hall gets a penalty logged against that hall\'s contractor instead, '
+             'priced manually at bill time — not through an automatic piece rate.\n\n'
+             'This must be its own dedicated work center — do not enable it on a '
+             'hall shared with other steps.')
     is_printing = fields.Boolean(
         string='Printing Work Center', default=False,
         help='Enable for screen-printing (silk-screen) halls.\n\n'
@@ -89,6 +102,19 @@ class MrpWorkcenter(models.Model):
              '• Panel (e.g. Cutting, Printing, Sorting): balls = qty ÷ panels per ball '
              '(read from the product\'s sampling blueprint).\n'
              '• Ball (e.g. Stitching, Shaping, QC): logged directly in balls (1:1).')
+    printing_low_qty_threshold = fields.Float(
+        string='Low-Qty Threshold (Balls)', default=60.0,
+        help='Printing only. Below or at this many combined balls, an order (or a '
+             'group of orders linked via "Printed Together With") is paid the flat '
+             'Low-Qty Per-Ball Rate below instead of the per-impression Piece Rate. '
+             'Evaluated once, when a contractor bill is generated.')
+    printing_low_qty_rate_id = fields.Many2one(
+        'reema.piece.rate',
+        string='Low-Qty Per-Ball Rate',
+        domain="[('workcenter_id', '=', id)]",
+        help='Printing only. Flat per-ball rate applied automatically to any article '
+             'when the combined order quantity is at or below the Low-Qty Threshold. '
+             'Set once here for the whole hall — no per-BOM configuration needed.')
     pay_basis = fields.Selection([
         ('ball', 'Per Ball'),
         ('hall', 'Per Hall Unit'),
@@ -121,7 +147,18 @@ class MrpWorkcenter(models.Model):
         'account.account',
         string='Labor Expense Account',
         domain=[('code', '=like', '5-2-1%')],
-        help='Account debited when a contractor bill is posted for this work center.',
+        help='Used only for scrap deductions on a contractor bill (material/labor '
+             'lost to a scrapped unit, charged immediately — it never becomes a '
+             'sellable good, so it is never deferred through WIP). Normal contractor '
+             'bill lines use wip_labor_account_id instead.',
+    )
+    wip_labor_account_id = fields.Many2one(
+        'account.account',
+        string='WIP Labor Account',
+        domain=[('code', '=', '1-1-7-07')],
+        help='Account debited for normal (non-scrap) contractor bill lines at this '
+             'work center — deferred as Work In Progress until the order reaches '
+             'Finished Goods, rather than expensed immediately.',
     )
     scrap_enabled = fields.Boolean(
         string='Allow Scrap Logging', default=False,

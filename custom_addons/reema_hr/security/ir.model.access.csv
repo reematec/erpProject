@@ -10,5 +10,10 @@ access_reema_hr_payslip_user,reema.hr.payslip user,model_reema_hr_payslip,reema_
 access_reema_hr_payslip_manager,reema.hr.payslip manager,model_reema_hr_payslip,reema_hr.group_reema_hr_manager,1,1,1,1
 access_reema_hr_payslip_pay_wizard,reema.hr.payslip.pay.wizard,model_reema_hr_payslip_pay_wizard,reema_hr.group_reema_hr_user,1,1,1,1
 access_reema_hr_payslip_generate_wizard,reema.hr.payslip.generate.wizard,model_reema_hr_payslip_generate_wizard,reema_hr.group_reema_hr_user,1,1,1,1
+access_reema_hr_payslip_accountant,reema.hr.payslip accountant,model_reema_hr_payslip,reema_accounting.group_reema_accountant,1,1,0,0
+access_reema_hr_payslip_pay_wizard_accountant,reema.hr.payslip.pay.wizard accountant,model_reema_hr_payslip_pay_wizard,reema_accounting.group_reema_accountant,1,1,1,0
+access_reema_hr_employee_advance_accountant,reema.hr.employee.advance accountant,model_reema_hr_employee_advance,reema_accounting.group_reema_accountant,1,0,0,0
+access_reema_hr_employee_advance_line_accountant,reema.hr.employee.advance.line accountant,model_reema_hr_employee_advance_line,reema_accounting.group_reema_accountant,1,0,0,0
 access_reema_hr_public_holiday_user,reema.hr.public.holiday user,model_reema_hr_public_holiday,reema_hr.group_reema_hr_user,1,0,0,0
 access_reema_hr_public_holiday_manager,reema.hr.public.holiday manager,model_reema_hr_public_holiday,reema_hr.group_reema_hr_manager,1,1,1,1
+access_reema_payroll_balance_accountant,reema.payroll.balance accountant,model_reema_payroll_balance,reema_accounting.group_reema_accountant,1,0,0,0

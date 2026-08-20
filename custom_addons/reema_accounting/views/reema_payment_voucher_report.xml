@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Cash/Bank Payment Vouchers (account.payment),
+        following the reema reporting standard (see custom_addons/REPORTS.md):
+        report_type="qweb-html", no binding_model_id (kept out of the cog
+        Print menu). Triggered by action_print_payment_voucher(), which opens
+        /report/html/... in a new tab; the user prints with the browser
+        (Ctrl+P) — the printout is meant to be signed as acknowledgment of
+        cash/bank receipt or payment.
+    -->
+    <record id="action_report_payment_voucher" model="ir.actions.report">
+        <field name="name">Payment Voucher</field>
+        <field name="model">account.payment</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_accounting.report_payment_voucher</field>
+        <field name="report_file">reema_accounting.report_payment_voucher</field>
+        <field name="print_report_name">'%s - %s' % ('Receipt Voucher' if object.payment_type == 'inbound' else 'Payment Voucher', object.name or 'Draft')</field>
+    </record>
+
+    <template id="report_payment_voucher">
+        <t t-call="web.html_container">
+            <style>
+                @media print {
+                    .payment_voucher_doc { page-break-after: always; }
+                    .payment_voucher_doc:last-child { page-break-after: auto; }
+                }
+                @page { margin: 12mm; }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page payment_voucher_doc">
+
+                        <!-- Voucher card: date + status first, then a separator,
+                             then the voucher body (partner, amount, payment
+                             method), top to bottom like a real payment voucher
+                             rather than a two-column data sheet. -->
+                        <div style="border:1px solid #333; padding:14px 16px; margin-top:8px;">
+
+                            <div class="row">
+                                <div class="col-8">
+                                    <div style="font-size:16px; font-weight:700;">
+                                        <span t-esc="'Receipt Voucher' if o.payment_type == 'inbound' else 'Payment Voucher'"/>
+                                    </div>
+                                    <div style="font-size:12px; color:#555;">
+                                        <span t-esc="o.name"/>
+                                    </div>
+                                </div>
+                                <div class="col-4 text-end">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+                                        <tr>
+                                            <td class="text-end"><strong>Date</strong></td>
+                                            <td class="text-end" style="width:110px;"><span t-field="o.date"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-end"><strong>Status</strong></td>
+                                            <td class="text-end">
+                                                <span t-attf-class="badge #{'text-bg-info' if o.state == 'draft' else 'text-bg-success' if o.state == 'paid' else 'text-bg-warning' if o.state == 'in_process' else 'text-bg-danger'}">
+                                                    <span t-field="o.state"/>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <hr style="margin:8px 0;"/>
+
+                            <div t-if="o.state == 'draft'" class="mb-2">
+                                <div style="border:1px solid #b45309; background:#fef3c7; color:#92400e; padding:6px 10px; font-size:12px; font-weight:700;">
+                                    NOT YET CONFIRMED — FOR APPROVAL / SIGNATURE ONLY. No journal entry has been created; no funds have moved yet.
+                                </div>
+                            </div>
+                            <div t-if="o.state in ('canceled', 'rejected')" class="mb-2">
+                                <div style="border:1px solid #b91c1c; background:#fee2e2; color:#7f1d1d; padding:6px 10px; font-size:12px; font-weight:700;">
+                                    <span t-field="o.state"/> — this voucher no longer represents an active payment.
+                                </div>
+                            </div>
+
+                            <!-- Mirrors the form view's two group blocks, same
+                                 left/right field split as on screen. -->
+                            <div class="row">
+                                <div class="col-6">
+                                    <table class="table table-sm table-borderless" style="font-size:13px;">
+                                        <tr>
+                                            <td style="width:45%;">
+                                                <strong t-esc="'Received From' if o.payment_type == 'inbound' else 'Paid To'"/>
+                                            </td>
+                                            <td><span t-field="o.partner_id"/></td>
+                                        </tr>
+                                        <tr t-if="o.memo">
+                                            <td><strong>Memo</strong></td>
+                                            <td><span t-field="o.memo"/></td>
+                                        </tr>
+                                        <tr t-if="o.reema_description">
+                                            <td><strong>Description</strong></td>
+                                            <td><span t-field="o.reema_description"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-6">
+                                    <table class="table table-sm table-borderless" style="font-size:13px;">
+                                        <tr>
+                                            <td style="width:45%;"><strong>Payment Method</strong></td>
+                                            <td><span t-field="o.journal_id"/></td>
+                                        </tr>
+                                        <tr t-if="o.journal_id.type == 'bank' and o.reema_bank_id">
+                                            <td><strong>Paid From Bank</strong></td>
+                                            <td><span t-field="o.reema_bank_id"/></td>
+                                        </tr>
+                                        <tr t-if="o.journal_id.type == 'bank' and o.reema_cheque_no">
+                                            <td><strong>Cheque / Ref No.</strong></td>
+                                            <td><span t-field="o.reema_cheque_no"/></td>
+                                        </tr>
+                                        <tr t-if="o.journal_id.type == 'bank' and o.reema_cheque_no">
+                                            <td><strong>Cheque Type</strong></td>
+                                            <td><span t-field="o.reema_cheque_type"/></td>
+                                        </tr>
+                                        <tr t-if="o.journal_id.type == 'bank' and o.reema_post_dated">
+                                            <td><strong>Post-dated To</strong></td>
+                                            <td><span t-field="o.reema_post_dated_date"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Amount (PKR)</strong></td>
+                                            <td style="font-size:15px; font-weight:700;"><span t-field="o.amount"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row" t-if="o.move_id">
+                                <div class="col-12">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+                                        <tr>
+                                            <td style="width:22.5%;"><strong>Journal Entry</strong></td>
+                                            <td><span t-esc="o.move_id.name"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row mt-5 pt-5">
+                                <div class="col-6">
+                                    <div style="border-top:1px solid #000; width:80%; margin-top:40px;"></div>
+                                    <div style="font-size:12px;">Prepared By (<span t-esc="env.user.name"/>)</div>
+                                </div>
+                                <div class="col-6">
+                                    <div style="border-top:1px solid #000; width:80%; margin-top:40px;"></div>
+                                    <div style="font-size:12px;">
+                                        <span t-esc="'Received By' if o.payment_type == 'inbound' else 'Recipient'"/> (Signature)
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

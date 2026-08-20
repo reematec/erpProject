@@ -22,7 +22,6 @@
                 </group>
                 <group string="Salary &amp; Statutory Deductions" name="reema_hr_salary" groups="hr.group_hr_user">
                     <field name="monthly_salary"/>
-                    <field name="daily_rate" readonly="1"/>
                     <field name="has_eobi"/>
                     <field name="eobi_amount" invisible="not has_eobi" required="has_eobi"/>
                     <field name="has_pessi"/>

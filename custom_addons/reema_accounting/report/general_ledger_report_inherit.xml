@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <!-- General Ledger, trimmed for Reema:
+         - Reema never uses taxes on journal entries (GST/WHT configured but
+           unused) or analytic/cost centers, and single-company PKR books
+           mean the Account/Rec./Taxes columns are always-blank noise on
+           every one of what can be hundreds of rows per contractor/account.
+         - Keep: Date, Entry, Label, Debit, Credit, Cumul. Bal. — Journal
+           and Partner dropped too, per user request.
+         - Column positions below are counted among each row's *direct*
+           <td> children only (cost_center/analytic/currency columns live
+           inside <t t-if="..."> wrappers, so they never count as siblings
+           here) — verified against the installed account_financial_report
+           template: position 4 = Account, 5 = Taxes, 7 = Ref-Label,
+           8 = Rec. Removals go highest-position-first so an earlier
+           removal never shifts the position of one still to come.
+           NOTE: account_financial_report's report_general_ledger_lines was
+           patched (see general_ledger.xml in the vendored OCA module) to
+           use real <table>/<thead>/<tr>/<td> tags instead of styled <div>s
+           — Chrome's print engine only repeats a genuine <thead> across
+           page breaks, not a div faking one via CSS. These xpaths were
+           updated to match (tr/td instead of div). -->
+    <template id="report_general_ledger_lines_trimmed"
+              inherit_id="account_financial_report.report_general_ledger_lines">
+
+        <!-- Header: widen + rename Ref - Label -> Label (position 7),
+             before any removals so the position is still accurate. -->
+        <xpath expr="//tr[@class='act_as_row labels']/td[7]" position="replace">
+            <td class="act_as_cell" style="width: 32.95%;">Label</td>
+        </xpath>
+
+        <!-- Header: drop Rec.(8), Taxes(5), Account(4) -->
+        <xpath expr="//tr[@class='act_as_row labels']/td[8]" position="replace"/>
+        <xpath expr="//tr[@class='act_as_row labels']/td[5]" position="replace"/>
+        <xpath expr="//tr[@class='act_as_row labels']/td[4]" position="replace"/>
+
+        <!-- Initial-balance row: same 3 columns, same positions -->
+        <xpath expr="(//tr[@class='act_as_row lines'])[1]/td[8]" position="replace"/>
+        <xpath expr="(//tr[@class='act_as_row lines'])[1]/td[5]" position="replace"/>
+        <xpath expr="(//tr[@class='act_as_row lines'])[1]/td[4]" position="replace"/>
+
+        <!-- Per-transaction row: same 3 columns, same positions -->
+        <xpath expr="(//tr[@class='act_as_row lines'])[2]/td[8]" position="replace"/>
+        <xpath expr="(//tr[@class='act_as_row lines'])[2]/td[5]" position="replace"/>
+        <xpath expr="(//tr[@class='act_as_row lines'])[2]/td[4]" position="replace"/>
+
+        <!-- Drop Journal and Partner too. After the removals above, columns
+             are (1)Date (2)Entry (3)Journal (4)Partner (5)Label (6)Debit
+             (7)Credit (8)Cumul. Bal — these xpaths run after those, against
+             that already-trimmed tree, so positions 3/4 here mean Journal/
+             Partner, not the original template's numbering. Same
+             highest-position-first rule applies. -->
+        <xpath expr="//tr[@class='act_as_row labels']/td[4]" position="replace"/>
+        <xpath expr="//tr[@class='act_as_row labels']/td[3]" position="replace"/>
+
+        <xpath expr="(//tr[@class='act_as_row lines'])[1]/td[4]" position="replace"/>
+        <xpath expr="(//tr[@class='act_as_row lines'])[1]/td[3]" position="replace"/>
+
+        <xpath expr="(//tr[@class='act_as_row lines'])[2]/td[4]" position="replace"/>
+        <xpath expr="(//tr[@class='act_as_row lines'])[2]/td[3]" position="replace"/>
+
+        <!-- Date column (now position 1 everywhere): a bit wider + no-wrap
+             so "Jul 17, 2026"-style values never break onto multiple
+             lines. -->
+        <xpath expr="//tr[@class='act_as_row labels']/td[1]" position="attributes">
+            <attribute name="style">width: 6%; white-space: nowrap;</attribute>
+        </xpath>
+        <xpath expr="(//tr[@class='act_as_row lines'])[1]/td[1]" position="attributes">
+            <attribute name="style">white-space: nowrap;</attribute>
+        </xpath>
+        <xpath expr="(//tr[@class='act_as_row lines'])[2]/td[1]" position="attributes">
+            <attribute name="style">white-space: nowrap;</attribute>
+        </xpath>
+
+        <!-- "Cumul. Bal." -> "Balance" (now position 6). -->
+        <xpath expr="//tr[@class='act_as_row labels']/td[6]" position="replace">
+            <td class="act_as_cell amount" style="width: 8.02%;">Balance</td>
+        </xpath>
+    </template>
+
+    <!-- Drop the in-body title (redundant now that the letterhead banner
+         below shows it) and the top-of-report filters table (Date range /
+         Target moves / Account balance at 0 / Centralize — mostly static
+         noise Reema never changes) — replaced with just the date range,
+         inline under each account's own caption instead of a separate
+         global table. -->
+    <template id="report_general_ledger_base_reema"
+              inherit_id="account_financial_report.report_general_ledger_base">
+        <xpath expr="//div[@class='row']" position="replace" />
+        <xpath expr="//t[@t-call='account_financial_report.report_general_ledger_filters']" position="replace" />
+        <xpath expr="//div[@class='act_as_caption account_title'][@style='width: 100%']" position="after">
+            <div class="account_title" style="margin-bottom:4px;">
+                Date range: <span t-out="date_from" /> to <span t-out="date_to" />
+            </div>
+        </xpath>
+    </template>
+
+    <!-- Bring in the company's real letterhead (folder banner/logo/address —
+         same as invoices, POs, etc.), which account_financial_report never
+         does: its own account_financial_report.internal_layout is a
+         deliberately bare wrapper (CSS link + plain footer, no letterhead)
+         since these are "internal" accounting reports by OCA's design.
+         Full redefinition of the top-level general_ledger template (same
+         xmlid, no inherit_id) — this genuinely does replace the view in
+         place (confirmed via write_date + _get_view_id resolution after a
+         real module upgrade); it only looked like it didn't work earlier
+         because this dev server's file-watcher auto-reload doesn't always
+         re-apply -u on every restart. A separate inherit_id+primary="True"
+         template does NOT work for this: that only creates an
+         independently-addressable COPY under its own name — it does not
+         transparently substitute for account_financial_report.general_ledger
+         wherever THAT name is called (confirmed: _get_view_id() kept
+         resolving to the original view even with the primary override
+         present). company must be set to an actual res.company record
+         before the call — external_layout falls back to using company_id
+         as-is if 'company' isn't already truthy, and here company_id is a
+         plain int (from the wizard data), not a record, which would break
+         every company.* field access inside external_layout_folder. -->
+    <template id="account_financial_report.general_ledger">
+        <t t-call="account_financial_report.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-set="company" t-value="env['res.company'].browse(company_id)" />
+                <t t-call="web.external_layout">
+                    <div class="article o_account_financial_reports_page">
+                        <link
+                            href="/account_financial_report/static/src/css/report.css"
+                            rel="stylesheet"
+                        />
+                        <t t-call="account_financial_report.report_general_ledger_base" />
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

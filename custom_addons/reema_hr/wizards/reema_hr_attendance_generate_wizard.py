@@ -45,6 +45,9 @@ class ReemaHrAttendanceGenerateWizard(models.TransientModel):
         ])
         existing_keys = {(rec.employee_id.id, rec.date) for rec in existing}
         default_check_in = company.reema_hr_shift_start
+        default_half_time_out = company.reema_hr_half_time_start
+        default_half_time_in = company.reema_hr_half_time_end
+        default_check_out = company.reema_hr_shift_end
 
         to_create = []
         current = self.date_from
@@ -66,6 +69,9 @@ class ReemaHrAttendanceGenerateWizard(models.TransientModel):
                 else:
                     vals['state'] = 'present'
                     vals['check_in'] = default_check_in
+                    vals['half_time_out'] = default_half_time_out
+                    vals['half_time_in'] = default_half_time_in
+                    vals['check_out'] = default_check_out
                 to_create.append(vals)
             current += timedelta(days=1)
 

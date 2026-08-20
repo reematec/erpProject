@@ -99,6 +99,86 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <!-- ── Vendor Payments form: pay-only, no "Receive Money" — Payment Type
+         is hidden (mirrors the domain's hard 'outbound' below), Payment
+         Method Line is hidden since every journal in this database only
+         ever has one outbound method available ("Manual Payment", same
+         reasoning as the Contractor Bill Register Payment wizard above —
+         it still auto-fills in the background), and Vendor Bank Account is
+         dropped since we pay by cheque and the vendor deposits it wherever
+         they like — there's no fixed recipient account to record. A
+         standalone primary view scoped to just this action via view_ids
+         below, so Customer Payments and any other account.payment screen
+         keep the untouched core form (with the reema_bank_id/cheque/
+         cheque type/post-dated/description group from
+         view_account_payment_form_reema_contractor above, which is
+         additive and still applies here too — its own invisible condition
+         only reveals the group once one of those fields already has a
+         value, which never happens on a manually-created payment, so it's
+         re-gated below on journal type instead, same as the register
+         wizard). ── -->
+    <record id="view_account_payment_form_reema_vendor" model="ir.ui.view">
+        <field name="name">account.payment.form.reema.vendor</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='payment_type']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- Currency: this company only ever operates in PKR, same as
+                 the Contractor Bill Register Payment wizard above. -->
+            <xpath expr="//div[@name='amount_div']/field[@name='currency_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='payment_method_line_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- Odoo forbids selecting by the 'string' attribute in view
+                 inheritance, and there are 3 partner_bank_id fields on this
+                 form (Customer/Vendor/Company Bank Account) — matched here
+                 by its exact core invisible condition instead. -->
+            <xpath expr="//field[@name='partner_bank_id'][@invisible=&quot;not show_partner_bank_account or partner_type != 'supplier' or payment_type == 'inbound'&quot;]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='reema_bank_id']" position="attributes">
+                <attribute name="invisible">reema_journal_type != 'bank'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='reema_cheque_no']" position="attributes">
+                <attribute name="invisible">reema_journal_type != 'bank'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='reema_cheque_type']" position="attributes">
+                <attribute name="invisible">reema_journal_type != 'bank'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='reema_post_dated']" position="attributes">
+                <attribute name="invisible">reema_journal_type != 'bank'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='reema_post_dated_date']" position="attributes">
+                <attribute name="invisible">reema_journal_type != 'bank' or not reema_post_dated</attribute>
+                <attribute name="required">reema_journal_type == 'bank' and reema_post_dated</attribute>
+            </xpath>
+            <xpath expr="//field[@name='reema_description']" position="attributes">
+                <attribute name="invisible">0</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── Accounting > Vendors > Payments: same contractor exclusion as the
+         Vendors partner list above and Vendor Bills (reema_purchase/views/
+         vendor_bill_views.xml) — contractor payments belong in Contractors >
+         Ready to Pay / Contractor Ledger, not here. Core ships no domain at
+         all on this action (only a removable search_default_outbound_filter
+         facet), so partner_type and payment_type are hard-baked here too,
+         not just the contractor exclusion — this screen pays vendors, it
+         never records money received from one. -->
+    <record id="account.action_account_payments_payable" model="ir.actions.act_window">
+        <field name="domain">[('partner_type', '=', 'supplier'), ('partner_id.is_contractor', '=', False),
+                               ('payment_type', '=', 'outbound')]</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('account.view_account_supplier_payment_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_account_payment_form_reema_vendor')})]"/>
+    </record>
+
     <!-- ── Partner form (account extension): hide irrelevant Invoicing tab groups + lock account fields ── -->
     <record id="view_partner_invoicing_cleanup" model="ir.ui.view">
         <field name="name">reema.partner.invoicing.cleanup</field>
@@ -355,6 +435,23 @@
         name="Account Groups"
         parent="account.account_account_menu"
         action="action_account_group"
+        sequence="2"
+        groups="account.group_account_manager"/>
+
+    <!-- ── Bank Accounts: same reema.bank.account list/action already on
+         Sales → Configuration (reema_invoice/views/reema_invoice_views.xml,
+         menu_reema_bank_accounts) — accounting deals with these banks
+         constantly (Vendor Payments' Paid From Bank, Contractor Advances),
+         so it's surfaced here too instead of forcing a trip to Sales. Same
+         action, same records, just a second doorway into it. Filed under
+         core's existing "Banks" group (Configuration → Banks) alongside
+         "Add a Bank Account" / Reconciliation Models, instead of sitting
+         as a separate top-level Configuration entry. ── -->
+    <menuitem
+        id="menu_reema_accounting_bank_accounts"
+        name="Bank Accounts"
+        parent="account.account_banks_menu"
+        action="reema_invoice.action_reema_bank_accounts"
         sequence="2"
         groups="account.group_account_manager"/>
 
@@ -1039,6 +1136,12 @@
                        invisible="reema_journal_type != 'bank'"/>
                 <field name="reema_cheque_no" placeholder="e.g. Cheque no. or transfer reference"
                        invisible="reema_journal_type != 'bank'"/>
+                <field name="reema_cheque_type" widget="radio" options="{'horizontal': True}"
+                       invisible="reema_journal_type != 'bank'"/>
+                <field name="reema_post_dated" invisible="reema_journal_type != 'bank'"/>
+                <field name="reema_post_dated_date"
+                       invisible="reema_journal_type != 'bank' or not reema_post_dated"
+                       required="reema_journal_type == 'bank' and reema_post_dated"/>
                 <field name="reema_description" placeholder="e.g. Payment for August contractor bills"/>
             </xpath>
             <!-- Reorder this column to Date, Memo, Amount. The other
@@ -1053,24 +1156,50 @@
         </field>
     </record>
 
-    <!-- Surface the same Paid From Bank / Cheque No. / Description on the
-         resulting account.payment record, so they're still visible when
-         reviewing a payment after the wizard closes — not just captured
-         and forgotten. Plain extension (no mode="primary"): this is
-         additive and conditional, so it's harmless everywhere else — for
-         any payment that didn't come from a contractor bill these three
-         fields are simply empty, and the group stays hidden. -->
+    <!-- Surface the same Paid From Bank / Cheque No. / Cheque Type /
+         Post-dated / Description on the resulting account.payment record,
+         so they're still visible when reviewing a payment after the
+         wizard closes — not just captured and forgotten. Plain extension
+         (no mode="primary"): this is additive and conditional, so it's
+         harmless everywhere else — for any payment that didn't come from
+         a contractor bill these fields are simply empty, and the group
+         stays hidden. Vendor Payments (below) forces this group visible
+         instead, since cheque details need to be enterable there too. -->
     <record id="view_account_payment_form_reema_contractor" model="ir.ui.view">
         <field name="name">account.payment.form.reema.contractor</field>
         <field name="model">account.payment</field>
         <field name="inherit_id" ref="account.view_account_payment_form"/>
         <field name="arch" type="xml">
+            <!-- "Cancel" reads as "go back / dismiss" to users, not "void
+                 this payment" — it's a destructive state change (state
+                 becomes 'canceled'), so it needs a specific verb and a
+                 confirmation, never the bare word "Cancel". Applies to
+                 every account.payment form (this view isn't primary). -->
+            <xpath expr="//button[@name='action_cancel']" position="attributes">
+                <attribute name="string">Void Payment</attribute>
+                <attribute name="confirm">This will void the payment. Are you sure?</attribute>
+                <attribute name="confirm-label">Yes, Void It</attribute>
+                <attribute name="cancel-label">Go Back</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_cancel']" position="after">
+                <button name="action_print_payment_voucher" string="Print"
+                        type="object"
+                        invisible="state in ('canceled', 'rejected')"/>
+            </xpath>
             <xpath expr="//field[@name='payment_method_line_id']" position="after">
+                <field name="reema_journal_type" invisible="1"/>
                 <field name="reema_bank_id" readonly="state != 'draft'"
                        options="{'no_create': True, 'no_edit': True}"
                        invisible="not reema_bank_id and not reema_cheque_no and not reema_description"/>
                 <field name="reema_cheque_no" readonly="state != 'draft'"
                        invisible="not reema_bank_id and not reema_cheque_no and not reema_description"/>
+                <field name="reema_cheque_type" widget="radio" options="{'horizontal': True}"
+                       readonly="state != 'draft'"
+                       invisible="not reema_bank_id and not reema_cheque_no and not reema_description"/>
+                <field name="reema_post_dated" readonly="state != 'draft'"
+                       invisible="not reema_bank_id and not reema_cheque_no and not reema_description"/>
+                <field name="reema_post_dated_date" readonly="state != 'draft'"
+                       invisible="(not reema_bank_id and not reema_cheque_no and not reema_description) or not reema_post_dated"/>
                 <field name="reema_description" readonly="state != 'draft'"
                        invisible="not reema_bank_id and not reema_cheque_no and not reema_description"/>
             </xpath>

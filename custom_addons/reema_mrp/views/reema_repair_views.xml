@@ -56,6 +56,7 @@
                             <field name="repair_source" string="Found At" readonly="1"/>
                         </group>
                         <group string="Fault">
+                            <field name="construction_type" invisible="1"/>
                             <field name="available_fault_contractor_ids" invisible="1"/>
                             <field name="fault_workcenter_id" readonly="1" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                             <field name="fault_contractor_id" readonly="1" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
@@ -67,6 +68,7 @@
                         <group string="Repair">
                             <field name="available_repair_contractor_ids" invisible="1"/>
                             <field name="repair_contractor_id" string="Shell Closing Contractor" readonly="1"
+                                   invisible="construction_type == 'thb'"
                                    options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                             <field name="qty_balls" string="Balls Affected" readonly="1"/>
                             <field name="repair_count" string="Number of Repairs" readonly="1"/>

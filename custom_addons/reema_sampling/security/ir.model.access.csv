@@ -15,7 +15,5 @@ access_reema_sampling_size_line_supervisor,reema.sampling.size.line supervisor,m
 access_reema_sampling_knife_line_supervisor,reema.sampling.knife.line supervisor,model_reema_sampling_knife_line,reema_mrp.group_reema_supervisor,1,0,0,0
 access_reema_product_type_user,reema.product.type user,model_reema_product_type,reema_sampling.group_reema_sampling,1,1,1,1
 access_reema_product_type_manager,reema.product.type manager,model_reema_product_type,base.group_erp_manager,1,1,1,1
-access_reema_sampling_status_info_wizard_user,reema.sampling.status.info.wizard user,model_reema_sampling_status_info_wizard,reema_sampling.group_reema_sampling,1,1,1,1
-access_reema_sampling_status_info_wizard_manager,reema.sampling.status.info.wizard manager,model_reema_sampling_status_info_wizard,base.group_erp_manager,1,1,1,1
 access_reema_sampling_rejection_wizard_user,reema.sampling.rejection.wizard user,model_reema_sampling_rejection_wizard,reema_sampling.group_reema_sampling,1,1,1,1
 access_reema_sampling_rejection_wizard_manager,reema.sampling.rejection.wizard manager,model_reema_sampling_rejection_wizard,base.group_erp_manager,1,1,1,1

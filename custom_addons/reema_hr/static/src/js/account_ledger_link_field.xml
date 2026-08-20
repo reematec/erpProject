@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+
+    <t t-name="reema_hr.AccountLedgerLinkField">
+        <a href="#" class="oe_link" t-on-click.prevent="onClick" t-if="displayName">
+            <t t-esc="displayName"/>
+        </a>
+    </t>
+
+</templates>

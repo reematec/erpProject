@@ -12,7 +12,7 @@ class ReemaInvoice(models.Model):
     # readonly=True prevents manual edits; the create() method below sets it.
     name = fields.Char(
         string='PI Number', required=True, copy=False,
-        readonly=True, default=lambda self: _('New'),
+        readonly=True, default=lambda self: _('New'), tracking=True,
     )
     date = fields.Date(
         string='PI Date', default=fields.Date.context_today,
@@ -91,7 +91,8 @@ class ReemaInvoice(models.Model):
 
     currency_id = fields.Many2one(
         'res.currency', string='Currency',
-        default=lambda self: self.env.company.currency_id,
+        default=lambda self: self.env['res.currency'].search([('name', '=', 'USD')], limit=1)
+                              or self.env.company.currency_id,
         tracking=True,
     )
     total_qty = fields.Float(
@@ -117,7 +118,9 @@ class ReemaInvoice(models.Model):
         currency_field='currency_id', tracking=True,
     )
 
-    move_id = fields.Many2one('account.move', string='Journal Entry', readonly=True, copy=False)
+    move_id = fields.Many2one(
+        'account.move', string='Journal Entry', readonly=True, copy=False, tracking=True,
+    )
 
     # ── Computed / onchange ───────────────────────────────────────────────────
 
@@ -298,14 +301,21 @@ class ReemaInvoice(models.Model):
         if terms:
             recv_desc += f" | {terms}"
 
-        move_lines = [(0, 0, {
+        recv_line_vals = {
             'account_id': receivable_account.id,
             'name': recv_desc,
             'debit': pkr_total,
             'credit': 0.0,
-            'currency_id': invoice_currency.id if is_foreign else False,
-            'amount_currency': self.net_total_payable if is_foreign else 0.0,
-        })]
+        }
+        if is_foreign:
+            # Only stamp a foreign currency_id/amount_currency when the line
+            # actually is foreign — setting currency_id (even to the company's
+            # own currency) makes Odoo derive debit/credit FROM amount_currency,
+            # so passing amount_currency=0.0 here would silently zero out
+            # pkr_total on domestic invoices.
+            recv_line_vals['currency_id'] = invoice_currency.id
+            recv_line_vals['amount_currency'] = self.net_total_payable
+        move_lines = [(0, 0, recv_line_vals)]
 
         account_totals = {}
         for line in self.line_ids:
@@ -333,14 +343,16 @@ class ReemaInvoice(models.Model):
                 )
             else:
                 credit_desc = f"{self.name} | {amounts['type_name']} | {company_currency.name} {amounts['pkr']:,.2f}"
-            move_lines.append((0, 0, {
+            credit_line_vals = {
                 'account_id': account_id,
                 'name': credit_desc,
                 'debit': 0.0,
                 'credit': amounts['pkr'],
-                'currency_id': invoice_currency.id if is_foreign else False,
-                'amount_currency': -amounts['fc'] if is_foreign else 0.0,
-            }))
+            }
+            if is_foreign:
+                credit_line_vals['currency_id'] = invoice_currency.id
+                credit_line_vals['amount_currency'] = -amounts['fc']
+            move_lines.append((0, 0, credit_line_vals))
 
         # Narration — full summary visible on the journal entry form
         narration = [
@@ -389,16 +401,6 @@ class ReemaInvoice(models.Model):
             'type': 'ir.actions.act_url',
             'url': '/report/html/reema_invoice.report_reema_invoice_html/%s' % ','.join(str(i) for i in self.ids),
             'target': 'new',
-        }
-
-    def action_open_status_info(self):
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'PI Status Reference',
-            'res_model': 'reema.invoice.status.info.wizard',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {},
         }
 
     def action_open_accept_wizard(self):
@@ -550,6 +552,3 @@ class ReemaInvoiceAcceptWizard(models.TransientModel):
         return {'type': 'ir.actions.act_window_close'}
 
 
-class ReemaInvoiceStatusInfoWizard(models.TransientModel):
-    _name = 'reema.invoice.status.info.wizard'
-    _description = 'PI Status Reference'

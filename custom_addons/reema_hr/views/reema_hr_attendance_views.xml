@@ -34,7 +34,10 @@
         <field name="name">reema.hr.attendance.list</field>
         <field name="model">reema.hr.attendance</field>
         <field name="arch" type="xml">
-            <list string="Attendance" create="0">
+            <list string="Attendance" editable="bottom" create="0" class="o_reema_hr_attendance_list"
+                  js_class="reema_hr_attendance_list"
+                  decoration-danger="state == 'absent'" decoration-warning="state == 'holiday'"
+                  decoration-muted="payroll_locked">
                 <header>
                     <button name="%(action_reema_hr_attendance_generate_wizard)d" string="Generate Attendance"
                             type="action" class="btn-secondary" display="always"/>
@@ -43,17 +46,20 @@
                     <button name="action_mark_present" string="Mark as Present"
                             type="object" class="btn-secondary"/>
                 </header>
-                <field name="employee_id"/>
-                <field name="date"/>
-                <field name="state" widget="badge"
-                       decoration-success="state == 'present'"
-                       decoration-danger="state == 'absent'"
-                       decoration-warning="state in ('leave', 'half_day')"
-                       decoration-info="state == 'holiday'"/>
-                <field name="check_in" widget="float_time" optional="show"/>
-                <field name="check_out" widget="float_time" optional="show"/>
-                <field name="late_minutes" optional="show"/>
-                <field name="late_deduction" optional="show" sum="Total"/>
+                <field name="employee_id" readonly="1"/>
+                <field name="date" readonly="1"/>
+                <field name="payroll_locked" invisible="1"/>
+                <field name="state" readonly="payroll_locked"/>
+                <field name="check_in" widget="float_time" optional="show" readonly="payroll_locked"/>
+                <field name="half_time_out" widget="float_time" optional="show" readonly="payroll_locked"/>
+                <field name="half_time_in" widget="float_time" optional="show" readonly="payroll_locked"/>
+                <field name="check_out" widget="float_time" optional="show" readonly="payroll_locked"/>
+                <field name="late_minutes" optional="hide" readonly="1"/>
+                <field name="late_deduction" optional="hide" sum="Total" readonly="1"/>
+                <field name="early_minutes" optional="hide" readonly="1"/>
+                <field name="early_deduction" optional="hide" sum="Total" readonly="1"/>
+                <field name="deduction_waived" optional="hide" readonly="payroll_locked"
+                       groups="reema_hr.group_reema_hr_manager"/>
             </list>
         </field>
     </record>
@@ -69,13 +75,21 @@
                             <field name="employee_id" readonly="1" context="{'active_test': False}"
                                    options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                             <field name="date" readonly="1"/>
-                            <field name="state"/>
+                            <field name="payroll_locked" invisible="1"/>
+                            <field name="state" readonly="payroll_locked"/>
                         </group>
                         <group>
-                            <field name="check_in" widget="float_time"/>
-                            <field name="check_out" widget="float_time"/>
+                            <field name="check_in" widget="float_time" readonly="payroll_locked"/>
+                            <field name="half_time_out" widget="float_time" readonly="payroll_locked"/>
+                            <field name="half_time_in" widget="float_time" readonly="payroll_locked"/>
+                            <field name="check_out" widget="float_time" readonly="payroll_locked"/>
+                        </group>
+                        <group string="Deductions" groups="reema_hr.group_reema_hr_manager">
                             <field name="late_minutes"/>
                             <field name="late_deduction"/>
+                            <field name="early_minutes"/>
+                            <field name="early_deduction"/>
+                            <field name="deduction_waived" readonly="payroll_locked"/>
                         </group>
                     </group>
                 </sheet>

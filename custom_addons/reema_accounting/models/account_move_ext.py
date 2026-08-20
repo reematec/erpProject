@@ -1,5 +1,7 @@
 from odoo import _, api, fields, models
 
+from odoo.addons.reema_mrp.models.reema_repair import DEFECT_TYPE_SELECTION
+
 
 class ReemaBillDeduction(models.Model):
     _name = 'reema.bill.deduction'
@@ -181,6 +183,21 @@ class AccountMoveDeductionExt(models.Model):
         string='Suggested Deduction',
         compute='_compute_reema_suggested_deduction_note',
     )
+    # Cash/Bank Voucher list columns (reema_cash_bank_voucher_views.xml) need a
+    # single "amount moved" figure — amount_total is 0 for plain journal
+    # entries (move_type='entry') since it's computed from invoice lines only,
+    # which these don't have. Sum of the debit side always equals the total
+    # value of a balanced entry, regardless of how many lines it has.
+    reema_voucher_amount = fields.Monetary(
+        string='Voucher Amount',
+        compute='_compute_reema_voucher_amount',
+        currency_field='currency_id',
+    )
+
+    @api.depends('line_ids.debit')
+    def _compute_reema_voucher_amount(self):
+        for move in self:
+            move.reema_voucher_amount = sum(move.line_ids.mapped('debit'))
 
     @api.depends(
         'reema_deduction_ids.amount', 'reema_ilo_deduction_ids.amount',
@@ -377,7 +394,10 @@ class AccountMoveDeductionExt(models.Model):
             new_lines += [
                 (0, 0, {
                     'name': f'{s.name} — Scrap Material Cost ({s.reason_id.name})',
-                    'account_id': s.workcenter_id.expense_account_id.id,
+                    # workcenter_id.expense_account_id needs sudo: posting a bill is an
+                    # accounting action, but the accountant/approver posting it may not
+                    # have Manufacturing access to read mrp.workcenter directly.
+                    'account_id': s.sudo().workcenter_id.expense_account_id.id,
                     'quantity': 1.0,
                     'price_unit': -s.amount,
                     'reema_is_deduction_line': True,
@@ -386,7 +406,7 @@ class AccountMoveDeductionExt(models.Model):
             ]
             new_lines += [
                 (0, 0, {
-                    'name': f'{p.name} — Repair Penalty ({dict(p._fields["defect_type"].selection)[p.defect_type]})',
+                    'name': f'{p.name} — Repair Penalty ({dict(DEFECT_TYPE_SELECTION)[p.defect_type]})',
                     'account_id': p.account_id.id,
                     'quantity': 1.0,
                     'price_unit': -p.amount,
@@ -418,4 +438,21 @@ class AccountMoveDeductionExt(models.Model):
                 'misc': move.reema_total_charges,
                 'net': move.reema_net_payable,
             })
-        return super().action_post()
+        res = super().action_post()
+        # Odoo's own auto-generated "Contractors Payable" balancing line
+        # (display_type='payment_term') is left with an empty name — on the
+        # General Ledger that shows up as a row with no label at all telling
+        # the reader what the entry is for. Only computed to its final form
+        # once actually posted, hence after super().action_post() rather
+        # than alongside the deduction lines above.
+        for move in self.filtered('batch_entry_ids'):
+            term_line = move.line_ids.filtered(lambda l: l.display_type == 'payment_term')
+            if not term_line:
+                continue
+            workcenters = []
+            for wc in move.invoice_line_ids.mapped('reema_batch_entry_id.workorder_id.workcenter_id.name'):
+                if wc and wc not in workcenters:
+                    workcenters.append(wc)
+            suffix = '/'.join(workcenters) if workcenters else 'Contractor Bill'
+            term_line.write({'name': '%s — %s' % (move.partner_id.name, suffix)})
+        return res

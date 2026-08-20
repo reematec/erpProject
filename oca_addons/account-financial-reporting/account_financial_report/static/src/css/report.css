@@ -47,6 +47,12 @@ a {
     border-collapse: collapse;
 }
 
+/* Table body rows (the "lines" class — both the initial-balance row and
+   every transaction row), overriding the 10px on .data_table above. */
+.act_as_row.lines .act_as_cell {
+    font-size: 9px;
+}
+
 .totals_table {
     font-weight: bold;
     text-align: center;
@@ -99,7 +105,7 @@ a {
 }
 
 .account_title {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: bold;
 
     &.labels {

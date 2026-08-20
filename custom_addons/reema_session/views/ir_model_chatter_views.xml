@@ -5,10 +5,10 @@
         <field name="name">ir.model.chatter.layout.list</field>
         <field name="model">ir.model</field>
         <field name="arch" type="xml">
-            <list string="Chatter Layout" editable="bottom" create="0" delete="0" default_order="name">
+            <list string="Chatter Layout" js_class="reema_chatter_layout_list" editable="bottom" create="0" delete="0" default_order="name">
                 <field name="name" string="Document" optional="show"/>
                 <field name="model" string="Technical Name" optional="hide"/>
-                <field name="reema_bottom_chatter" string="Bottom Chatter" optional="show"/>
+                <field name="reema_bottom_chatter" string="Bottom Chatter" optional="show" class="o_reema_bottom_chatter_cell"/>
             </list>
         </field>
     </record>

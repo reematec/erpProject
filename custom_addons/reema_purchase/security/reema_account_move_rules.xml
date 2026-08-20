@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Purchase Manager was granted direct account.move access so they can
+         review/submit Vendor Bills for match approval on the dedicated Vendor
+         Bill screen. This rule keeps that access scoped to PO-linked vendor
+         bills only — they must never see contractor bills, customer invoices,
+         or plain journal entries. Mirrors
+         reema_accounting's rule_account_move_reema_production_contractor_bills_only. -->
+    <record id="rule_account_move_reema_purchase_vendor_bills_only" model="ir.rule">
+        <field name="name">PO-linked vendor bills only (Purchase Manager)</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="domain_force">[('move_type', '=', 'in_invoice'), ('reema_po_id', '!=', False)]</field>
+        <field name="groups" eval="[(4, ref('reema_purchase.group_reema_purchase_manager'))]"/>
+    </record>
+
+    <record id="rule_account_move_line_reema_purchase_vendor_bills_only" model="ir.rule">
+        <field name="name">PO-linked vendor bill lines only (Purchase Manager)</field>
+        <field name="model_id" ref="account.model_account_move_line"/>
+        <field name="domain_force">[('move_id.move_type', '=', 'in_invoice'), ('move_id.reema_po_id', '!=', False)]</field>
+        <field name="groups" eval="[(4, ref('reema_purchase.group_reema_purchase_manager'))]"/>
+    </record>
+
+</odoo>

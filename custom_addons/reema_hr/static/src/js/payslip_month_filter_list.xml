@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+
+    <t t-name="reema_hr.PayslipListView" t-inherit="web.ListView" t-inherit-mode="primary">
+        <!-- Replaces the arch's plain type="object" Print button (removed from
+             the list view header) — needs a real click handler to read which
+             columns are currently visible on screen, not just an object-button
+             RPC. Positioned in the same "always visible" button row as
+             Generate Payslips / Pay Selected. -->
+        <xpath expr="//t[@t-set-slot='control-panel-always-buttons']/t[@t-foreach='archInfo.headerButtons']" position="after">
+            <button type="button" class="btn btn-secondary" t-on-click="onClickPrint">Print</button>
+        </xpath>
+        <xpath expr="//t[@t-set-slot='layout-actions']/SearchBar" position="before">
+            <div class="d-flex align-items-center gap-1 me-2 flex-shrink-0">
+                <span class="text-muted small">Month</span>
+                <select class="o_input o_reema_hr_payslip_month" t-on-change="onMonthChange">
+                    <option value="">Select...</option>
+                    <t t-foreach="monthOptions" t-as="m" t-key="m[0]">
+                        <option t-att-value="m[0]" t-att-selected="filterState.month === m[0]">
+                            <t t-esc="m[1]"/>
+                        </option>
+                    </t>
+                </select>
+                <span class="text-muted small">Year</span>
+                <input type="number" class="o_input o_reema_hr_payslip_year" style="width: 80px;"
+                       t-att-value="filterState.year" t-on-change="onYearChange"/>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ── Payroll Balances: flat summary, one row per active employee's
+         Advances & Loans account, all employees on one screen (unlike the
+         Employee Ledger in reema_hr_payslip_accounts_views.xml, which is
+         single-employee drill-down gated behind the wizard). See
+         reema_payroll_balance.py. ── -->
+    <record id="view_reema_payroll_balance_list" model="ir.ui.view">
+        <field name="name">reema.payroll.balance.list</field>
+        <field name="model">reema.payroll.balance</field>
+        <field name="arch" type="xml">
+            <list string="Payroll Balances" create="0" edit="0" delete="0" default_order="employee_id">
+                <header>
+                    <button name="action_print_payroll_balance" type="object" string="Print"
+                            class="btn-secondary" display="always"/>
+                    <button name="action_print_payroll_balance" type="object" string="Print (Skip Zero)"
+                            class="btn-secondary" display="always"
+                            context="{'reema_hide_zero_balance': True}"/>
+                </header>
+                <field name="account_code" string="Account"/>
+                <field name="employee_id" string="Employee"/>
+                <field name="balance" string="Balance (PKR)" widget="monetary" sum="Total"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="company_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_payroll_balance_search" model="ir.ui.view">
+        <field name="name">reema.payroll.balance.search</field>
+        <field name="model">reema.payroll.balance</field>
+        <field name="arch" type="xml">
+            <search string="Payroll Balances">
+                <field name="employee_id"/>
+                <filter name="hide_zero_balance" string="Non-zero Balance" domain="[('balance', '!=', 0)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_payroll_balance" model="ir.actions.act_window">
+        <field name="name">Payroll Balances</field>
+        <field name="res_model">reema.payroll.balance</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_reema_payroll_balance_list"/>
+        <field name="search_view_id" ref="view_reema_payroll_balance_search"/>
+        <field name="context">{'search_default_hide_zero_balance': 1}</field>
+    </record>
+    <menuitem
+        id="menu_payroll_balance"
+        name="Payroll Balances"
+        parent="menu_reema_accounting_payroll"
+        action="action_payroll_balance"
+        sequence="40"/>
+
+    <!--
+        HTML preview report, following the reema reporting standard (see
+        custom_addons/REPORTS.md). Triggered by the list view's "Print" /
+        "Print (Skip Zero)" header buttons above, both bound to
+        action_print_payroll_balance in reema_payroll_balance.py.
+    -->
+    <record id="action_report_payroll_balance" model="ir.actions.report">
+        <field name="name">Payroll Balances</field>
+        <field name="model">reema.payroll.balance</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_hr.report_payroll_balance</field>
+        <field name="report_file">reema_hr.report_payroll_balance</field>
+        <field name="print_report_name">'Payroll Balances'</field>
+    </record>
+
+    <template id="report_payroll_balance">
+        <t t-call="web.html_container">
+            <style>
+                @page { margin: 12mm; }
+            </style>
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div style="font-size:15px; font-weight:700;">
+                        Payroll Balances
+                    </div>
+                    <hr style="margin-top:4px;"/>
+
+                    <table class="table table-sm table-striped" style="font-size:12px;">
+                        <thead>
+                            <tr class="table-dark">
+                                <th>Account</th>
+                                <th>Employee</th>
+                                <th class="text-end">Balance (PKR)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="docs" t-as="o">
+                                <td><span t-esc="o.account_code"/></td>
+                                <td><span t-field="o.employee_id"/></td>
+                                <td class="text-end"><span t-field="o.balance"/></td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="2" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end"><strong t-esc="'%.2f' % total_balance"/></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div t-if="not docs" class="text-muted mt-3">No payroll balances found.</div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

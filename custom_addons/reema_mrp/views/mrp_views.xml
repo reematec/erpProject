@@ -251,11 +251,25 @@
                     <field name="extra_material_issuance"/>
                 </group>
             </xpath>
+            <xpath expr="//field[@name='bom_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_uom_id'][@groups='uom.group_uom']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
             <xpath expr="//field[@name='bom_id']" position="after">
                 <field name="construction_type" options="{'no_create': True, 'no_edit': True}"
-                       readonly="state != 'draft'"/>
-                <field name="ball_size" readonly="state != 'draft'"/>
-
+                       readonly="1"/>
+                <field name="ball_size" readonly="1"/>
+            </xpath>
+            <!-- Own labeled row, not crammed into the BOM header's tight button row —
+                 Production Manager only (see group_reema_production_manager below). -->
+            <xpath expr="//notebook" position="before">
+                <group groups="reema_mrp.group_reema_production_manager">
+                    <field name="reema_printing_group_ids"
+                           domain="[('product_id', '=', product_id), ('id', '!=', id)]"
+                           options="{'no_create': True, 'no_edit': True}" widget="many2many_tags"/>
+                </group>
             </xpath>
             <!-- Hide the raw product field and show the sample instead — clicking it
                  opens the sample sheet rather than the plain product form. -->
@@ -334,10 +348,60 @@
             <xpath expr="//header/button[@name='action_cancel']" position="replace"/>
             <xpath expr="//header/field[@name='show_lock']" position="before">
                 <field name="has_active_issuance" invisible="1"/>
-                <button name="action_open_status_info" type="object"
-                        icon="fa-info-circle"
-                        class="btn-secondary btn-sm"
-                        title="MO Status Reference"/>
+                <button class="btn btn-secondary btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#reema_mo_status_info_modal"
+                        title="MO Status Reference">
+                    <i class="fa fa-info-circle"/>
+                </button>
+            </xpath>
+            <!-- MO Status Reference: plain Bootstrap modal (no OWL/wizard) -->
+            <xpath expr="//sheet" position="before">
+                <div class="modal fade" id="reema_mo_status_info_modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">MO Status Reference</h5>
+                                <a href="#" role="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:140px">Status</th>
+                                            <th>What it means &amp; key effects</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge text-bg-secondary">Draft</span></td>
+                                            <td>MO has been created but not yet confirmed. Fields are still editable. Work orders are not active yet.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-info">Confirmed</span></td>
+                                            <td>MO is confirmed. Work orders are now active. The Store Keeper can now issue raw materials via Material Issuance. Hall supervisors can begin logging batch progress once materials are issued.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-warning text-dark">In Progress</span></td>
+                                            <td>Production is underway. At least one work order has been started. Batch logs are being recorded across halls.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-success">Done</span></td>
+                                            <td>All work orders are completed. MO is closed. <strong>Final status.</strong> No further changes allowed.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-danger">Cancelled</span></td>
+                                            <td>MO was cancelled. All work orders are also cancelled. No production was recorded under this MO.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" role="button" class="btn btn-primary" data-bs-dismiss="modal">Close</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </xpath>
             <!-- Confirm MO: require explicit confirmation before activating work orders -->
             <xpath expr="//button[@name='action_confirm']" position="attributes">
@@ -533,9 +597,75 @@
                             invisible="bom_status == 'ready'"/>
                     <button name="action_print_bom" string="Print"
                             type="object" class="btn-secondary"/>
+                    <button class="btn btn-secondary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#reema_bom_status_info_modal"
+                            title="BOM Status Reference">
+                        <i class="fa fa-info-circle"/>
+                    </button>
                     <field name="bom_status" widget="statusbar"
                            statusbar_visible="draft,ready" readonly="1"/>
                 </header>
+                <!-- BOM Status Reference: plain Bootstrap modal (no OWL/wizard) —
+                     Odoo's view compiler skips any button carrying data-bs-toggle,
+                     so this is rendered untouched and driven entirely by the
+                     Bootstrap JS already bundled in the backend. -->
+                <div class="modal fade" id="reema_bom_status_info_modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">BOM Status Reference</h5>
+                                <a href="#" role="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <h6>Buttons</h6>
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:140px">Button</th>
+                                            <th>What it does</th>
+                                            <th style="width:110px">Required?</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Mark Ready</strong></td>
+                                            <td>Validates the BOM (at least one component with quantity &gt; 0, and at least one hall operation) and moves it to <span class="badge text-bg-success">Ready</span>.</td>
+                                            <td><span class="badge text-bg-danger">Yes</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Print</strong></td>
+                                            <td>Opens the BOM sheet as an HTML preview in a new tab for printing/reference.</td>
+                                            <td><span class="badge text-bg-secondary">No</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <h6 class="mt-3">Status</h6>
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:140px">Status</th>
+                                            <th>What it means</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge text-bg-secondary">Draft</span></td>
+                                            <td>Auto-created from sample approval, not yet reviewed. Components, quantities and hall operations can be freely edited. <strong>Cannot</strong> be selected on a Manufacturing Order yet — click <strong>Mark Ready</strong> first.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-success">Ready</span></td>
+                                            <td>Reviewed and available for use on new Manufacturing Orders. Still editable until a Manufacturing Order is confirmed against this BOM — once that happens, the product, quantity, components and operations are locked (see "BOM Locked" notice).</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" role="button" class="btn btn-primary" data-bs-dismiss="modal">Close</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </xpath>
             <!-- Hide BoM Overview smart button — not used in our flow -->
             <xpath expr="//div[@name='button_box']/button[@icon='fa-bars']" position="replace"/>
@@ -762,6 +892,10 @@
         <field name="arch" type="xml">
             <xpath expr="//group[@name='capacity']" position="inside">
                 <field name="workforce_type"/>
+                <field name="wip_labor_account_id"
+                       options="{'no_create': True, 'no_edit': True}"
+                       groups="base.group_erp_manager"
+                       invisible="workforce_type == 'employee' and not is_initial_qc and not is_final_qc"/>
                 <field name="expense_account_id"
                        options="{'no_create': True, 'no_edit': True}"
                        groups="base.group_erp_manager"
@@ -773,6 +907,8 @@
                        help="Enable for the ILO Final QC hall — logging a batch here (HS construction only) opens its own Pass/Fail-to-repair/Scrap modal with a self-contained repair loop, separate from Initial QC."/>
                 <field name="is_shell_closing" string="Shell Closing Work Center"
                        help="Enable for the Shell Closing hall — used to find the Shell Closing contractor and repair piece rate for the hybrid/machine-stitched repair-penalty system. Must be its own dedicated work center."/>
+                <field name="is_thb_binding" string="THB Binding Work Center"
+                       help="Enable for the THB Binding hall — always does THB rework regardless of fault, but is never paid a separate repair fee for it. Must be its own dedicated work center."/>
                 <field name="is_packing" string="Is Packing Station"
                        help="Enable if this work center is the packing stage. The MO's quantity-producing counter will be driven by batch entries logged here."/>
                 <field name="is_ilo" string="ILO Work Center"
@@ -780,6 +916,9 @@
                 <field name="is_ball_receive_point" string="Ball Receive Point"
                        help="Enable for the dedicated hall where balls dispatched to an ILO contractor are logged back in — works for any construction type (HS, HYB, THB, etc). Must be its own work center, not shared with another step."/>
                 <field name="is_printing"/>
+                <field name="printing_low_qty_threshold" invisible="not is_printing"/>
+                <field name="printing_low_qty_rate_id" invisible="not is_printing"
+                       options="{'no_create': True, 'no_edit': True}"/>
                 <field name="scrap_enabled"/>
                 <field name="hall_unit"/>
                 <field name="pay_basis"/>
@@ -843,6 +982,9 @@
                 <field name="workforce_type" optional="show"/>
                 <field name="sfg_product_id" optional="hide"
                        options="{'no_create': True, 'no_edit': True}"/>
+                <field name="wip_labor_account_id" optional="hide"
+                       groups="base.group_erp_manager"
+                       options="{'no_create': True, 'no_edit': True}"/>
                 <field name="expense_account_id" optional="hide"
                        groups="base.group_erp_manager"
                        options="{'no_create': True, 'no_edit': True}"/>
@@ -853,6 +995,7 @@
                 <field name="is_initial_qc" optional="hide"/>
                 <field name="is_final_qc" optional="hide"/>
                 <field name="is_shell_closing" optional="hide"/>
+                <field name="is_thb_binding" optional="hide"/>
                 <field name="is_printing" optional="hide"/>
             </xpath>
         </field>
@@ -980,51 +1123,6 @@
                         domain="[('bom_status', '=', 'ready')]"/>
                 <separator/>
             </xpath>
-        </field>
-    </record>
-
-    <!-- MO STATUS INFO WIZARD — opened by the ⓘ button in the MO form header -->
-    <record id="view_reema_mo_status_info_wizard_form" model="ir.ui.view">
-        <field name="name">reema.mo.status.info.wizard.form</field>
-        <field name="model">reema.mo.status.info.wizard</field>
-        <field name="arch" type="xml">
-            <form string="MO Status Reference">
-                <sheet>
-                    <table class="table table-sm table-bordered" style="font-size:13px;">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width:140px">Status</th>
-                                <th>What it means &amp; key effects</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><span class="badge text-bg-secondary">Draft</span></td>
-                                <td>MO has been created but not yet confirmed. Fields are still editable. Work orders are not active yet.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-info">Confirmed</span></td>
-                                <td>MO is confirmed. Work orders are now active. The Store Keeper can now issue raw materials via Material Issuance. Hall supervisors can begin logging batch progress once materials are issued.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-warning text-dark">In Progress</span></td>
-                                <td>Production is underway. At least one work order has been started. Batch logs are being recorded across halls.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-success">Done</span></td>
-                                <td>All work orders are completed. MO is closed. <strong>Final status.</strong> No further changes allowed.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-danger">Cancelled</span></td>
-                                <td>MO was cancelled. All work orders are also cancelled. No production was recorded under this MO.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </sheet>
-                <footer>
-                    <button string="Close" class="btn-primary" special="cancel"/>
-                </footer>
-            </form>
         </field>
     </record>
 

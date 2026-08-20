@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        HTML preview report for Vendor Bills, following the house standard
+        (custom_addons/REPORTS.md): report_type="qweb-html" (no PDF/wkhtmltopdf),
+        no binding_model_id. account.move is shared with Contractor Bills and
+        Customer Invoices, so this report is deliberately NOT bound to the
+        model (that would leak it into the cog Print menu on those screens
+        too) — it's only reachable via the Print button on the Vendor Bill
+        form (views/vendor_bill_views.xml, action_reema_print_vendor_bill()).
+    -->
+    <record id="report_vendor_bill" model="ir.actions.report">
+        <field name="name">Vendor Bill</field>
+        <field name="model">account.move</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_purchase.report_vendor_bill_template</field>
+        <field name="report_file">reema_purchase.report_vendor_bill_template</field>
+        <field name="print_report_name">'Bill - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_vendor_bill_template">
+        <t t-call="web.html_container">
+            <!-- No in-page toolbar: user prints with Ctrl+P and closes the tab. -->
+            <style>
+                @media print {
+                    .vendor_bill_doc { page-break-after: always; }
+                    .vendor_bill_doc:last-child { page-break-after: auto; }
+                }
+                @page { margin: 12mm; }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page vendor_bill_doc">
+
+                        <!-- Title: Bill number + vendor -->
+                        <div class="row mt-2 mb-2">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    Vendor Bill — <span t-field="o.name"/>
+                                    <br/>
+                                    <span t-field="o.partner_id.name"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- Header details + vendor address -->
+                        <div class="row mt-3">
+                            <div class="col-7">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Bill Date</strong></td>
+                                        <td><span t-field="o.invoice_date"/></td>
+                                    </tr>
+                                    <tr t-if="o.invoice_date_due">
+                                        <td><strong>Due Date</strong></td>
+                                        <td><span t-field="o.invoice_date_due"/></td>
+                                    </tr>
+                                    <tr t-if="o.ref">
+                                        <td><strong>Vendor Reference</strong></td>
+                                        <td><span t-field="o.ref"/></td>
+                                    </tr>
+                                    <tr t-if="o.reema_po_id">
+                                        <td><strong>Purchase Order</strong></td>
+                                        <td><span t-field="o.reema_po_id"/></td>
+                                    </tr>
+                                    <tr t-if="o.reema_grn_ids">
+                                        <td><strong>Goods Receipt Note(s)</strong></td>
+                                        <td>
+                                            <t t-foreach="o.reema_grn_ids" t-as="grn">
+                                                <span t-field="grn.name"/><t t-if="not grn_last">, </t>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="o.invoice_payment_term_id">
+                                        <td><strong>Payment Terms</strong></td>
+                                        <td><span t-field="o.invoice_payment_term_id"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-5">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td><strong>Vendor</strong></td>
+                                    </tr>
+                                </table>
+                                <address class="mb-0" style="font-size:13px;">
+                                    <span t-field="o.partner_id.name"/>
+                                    <t t-if="o.partner_id.street"><br/><span t-field="o.partner_id.street"/></t>
+                                    <t t-if="o.partner_id.city or o.partner_id.country_id"><br/>
+                                        <t t-if="o.partner_id.city"><span t-field="o.partner_id.city"/></t>
+                                        <t t-if="o.partner_id.city and o.partner_id.country_id">, </t>
+                                        <t t-if="o.partner_id.country_id"><span t-field="o.partner_id.country_id.name"/></t>
+                                    </t>
+                                    <t t-if="o.partner_id.phone"><br/>Tel: <span t-field="o.partner_id.phone"/></t>
+                                </address>
+                            </div>
+                        </div>
+
+                        <!-- Line Items -->
+                        <h5 class="mt-3 mb-1">Bill Lines</h5>
+                        <table class="table table-sm table-striped" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>#</th>
+                                    <th>Product / Description</th>
+                                    <th class="text-end">Qty</th>
+                                    <th>Unit</th>
+                                    <th class="text-end">Unit Price</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-set="reema_line_no" t-value="0"/>
+                                <t t-foreach="o.invoice_line_ids" t-as="line">
+                                    <t t-if="line.display_type == 'product' and not line.reema_is_variance_line">
+                                        <t t-set="reema_line_no" t-value="reema_line_no + 1"/>
+                                        <tr>
+                                            <td><t t-esc="reema_line_no"/></td>
+                                            <td><t t-esc="line.product_id.display_name or line.name"/></td>
+                                            <td class="text-end"><t t-esc="line.quantity"/></td>
+                                            <td><t t-esc="line.product_uom_id.name or ''"/></td>
+                                            <td class="text-end">
+                                                <t t-esc="line.price_unit" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                            </td>
+                                            <td class="text-end">
+                                                <t t-esc="line.price_subtotal" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </t>
+                            </tbody>
+                        </table>
+                        <div t-if="o.reema_match_difference" class="mt-1" style="font-size:12px;">
+                            <small class="text-muted">
+                                Price Variance vs GRN (already included in Total below):
+                                <t t-esc="o.reema_match_difference" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                            </small>
+                        </div>
+
+                        <!-- Totals -->
+                        <div class="row">
+                            <div class="col-5 offset-7">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td><strong>Subtotal</strong></td>
+                                        <td class="text-end">
+                                            <t t-esc="o.amount_untaxed" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="o.amount_tax">
+                                        <td><strong>Tax</strong></td>
+                                        <td class="text-end">
+                                            <t t-esc="o.amount_tax" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-top">
+                                        <td><strong>Total</strong></td>
+                                        <td class="text-end"><strong>
+                                            <t t-esc="o.amount_total" t-options="{'widget':'monetary','display_currency':o.currency_id}"/>
+                                        </strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Signatures -->
+                        <div class="row mt-5">
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Prepared By
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Checked By (Accountant)
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top:1px solid #000; padding-top:5px; margin-top:40px;">
+                                    Approved By
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

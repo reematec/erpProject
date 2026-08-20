@@ -8,7 +8,7 @@ class ReemaHrEmployeeAdvance(models.Model):
     _name = 'reema.hr.employee.advance'
     _description = 'Employee Advance / Loan'
     _inherit = ['mail.thread', 'mail.activity.mixin']
-    _order = 'id desc'
+    _order = 'date desc, id desc'
 
     name = fields.Char(
         string='Voucher No.', readonly=True, copy=False,
@@ -106,21 +106,22 @@ class ReemaHrEmployeeAdvance(models.Model):
             liquidity_account = rec.journal_id.default_account_id
             if not liquidity_account:
                 raise UserError(_('Selected payment method has no default account configured.'))
+            type_label = dict(rec._fields['advance_type'].selection).get(rec.advance_type)
+            line_name = f'{type_label} — {rec.purpose}'
             move = self.env['account.move'].create({
                 'move_type': 'entry',
                 'journal_id': rec.journal_id.id,
                 'date': rec.date,
-                'ref': f'{rec.name} — {rec.purpose}',
                 'line_ids': [
                     (0, 0, {
                         'account_id': advance_account.id,
-                        'name': rec.purpose,
+                        'name': line_name,
                         'debit': rec.amount,
                         'credit': 0.0,
                     }),
                     (0, 0, {
                         'account_id': liquidity_account.id,
-                        'name': rec.purpose,
+                        'name': line_name,
                         'debit': 0.0,
                         'credit': rec.amount,
                     }),
@@ -177,6 +178,40 @@ class ReemaHrEmployeeAdvance(models.Model):
             reversal.action_post()
             rec.write({'reversal_move_id': reversal.id, 'state': 'cancelled'})
             rec._message_log(body=_('Advance/loan reversed by %s.') % self.env.user.name)
+
+    @api.model
+    def action_open_account_ledger(self, account_id):
+        """Opens an account's Journal Items in a new browser tab. Called directly
+        via RPC from a client-side widget (not a type="object" button) — a
+        button click always saves the record first (core Odoo behavior), which
+        would silently persist a still-being-filled-in draft voucher just from
+        clicking this informational link. @api.model + a plain account_id
+        (not self) means it works identically whether the voucher has been
+        saved yet or not.
+
+        A plain act_window with target='new' only opens a dialog in the same
+        tab, so this creates a one-off act_window record with the domain
+        baked in and redirects to it via act_url (target='new'), which the
+        web client opens with window.open — a genuine new tab."""
+        account = self.env['account.account'].browse(account_id)
+        if not account.exists():
+            raise UserError(_('Account not found.'))
+        # ir.actions.act_window create is restricted to group_system by default —
+        # sudo() only covers creating this throwaway navigation record; the
+        # account.move.line data itself is still access-checked normally when
+        # the new tab loads.
+        action = self.env['ir.actions.act_window'].sudo().create({
+            'name': _('Ledger — %s') % account.display_name,
+            'res_model': 'account.move.line',
+            'view_mode': 'list,form',
+            'domain': [('account_id', '=', account.id)],
+            'context': {'search_default_posted': 1},
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/odoo/action-{action.id}',
+            'target': 'new',
+        }
 
 
 class ReemaHrEmployeeAdvanceLine(models.Model):

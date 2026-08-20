@@ -87,12 +87,76 @@
                             cancel-label="Go Back"/>
                     <button name="action_print_sampling" string="Print" type="object"
                             groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
-                    <button name="action_open_status_info" type="object"
-                            icon="fa-info-circle"
-                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system"/>
+                    <button class="btn btn-secondary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#reema_sampling_status_info_modal"
+                            title="Sample Status Reference"
+                            groups="reema_sampling.group_reema_sampling,base.group_erp_manager,base.group_system">
+                        <i class="fa fa-info-circle"/>
+                    </button>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,in_progress,completed,shipped,sample_approved"/>
                 </header>
+                <!-- Sample Status Reference: plain Bootstrap modal (no OWL/wizard) -->
+                <div class="modal fade" id="reema_sampling_status_info_modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Sample Status Reference</h5>
+                                <a href="#" role="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:160px">Status</th>
+                                            <th>What it means &amp; key effects</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge text-bg-secondary">Draft</span></td>
+                                            <td>Initial state. All fields editable. Sample not yet started.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-info">In Progress</span></td>
+                                            <td>Sample is being physically made. All fields editable.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-primary">Completed</span></td>
+                                            <td>Physical sample is ready. Can be shipped to the customer for review, or approved/rejected directly if the customer visited in person.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-warning text-dark">Shipped</span></td>
+                                            <td>Sample sent to customer for review. Form is <strong>locked</strong> — no edits allowed. Approve or reject once the customer responds.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-success">Sample Approved</span></td>
+                                            <td>Customer has signed off. Form is <strong>permanently locked</strong>. Production Manager is automatically notified to create the Bill of Materials. Sample stays in the Pending BOM queue until a BOM is created.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-danger">Sample Rejected</span></td>
+                                            <td>
+                                                A wizard appears asking for the rejection reason and what happens next:
+                                                <ul class="mb-0 mt-1">
+                                                    <li><strong>No Further Development</strong> — sample is cancelled permanently.</li>
+                                                    <li><strong>Revise &amp; Remake</strong> — sample returns to In Progress so specs can be revised and a new sample made.</li>
+                                                </ul>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-dark">Cancelled</span></td>
+                                            <td>Dead end. Sample is locked and will not be developed further. Can only be reset to Draft by an administrator.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" role="button" class="btn btn-primary" data-bs-dismiss="modal">Close</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <sheet>
                     <field name="is_sampling_user" invisible="1"/>
                     <!-- Smart Buttons -->
@@ -200,7 +264,6 @@
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="product_id"
-                                           domain="[('type', '=', 'consu')]" 
                                            string="Material"
                                            options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                                     <field name="description"/>
@@ -256,65 +319,6 @@
                             string="Confirm Shipment"
                             class="btn-primary"/>
                     <button string="Go Back" class="btn-secondary" special="cancel"/>
-                </footer>
-            </form>
-        </field>
-    </record>
-
-    <!-- Status Info Wizard -->
-    <record id="view_reema_sampling_status_info_wizard_form" model="ir.ui.view">
-        <field name="name">reema.sampling.status.info.wizard.form</field>
-        <field name="model">reema.sampling.status.info.wizard</field>
-        <field name="arch" type="xml">
-            <form string="Sample Status Reference">
-                <sheet>
-                    <table class="table table-sm table-bordered" style="font-size:13px;">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width:160px">Status</th>
-                                <th>What it means &amp; key effects</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><span class="badge text-bg-secondary">Draft</span></td>
-                                <td>Initial state. All fields editable. Sample not yet started.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-info">In Progress</span></td>
-                                <td>Sample is being physically made. All fields editable.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-primary">Completed</span></td>
-                                <td>Physical sample is ready. Can be shipped to the customer for review, or approved/rejected directly if the customer visited in person.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-warning text-dark">Shipped</span></td>
-                                <td>Sample sent to customer for review. Form is <strong>locked</strong> — no edits allowed. Approve or reject once the customer responds.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-success">Sample Approved</span></td>
-                                <td>Customer has signed off. Form is <strong>permanently locked</strong>. Production Manager is automatically notified to create the Bill of Materials. Sample stays in the Pending BOM queue until a BOM is created.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-danger">Sample Rejected</span></td>
-                                <td>
-                                    A wizard appears asking for the rejection reason and what happens next:
-                                    <ul class="mb-0 mt-1">
-                                        <li><strong>No Further Development</strong> — sample is cancelled permanently.</li>
-                                        <li><strong>Revise &amp; Remake</strong> — sample returns to In Progress so specs can be revised and a new sample made.</li>
-                                    </ul>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-dark">Cancelled</span></td>
-                                <td>Dead end. Sample is locked and will not be developed further. Can only be reset to Draft by an administrator.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </sheet>
-                <footer>
-                    <button string="Close" class="btn-primary" special="cancel"/>
                 </footer>
             </form>
         </field>

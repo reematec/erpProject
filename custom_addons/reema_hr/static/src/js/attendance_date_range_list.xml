@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+
+    <t t-name="reema_hr.AttendanceListView" t-inherit="web.ListView" t-inherit-mode="primary">
+        <xpath expr="//t[@t-set-slot='layout-actions']/SearchBar" position="before">
+            <div class="d-flex align-items-center gap-1 me-2 flex-shrink-0">
+                <span class="text-muted small">From</span>
+                <div class="o_reema_hr_date_from">
+                    <DateTimeInput
+                        type="'date'"
+                        value="dateRangeState.dateFrom"
+                        onChange="(date) => this.onDateFromChange(date)"
+                        placeholder="'Any'"
+                    />
+                </div>
+                <span class="text-muted small">To</span>
+                <div class="o_reema_hr_date_to">
+                    <DateTimeInput
+                        type="'date'"
+                        value="dateRangeState.dateTo"
+                        onChange="(date) => this.onDateToChange(date)"
+                        placeholder="'Any'"
+                    />
+                </div>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

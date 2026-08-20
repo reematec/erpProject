@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for the Customer Balances list — mirrors
+        reema_vendor_balance_report.xml exactly (see custom_addons/REPORTS.md).
+        Triggered by the list view's "Print" / "Print (Skip Zero)" header
+        buttons, both bound to action_print_customer_balance in
+        reema_customer_balance.py.
+    -->
+    <record id="action_report_customer_balance" model="ir.actions.report">
+        <field name="name">Customer Balances</field>
+        <field name="model">reema.customer.balance</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_accounting.report_customer_balance</field>
+        <field name="report_file">reema_accounting.report_customer_balance</field>
+        <field name="print_report_name">'Customer Balances'</field>
+    </record>
+
+    <template id="report_customer_balance">
+        <t t-call="web.html_container">
+            <style>
+                @page { margin: 12mm; }
+            </style>
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div style="font-size:15px; font-weight:700;">
+                        Customer Balances
+                    </div>
+                    <hr style="margin-top:4px;"/>
+
+                    <table class="table table-sm table-striped" style="font-size:12px;">
+                        <thead>
+                            <tr class="table-dark">
+                                <th>Account</th>
+                                <th>Customer</th>
+                                <th class="text-end">Balance (PKR)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="docs" t-as="o">
+                                <td><span t-esc="o.account_code"/></td>
+                                <td><span t-field="o.partner_id"/></td>
+                                <td class="text-end"><span t-field="o.balance"/></td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="2" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end"><strong t-esc="'%.2f' % total_balance"/></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div t-if="not docs" class="text-muted mt-3">No customer balances found.</div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

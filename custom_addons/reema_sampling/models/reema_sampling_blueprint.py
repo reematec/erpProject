@@ -224,17 +224,15 @@ class ReemaSamplingBlueprint(models.Model):
         return action
 
     def action_start(self):
+        missing = self.filtered(lambda rec: rec.total_panels <= 0)
+        if missing:
+            names = ', '.join(missing.mapped('reference'))
+            raise UserError(
+                f'Cannot start sample(s) {names}. '
+                f'Add at least one Cutting Knife (with panel count) before starting.'
+            )
         self.write({'state': 'in_progress'})
 
-    def action_open_status_info(self):
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Sample Status Reference',
-            'res_model': 'reema.sampling.status.info.wizard',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {},
-        }
 
     def action_open_rejection_wizard(self):
         self.ensure_one()
@@ -349,11 +347,6 @@ class ReemaSamplingBlueprint(models.Model):
         }
 
 
-class ReemaSamplingStatusInfoWizard(models.TransientModel):
-    _name = 'reema.sampling.status.info.wizard'
-    _description = 'Sampling Status Reference'
-
-
 class ReemaSamplingRejectionWizard(models.TransientModel):
     _name = 'reema.sampling.rejection.wizard'
     _description = 'Sample Rejection Wizard'
@@ -459,7 +452,12 @@ class ReemaSamplingMaterialLine(models.Model):
     sequence = fields.Integer(string='Sequence', default=10)
     
     # The Material (Product) is now the primary field.
-    product_id = fields.Many2one('product.product', string='Material', required=True)
+    # Excludes Finished Goods — this tab is for the raw/packaging/SFG inputs
+    # that go into the sample, not other finished products.
+    product_id = fields.Many2one(
+        'product.product', string='Material', required=True,
+        domain=[('type', '=', 'consu'), ('product_tmpl_id.product_group', '!=', 'finished_good')],
+    )
     
     # Additional fields to provide more context for each specific material line.
     description = fields.Char(string='Description')

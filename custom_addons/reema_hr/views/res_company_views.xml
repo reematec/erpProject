@@ -9,9 +9,11 @@
                 <sheet>
                     <group string="Attendance &amp; Payroll Settings">
                         <field name="reema_hr_shift_start" widget="float_time"/>
+                        <field name="reema_hr_shift_end" widget="float_time"/>
+                        <field name="reema_hr_half_time_start" widget="float_time"/>
+                        <field name="reema_hr_half_time_end" widget="float_time"/>
                         <field name="reema_hr_grace_minutes"/>
-                        <field name="reema_hr_hours_per_day"/>
-                        <field name="reema_hr_standard_days_per_month"/>
+                        <field name="reema_hr_hours_per_day" readonly="1" widget="float_time"/>
                         <field name="reema_hr_weekly_off_day"/>
                     </group>
                 </sheet>

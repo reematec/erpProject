@@ -41,13 +41,58 @@
                             string="Reset to Draft"
                             type="object"
                             invisible="state != 'cancelled'"/>
-                    <button name="action_open_po_status_info"
-                            type="object"
-                            icon="fa-info-circle"
-                            groups="base.group_user"/>
+                    <button class="btn btn-secondary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#reema_po_status_info_modal"
+                            title="Production Order Status Reference"
+                            groups="base.group_user">
+                        <i class="fa fa-info-circle"/>
+                    </button>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,confirmed,done"/>
                 </header>
+                <!-- PO Status Reference: plain Bootstrap modal (no OWL/wizard) -->
+                <div class="modal fade" id="reema_po_status_info_modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Production Order Status Reference</h5>
+                                <a href="#" role="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:140px">Status</th>
+                                            <th>What it means &amp; available actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge text-bg-secondary">Draft</span></td>
+                                            <td>Auto-created when the Pro Forma Invoice is accepted. BOMs may not be assigned yet. No MOs exist. Actions: <strong>Confirm</strong> (when ready), <strong>Delete PO</strong> (PM only, no MOs linked).</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-warning text-dark">Confirmed</span></td>
+                                            <td>Production Manager reviewed and confirmed the order. Actions: <strong>Create MOs</strong> (requires Ready BOMs with components and hall sequence), <strong>Mark Done</strong>, <strong>Cancel Order</strong> (PM only — all linked MOs must be cancelled first).</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-success">Done</span></td>
+                                            <td>All production is complete. Required before the Pro Forma Invoice can be marked as <em>Shipped</em>. No further actions on the PO.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-danger">Cancelled</span></td>
+                                            <td>Order was abandoned. All linked MOs must be cancelled before this state is reached. Action: <strong>Reset to Draft</strong> to reopen for corrections.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" role="button" class="btn btn-primary" data-bs-dismiss="modal">Close</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_mos"
@@ -147,47 +192,6 @@
         <field name="name">Production Orders</field>
         <field name="res_model">reema.production.order</field>
         <field name="view_mode">list,form</field>
-    </record>
-
-    <!-- PO Status Info Wizard -->
-    <record id="view_reema_po_status_info_wizard_form" model="ir.ui.view">
-        <field name="name">reema.po.status.info.wizard.form</field>
-        <field name="model">reema.po.status.info.wizard</field>
-        <field name="arch" type="xml">
-            <form string="Production Order Status Reference">
-                <sheet>
-                    <table class="table table-sm table-bordered" style="font-size:13px;">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width:140px">Status</th>
-                                <th>What it means &amp; available actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><span class="badge text-bg-secondary">Draft</span></td>
-                                <td>Auto-created when the Pro Forma Invoice is accepted. BOMs may not be assigned yet. No MOs exist. Actions: <strong>Confirm</strong> (when ready), <strong>Delete PO</strong> (PM only, no MOs linked).</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-warning text-dark">Confirmed</span></td>
-                                <td>Production Manager reviewed and confirmed the order. Actions: <strong>Create MOs</strong> (requires Ready BOMs with components and hall sequence), <strong>Mark Done</strong>, <strong>Cancel Order</strong> (PM only — all linked MOs must be cancelled first).</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-success">Done</span></td>
-                                <td>All production is complete. Required before the Pro Forma Invoice can be marked as <em>Shipped</em>. No further actions on the PO.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-danger">Cancelled</span></td>
-                                <td>Order was abandoned. All linked MOs must be cancelled before this state is reached. Action: <strong>Reset to Draft</strong> to reopen for corrections.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </sheet>
-                <footer>
-                    <button string="Close" class="btn-primary" special="cancel"/>
-                </footer>
-            </form>
-        </field>
     </record>
 
     <menuitem id="reema_mrp_menu_production_orders"

@@ -99,15 +99,4 @@
               sequence="20"
               groups="reema_purchase.group_reema_gate"/>
 
-    <!-- ══════════════════════════════════════════════════════════════════
-         ACCOUNTING > PAYABLES — Bill Matching (3-Way)
-    ══════════════════════════════════════════════════════════════════════ -->
-
-    <menuitem id="menu_reema_bill_matching_list"
-              name="Bill Matching (3-Way)"
-              parent="account.menu_finance_payables"
-              action="action_reema_bill_matching"
-              sequence="6"
-              groups="account.group_account_invoice,account.group_account_manager"/>
-
 </odoo>

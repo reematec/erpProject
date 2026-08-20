@@ -1,5 +1,5 @@
 from odoo import models, fields, api
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 class MrpProduction(models.Model):
@@ -19,6 +19,68 @@ class MrpProduction(models.Model):
     def _compute_reema_po_id(self):
         for mo in self:
             mo.reema_po_id = mo.reema_po_line_ids[:1].order_id
+
+    # "Printed Together With" — lets the Production Manager declare that this
+    # order's Printing-hall output is physically combined into one print run
+    # with one or more other orders (same article/variation only). The combined
+    # ball total across the group decides flat-per-ball vs per-impression pay —
+    # see reema.wo.batch.entry._pay_rate_and_qty(grouped=True), evaluated once
+    # at contractor-bill time, never live during production.
+    reema_printing_group_ids = fields.Many2many(
+        'mrp.production', 'reema_mrp_printing_group_rel', 'mo_id', 'group_mo_id',
+        string='Printed Together With',
+        help='Production Manager only. Other Manufacturing Orders whose Printing-hall '
+             'output is physically combined with this one into a single print run. '
+             'Only orders for the exact same article/variation can be linked. Locked '
+             'once any batch anywhere in the group has been billed — remove it from '
+             'its draft bill first to make changes.')
+
+    @api.constrains('reema_printing_group_ids')
+    def _check_reema_printing_group_same_product(self):
+        for mo in self:
+            mismatched = mo.reema_printing_group_ids.filtered(
+                lambda o: o.product_id != mo.product_id
+            )
+            if mismatched:
+                raise ValidationError(
+                    f"{mo.name} can only be \"Printed Together With\" orders producing "
+                    f"the exact same article/variation. These don't match: "
+                    f"{', '.join(mismatched.mapped('name'))}"
+                )
+
+    def _reema_printing_group_touched_ids(self, commands):
+        """This MO's id, its current group members, and every id referenced by an
+        add/remove/set command — the full set that must be checked for billed
+        Printing batches before a "Printed Together With" change is allowed."""
+        self.ensure_one()
+        ids = set(self.reema_printing_group_ids.ids) | {self.id}
+        for cmd in commands:
+            if cmd[0] in (2, 3, 4) and len(cmd) > 1:
+                ids.add(cmd[1])
+            elif cmd[0] == 6:
+                ids.update(cmd[2])
+        return ids
+
+    def _reema_printing_group_has_billed(self, mo_ids):
+        return bool(self.env['reema.wo.batch.entry'].search_count([
+            ('workorder_id.production_id', 'in', list(mo_ids)),
+            ('workorder_id.workcenter_id.is_printing', '=', True),
+            ('is_billed', '=', True),
+        ]))
+
+    def write(self, vals):
+        if 'reema_printing_group_ids' in vals:
+            for mo in self:
+                touched = mo._reema_printing_group_touched_ids(vals['reema_printing_group_ids'])
+                if mo._reema_printing_group_has_billed(touched):
+                    raise UserError(
+                        f'Cannot change "Printed Together With" for {mo.name} — one or '
+                        f'more orders in this group already have billed Printing '
+                        f'batches. Remove those batches from their draft bill first, or '
+                        f'if the bill is already finalized, the grouping can no longer '
+                        f'be changed.'
+                    )
+        return super().write(vals)
 
     construction_type = fields.Selection([
         ('hs', 'Hand Stitched (HS)'),
@@ -187,21 +249,6 @@ class MrpProduction(models.Model):
         # locked read-only in the view so it can't be edited afterward.
         self.write({'date_start': fields.Datetime.now()})
         return res
-
-    def action_open_status_info(self):
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'MO Status Reference',
-            'res_model': 'reema.mo.status.info.wizard',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {},
-        }
-
-
-class ReemaMoStatusInfoWizard(models.TransientModel):
-    _name = 'reema.mo.status.info.wizard'
-    _description = 'MO Status Reference'
 
 
 class StockMoveReema(models.Model):

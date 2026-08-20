@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Payslips, following the standard reema HTML-report
+        pattern (see custom_addons/REPORTS.md): report_type="qweb-html", no
+        binding_model_id (stays out of the cog Print menu), triggered by
+        action_print_payslip() which opens /report/html/... in a new tab. The
+        user prints with Ctrl+P and closes the tab.
+
+        Sized smaller than a full A4 sheet (210 x 230mm, vs. A4's 210 x 297mm)
+        per explicit request — a payslip is a short stub, not a full-page
+        document. Originally tried an exact half-A4 (210 x 148.5mm), but the
+        company header/logo block from web.external_layout alone needs ~110mm,
+        leaving too little room even after trimming the body content — verified
+        empirically (not guessed) via a headless Chromium print-to-PDF pass
+        with the real report CSS loaded: 148.5mm genuinely overflows to a
+        second page, 180mm is the minimum that fits on one page.
+
+        Height deliberately kept GREATER than width (i.e. genuinely portrait-
+        shaped, not just "shorter than A4"): a first attempt used 210 x 200mm
+        — width slightly larger than height — which printed fine in Chrome
+        but came out wrong-oriented in Firefox. Chromium applies a custom
+        `@page { size: W H }` literally regardless of which of W/H is larger,
+        but Firefox's print engine has a long-standing quirk where a
+        landscape-shaped (width > height) custom size flips the print
+        dialog's orientation guess to Landscape, rotating the physical page
+        against content that was authored top-to-bottom for portrait. Once
+        height > width there's no ambiguity for either engine to get wrong.
+    -->
+    <record id="action_report_payslip" model="ir.actions.report">
+        <field name="name">Payslip</field>
+        <field name="model">reema.hr.payslip</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_hr.report_payslip</field>
+        <field name="report_file">reema_hr.report_payslip</field>
+        <field name="print_report_name">'Payslip - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_payslip">
+        <t t-call="web.html_container">
+            <style>
+                @media print {
+                    .payslip_doc { page-break-after: always; }
+                    .payslip_doc:last-child { page-break-after: auto; }
+                }
+                @page { size: 210mm 230mm; margin: 8mm; }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page payslip_doc">
+
+                        <!-- Title: Payslip No. + Employee + Period -->
+                        <div class="row mt-1 mb-1">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    <span t-field="o.name"/> — <span t-field="o.employee_id"/>
+                                    <br/>
+                                    <span t-out="dict(o._fields['period_month'].selection).get(o.period_month)"/> <span t-esc="o.period_year"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:3px; margin-bottom:6px;"/>
+
+                        <!-- Basic details -->
+                        <div class="row">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless mb-1" style="font-size:12px;">
+                                    <tr>
+                                        <td style="width:50%;"><strong>Monthly Salary</strong></td>
+                                        <td><span t-out="'{:,.2f}'.format(o.monthly_salary)"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Daily Rate</strong></td>
+                                        <td><span t-out="'{:,.2f}'.format(o.daily_rate)"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless mb-1" style="font-size:12px;">
+                                    <tr>
+                                        <td style="width:50%;"><strong>Status</strong></td>
+                                        <td><span t-field="o.state"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Net Pay</strong></td>
+                                        <td><strong><span t-out="'{:,.2f}'.format(o.net_pay)"/></strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Days summary -->
+                        <h5 class="mt-1 mb-1" style="font-size:13px;">Days</h5>
+                        <table class="table table-sm table-bordered text-center mb-2" style="font-size:11px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Total</th>
+                                    <th>Holiday</th>
+                                    <th>Working</th>
+                                    <th>Absent</th>
+                                    <th>Leave</th>
+                                    <th>Half</th>
+                                    <th>Present</th>
+                                    <th>Late (min)</th>
+                                    <th>Early (min)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span t-field="o.total_days"/></td>
+                                    <td><span t-field="o.holiday_days"/></td>
+                                    <td><span t-field="o.working_days"/></td>
+                                    <td>
+                                        <span t-field="o.absent_days"/>
+                                        <t t-if="o.absent_waived_days">
+                                            <small class="text-muted">(-<span t-out="('%.2f' % o.absent_waived_days).rstrip('0').rstrip('.')"/>)</small>
+                                        </t>
+                                    </td>
+                                    <td><span t-field="o.leave_days"/></td>
+                                    <td>
+                                        <span t-out="('%.2f' % o.half_days).rstrip('0').rstrip('.')"/>
+                                        <t t-if="o.half_waived_days">
+                                            <small class="text-muted">(-<span t-out="('%.2f' % o.half_waived_days).rstrip('0').rstrip('.')"/>)</small>
+                                        </t>
+                                    </td>
+                                    <td><span t-out="('%.2f' % o.present_days).rstrip('0').rstrip('.')"/></td>
+                                    <td><span t-field="o.late_minutes"/></td>
+                                    <td><span t-field="o.early_minutes"/></td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- Earnings & Deductions -->
+                        <h5 class="mt-1 mb-1" style="font-size:13px;">Earnings &amp; Deductions</h5>
+                        <table class="table table-sm table-striped mb-0" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Description</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Monthly Salary</td>
+                                    <td class="text-end"><span t-out="'{:,.2f}'.format(o.monthly_salary)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Absent</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.absent_deduction)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Half Day</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.half_day_deduction)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Gross Pay</td>
+                                    <td class="text-end"><span t-out="'{:,.2f}'.format(o.gross_pay)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Late</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.late_deduction)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Early Leave</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.early_leave_deduction)"/></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Net Salary Expense</strong></td>
+                                    <td class="text-end"><strong><span t-out="'{:,.2f}'.format(o.net_salary_expense)"/></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Advance</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.advance_deduction)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Loan</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.loan_deduction)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>EOBI</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.eobi_deduction)"/></td>
+                                </tr>
+                                <tr>
+                                    <td>PESSI</td>
+                                    <td class="text-end">-<span t-out="'{:,.2f}'.format(o.pessi_deduction)"/></td>
+                                </tr>
+                                <tr style="border-top: 2px solid #000;">
+                                    <td><strong>Net Pay</strong></td>
+                                    <td class="text-end"><strong><span t-out="'{:,.2f}'.format(o.net_pay)"/></strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- Signatures -->
+                        <div class="row mt-4">
+                            <div class="col-6">
+                                <div style="border-top:1px solid #000; width:80%; margin-top:30px;"></div>
+                                <div style="font-size:12px;">Prepared By</div>
+                            </div>
+                            <div class="col-6">
+                                <div style="border-top:1px solid #000; width:80%; margin-top:30px;"></div>
+                                <div style="font-size:12px;">Received By (Employee)</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

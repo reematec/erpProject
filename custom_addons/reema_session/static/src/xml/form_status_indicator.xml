@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Autosave is disabled globally (see no_autosave_forms.js), so users
+         must click Save manually every time. Swap the default cloud-upload
+         glyph for the universally recognized floppy-disk save icon, plus
+         "Save"/"Cancel" labels, kept in the same plain gray button styling
+         as every other header icon. -->
+    <t t-inherit="web.FormStatusIndicator" t-inherit-mode="extension">
+        <xpath expr="//button[hasclass('o_form_button_save')]" position="attributes">
+            <attribute name="class" add="px-2" separator=" "/>
+        </xpath>
+        <xpath expr="//button[hasclass('o_form_button_save')]/i" position="replace">
+            <i class="fa fa-floppy-o fa-fw" />
+            <span class="ms-1">Save</span>
+        </xpath>
+        <xpath expr="//button[hasclass('o_form_button_cancel')]" position="attributes">
+            <attribute name="class" add="px-2" separator=" "/>
+        </xpath>
+        <xpath expr="//button[hasclass('o_form_button_cancel')]/i" position="replace">
+            <i class="fa fa-times fa-fw" />
+            <span class="ms-1">Cancel</span>
+        </xpath>
+    </t>
+
+</templates>

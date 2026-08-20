@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Summary/list report for Payslips — one compact table, all matching
+        payslips as rows (not one full-page stub per payslip). Triggered when
+        the list's "Print" header button is clicked with NOTHING selected:
+        prints whatever the list's current filter/search is showing, as a
+        single payroll-register-style sheet. Follows the standard reema
+        HTML-report pattern (see custom_addons/REPORTS.md): report_type
+        qweb-html, no binding_model_id, opened via act_url in a new tab.
+
+        Columns are dynamic — reema_hr_payslip_list_report.py's
+        _get_report_values() reads print_fields from the URL (a comma-joined
+        list of field names, in on-screen order), sent by
+        payslip_month_filter_list.js's onClickPrint() from whichever columns
+        are CURRENTLY VISIBLE in the list view at the moment Print is
+        clicked. No amount is formatted with a currency symbol — the report
+        is always in local PKR, understood from context.
+    -->
+    <record id="action_report_payslip_list" model="ir.actions.report">
+        <field name="name">Payslips (List)</field>
+        <field name="model">reema.hr.payslip</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_hr.report_payslip_list</field>
+        <field name="report_file">reema_hr.report_payslip_list</field>
+        <field name="print_report_name">'Payslips'</field>
+    </record>
+
+    <template id="report_payslip_list">
+        <t t-call="web.html_container">
+            <style>
+                @page { size: A4 landscape; margin: 12mm; }
+            </style>
+            <t t-call="web.external_layout">
+                <div class="page">
+
+                    <div class="row mt-2 mb-2">
+                        <div class="col-12">
+                            <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                <t t-esc="title"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr style="margin-top:4px;"/>
+
+                    <table class="table table-sm table-striped" style="font-size:11px;">
+                        <thead>
+                            <tr class="table-dark">
+                                <t t-foreach="headers" t-as="h" t-key="h_index">
+                                    <th t-att-class="alignments[h_index]">
+                                        <t t-esc="h"/>
+                                    </th>
+                                </t>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="rows" t-as="row" t-key="row_index">
+                                <tr>
+                                    <t t-foreach="row" t-as="cell" t-key="cell_index">
+                                        <td t-att-class="alignments[cell_index]">
+                                            <t t-if="cell_index == net_pay_col_index"><strong><t t-esc="cell"/></strong></t>
+                                            <t t-else=""><t t-esc="cell"/></t>
+                                        </td>
+                                    </t>
+                                </tr>
+                            </t>
+                        </tbody>
+                        <tfoot t-if="total_net_pay is not None">
+                            <tr class="table-light" style="border-top: 2px solid #000;">
+                                <t t-foreach="range(col_count)" t-as="i" t-key="i">
+                                    <t t-if="i == 0"><td><strong>Total</strong></td></t>
+                                    <t t-elif="i == net_pay_col_index"><td class="text-end"><strong><t t-esc="total_net_pay"/></strong></td></t>
+                                    <t t-else=""><td/></t>
+                                </t>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

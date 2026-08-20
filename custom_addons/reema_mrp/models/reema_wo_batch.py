@@ -225,41 +225,93 @@ class ReemaWoBatchEntry(models.Model):
             return wo.production_id.bom_id.impressions_per_ball or 0.0
         return 0.0
 
+    def _printing_total_balls(self, mo_ids):
+        """Sum of Printing-hall balls completed across the given MOs."""
+        total = 0.0
+        for mo in mo_ids:
+            printing_wo = mo.workorder_ids.filtered(lambda w: w.workcenter_id.is_printing)
+            total += sum(printing_wo.mapped('qty_balls_completed'))
+        return total
+
+    def _printing_low_qty_active(self, grouped=False):
+        """True when this printing-hall entry's order (or, if grouped=True, its
+        order plus every order linked via "Printed Together With") totals at or
+        below the hall's configurable threshold.
+
+        grouped=False is used for the live in-progress preview (amount_earned) —
+        deliberately ignores any grouping, since that can be set up right before
+        billing and shouldn't make the running total flicker mid-production.
+        grouped=True is the authoritative check, used only at the moment a
+        contractor bill is generated (see action_create_contractor_bill)."""
+        wo = self.workorder_id
+        wc = wo.workcenter_id
+        if not wc.is_printing:
+            return False
+        threshold = wc.printing_low_qty_threshold or 0.0
+        mo = wo.production_id
+        mo_ids = (mo | mo.reema_printing_group_ids) if grouped else mo
+        return self._printing_total_balls(mo_ids) <= threshold
+
     def _reema_expense_account(self):
-        """The Labor Expense Account to bill this entry against — the work
-        center's own expense_account_id. Initial QC and Final QC are
+        """The WIP Labor Account to bill this entry against — the work
+        center's own wip_labor_account_id. Initial QC and Final QC are
         configured the same way as every other hall, even though they're
         employee-staffed: a repair contractor's pass/fail/scrap decision is
         logged against that QC hall's own work order (that's where the
         inspection happens), so the hall still needs a real account set to
         bill the contractor for it.
+
+        Deliberately NOT expense_account_id — that one is reserved for scrap
+        deductions only (see account_move_ext.py), which must stay an
+        immediate P&L hit since scrapped work never reaches Finished Goods.
+        A normal bill line here is order-traceable work in progress, so it's
+        deferred instead: this method name/call sites are unchanged, only the
+        account it resolves to.
         """
         self.ensure_one()
-        return self.workorder_id.workcenter_id.expense_account_id
+        return self.workorder_id.workcenter_id.wip_labor_account_id
 
-    def _calc_amount(self):
-        if self.payment_excluded:
-            return 0.0
-        rate = self.piece_rate_id.rate or 0.0
+    def _pay_rate_and_qty(self, grouped=False):
+        """(rate, quantity) this entry is paid on — single source of truth shared
+        by amount_earned and contractor bill line generation.
+
+        grouped=False (the default, used for the live preview) checks this
+        entry's own order only. grouped=True (used only at bill-generation time)
+        also folds in every order it's linked to via "Printed Together With" —
+        see _printing_low_qty_active for why the two are kept separate."""
+        self.ensure_one()
         # Repair-purpose Pass entries: a ball can need more than one repair, so pay
         # is repair-count based, not ball-count based. repair_count is carried over
         # from the originating dispatch(es) at confirm time (see ReemaIloQcWizard).
         # Falls through to the normal ball-based calc for legacy rows with no
         # repair_count recorded (pre-dating this field).
         if self.ilo_dispatch_type == 'repair' and self.repair_count:
-            return rate * self.repair_count
+            return self.piece_rate_id.rate or 0.0, self.repair_count
         wc = self.workorder_id.workcenter_id
+        if self._printing_low_qty_active(grouped=grouped):
+            rate = wc.printing_low_qty_rate_id.rate or 0.0
+            return rate, self.qty_balls
+        rate = self.piece_rate_id.rate or 0.0
         if (wc.pay_basis or 'ball') == 'ball':
-            return rate * self.qty_balls
+            return rate, self.qty_balls
         ipu = self._impressions_per_ball()
         if ipu:
-            return rate * self.qty_balls * ipu
-        return rate * self.qty
+            return rate, self.qty_balls * ipu
+        return rate, self.qty
+
+    def _calc_amount(self):
+        if self.payment_excluded:
+            return 0.0
+        rate, qty = self._pay_rate_and_qty(grouped=False)
+        return rate * qty
 
     @api.depends(
         'piece_rate_id.rate', 'qty', 'qty_balls', 'payment_excluded', 'repair_count',
         'ilo_dispatch_type', 'workorder_id.workcenter_id.pay_basis',
         'workorder_id.workcenter_id.is_printing',
+        'workorder_id.workcenter_id.printing_low_qty_threshold',
+        'workorder_id.workcenter_id.printing_low_qty_rate_id.rate',
+        'workorder_id.qty_balls_completed',
         'workorder_id.production_id.bom_id.impressions_per_ball',
     )
     def _compute_amount_earned(self):
@@ -544,6 +596,20 @@ class ReemaWoBatchEntry(models.Model):
                 + '\n\nAssign a piece rate in the BOM before billing.'
             )
 
+        missing_low_qty_rate = self.filtered(
+            lambda e: e._printing_low_qty_active(grouped=True)
+            and not e.workorder_id.workcenter_id.printing_low_qty_rate_id
+        )
+        if missing_low_qty_rate:
+            raise UserError(
+                'The following printing entries qualify for the low-quantity flat '
+                'rate (combined order total is at or below the threshold) but no '
+                'Low-Qty Per-Ball Rate is set on the Printing work center:\n'
+                + '\n'.join(missing_low_qty_rate.mapped('name'))
+                + '\n\nGo to Manufacturing → Configuration → Work Centers and set the '
+                'Low-Qty Per-Ball Rate on the Printing work center before billing.'
+            )
+
         missing_account = self.filtered(lambda e: not e._reema_expense_account())
         if missing_account:
             wc_names = ', '.join(missing_account.mapped('workorder_id.workcenter_id.name'))
@@ -559,25 +625,24 @@ class ReemaWoBatchEntry(models.Model):
         lines = []
         for entry in self.sorted('name'):
             wc = entry.workorder_id.workcenter_id
-            pay_basis = wc.pay_basis or 'ball'
-            ipu = entry._impressions_per_ball()
-            rate = entry.piece_rate_id.rate or 0.0
-            if pay_basis == 'ball':
-                bill_qty = entry.qty_balls
-            elif ipu:
-                bill_qty = entry.qty_balls * ipu
-            else:
-                bill_qty = entry.qty
+            rate, bill_qty = entry._pay_rate_and_qty(grouped=True)
+            low_qty_active = wc.is_printing and entry._printing_low_qty_active(grouped=True)
+            uom = entry.piece_rate_id.uom_id
+            if low_qty_active and wc.printing_low_qty_rate_id.uom_id:
+                uom = wc.printing_low_qty_rate_id.uom_id
             line_vals = {
                 'name': entry.name,
                 'quantity': bill_qty,
                 'price_unit': rate,
                 'account_id': entry._reema_expense_account().id,
                 'reema_batch_entry_id': entry.id,
+                'reema_uom_id': uom.id,
             }
             if wc.is_printing:
                 line_vals['reema_balls_qty'] = entry.qty_balls
-                line_vals['reema_impressions_per_ball'] = ipu
+                line_vals['reema_impressions_per_ball'] = (
+                    0.0 if low_qty_active else entry._impressions_per_ball()
+                )
             lines.append((0, 0, line_vals))
 
         # Deductions against this contractor (ILO repair/lost charges + Final QC
@@ -846,7 +911,7 @@ class ReemaProductionScrap(models.Model):
                     f'Cannot remove {scrap.name} from its bill: the bill is '
                     'no longer in the drafting stage.'
                 )
-            scrap.bill_id.message_post(body=_(
+            scrap.bill_id.sudo().message_post(body=_(
                 'Scrap deduction removed: %(name)s — PKR %(amount).2f'
             ) % {'name': scrap.name, 'amount': scrap.amount})
         self.write({'is_billed': False, 'bill_id': False})
@@ -860,7 +925,7 @@ class ReemaProductionScrap(models.Model):
         if bill.state != 'draft' or bill.reema_bill_state != 'pending':
             raise UserError('This bill is no longer in the drafting stage.')
         self.write({'is_billed': True, 'bill_id': bill.id})
-        bill.message_post(body=_(
+        bill.sudo().message_post(body=_(
             'Scrap deduction(s) added: %(lines)s'
         ) % {'lines': ', '.join(f'{s.name} — PKR {s.amount:.2f}' for s in self)})
         return {'type': 'ir.actions.act_window_close'}
@@ -2379,6 +2444,7 @@ class ReemaRepairQcWizard(models.TransientModel):
     mo_id = fields.Many2one(related='workorder_id.production_id', string='Manufacturing Order', readonly=True)
     workcenter_name = fields.Char(related='workorder_id.workcenter_id.name', string='Hall', readonly=True)
     workcenter_id = fields.Many2one(related='workorder_id.workcenter_id', readonly=True)
+    construction_type = fields.Selection(related='mo_id.construction_type', readonly=True)
     qty_pass = fields.Integer(string='Pass Qty')
     qty_fail = fields.Integer(string='Fail Qty (Balls)')
     available_fault_workcenter_ids = fields.Many2many(
@@ -2492,6 +2558,7 @@ class ReemaRepairQcWizard(models.TransientModel):
                     f'{self.fault_workcenter_id.name} on this MO — cannot charge them for this fault.'
                 )
 
+        is_thb = self.construction_type == 'thb'
         if self.qty_fail > 0:
             if not self.defect_type:
                 raise UserError('Select a defect type before logging a Fail quantity.')
@@ -2502,16 +2569,17 @@ class ReemaRepairQcWizard(models.TransientModel):
                     'Number of Repairs cannot be less than Fail Qty — each failed ball '
                     'needs at least one repair.'
                 )
-            if not self.repair_contractor_id:
-                raise UserError('Select the Shell Closing repair contractor before logging a Fail quantity.')
-            is_edge_case = self.defect_type in EDGE_CASE_DEFECT_TYPES
-            rate = self.env['reema.repair.job']._repair_rate()
-            if not is_edge_case and not rate:
-                raise UserError(
-                    'No "Repair" piece rate is configured on the Shell Closing work center. '
-                    'Create one under Manufacturing → Configuration → Piece Rates before '
-                    'logging a Fail quantity.'
-                )
+            if not is_thb:
+                if not self.repair_contractor_id:
+                    raise UserError('Select the Shell Closing repair contractor before logging a Fail quantity.')
+                is_edge_case = self.defect_type in EDGE_CASE_DEFECT_TYPES
+                rate = self.env['reema.repair.job']._repair_rate()
+                if not is_edge_case and not rate:
+                    raise UserError(
+                        'No "Repair" piece rate is configured on the Shell Closing work center. '
+                        'Create one under Manufacturing → Configuration → Piece Rates before '
+                        'logging a Fail quantity.'
+                    )
         if self.qty_scrap > 0 and not self.scrap_reason_id:
             raise UserError('Select a reason for the scrapped quantity.')
 
@@ -2544,26 +2612,49 @@ class ReemaRepairQcWizard(models.TransientModel):
         })
 
         if self.qty_fail > 0:
-            is_edge_case = self.defect_type in EDGE_CASE_DEFECT_TYPES
-            rate = self.env['reema.repair.job']._repair_rate()
-            job = self.env['reema.repair.job'].create({
+            job_vals = {
                 'mo_id': mo.id,
                 'workorder_id': wo.id,
                 'fault_workcenter_id': self.fault_workcenter_id.id,
                 'fault_contractor_id': self.fault_contractor_id.id,
-                'repair_contractor_id': self.repair_contractor_id.id,
                 'qty_balls': self.qty_fail,
                 'repair_count': self.repair_count,
                 'defect_type': self.defect_type,
                 'notes': self.notes,
-            })
-            self.env['reema.repair.penalty'].create({
-                'repair_job_id': job.id,
-                'qty': self.repair_count,
-                'rate': 0.0 if is_edge_case else rate.rate,
-                'amount': 0.0 if is_edge_case else self.repair_count * rate.rate,
-                'notes': 'Priced manually at billing time.' if is_edge_case else False,
-            })
+            }
+            if is_thb:
+                # THB Binding always does the rework itself — no separate
+                # repair contractor to record.
+                rework_note = 'Sent back to THB Binding for rework — pending return'
+            else:
+                job_vals['repair_contractor_id'] = self.repair_contractor_id.id
+                rework_note = 'Sent to Shell Closing for repair — pending return'
+            job = self.env['reema.repair.job'].create(job_vals)
+
+            if is_thb:
+                # Fault is THB Binding's own mistake: they redo it, unpaid,
+                # since producing a flawless ball was their job — no penalty.
+                # Fault traced to a different hall: penalty logged now but
+                # priced manually at bill time, same as an MS/HYB edge case —
+                # there's no THB-wide flat rate to auto-calculate from.
+                if not self.fault_workcenter_id.is_thb_binding:
+                    self.env['reema.repair.penalty'].create({
+                        'repair_job_id': job.id,
+                        'qty': self.repair_count,
+                        'rate': 0.0,
+                        'amount': 0.0,
+                        'notes': 'Priced manually at billing time (THB).',
+                    })
+            else:
+                is_edge_case = self.defect_type in EDGE_CASE_DEFECT_TYPES
+                rate = self.env['reema.repair.job']._repair_rate()
+                self.env['reema.repair.penalty'].create({
+                    'repair_job_id': job.id,
+                    'qty': self.repair_count,
+                    'rate': 0.0 if is_edge_case else rate.rate,
+                    'amount': 0.0 if is_edge_case else self.repair_count * rate.rate,
+                    'notes': 'Priced manually at billing time.' if is_edge_case else False,
+                })
             # Records the Fail quantity as consumed from this hall's predecessor
             # right away (so it can't be silently re-drawn/double-logged later),
             # while repair_job_id lets _compute_qty_balls_completed net it back out
@@ -2575,7 +2666,7 @@ class ReemaRepairQcWizard(models.TransientModel):
                 'qty': self.qty_fail,
                 'notes': self.notes,
                 'payment_excluded': True,
-                'exclusion_reason': 'Sent to Shell Closing for repair — pending return',
+                'exclusion_reason': rework_note,
                 'repair_job_id': job.id,
             })
 
@@ -2608,13 +2699,21 @@ class AccountMoveLineExt(models.Model):
     reema_po_id = fields.Many2one(
         related='reema_batch_entry_id.reema_po_id', string='PO', store=True, readonly=True,
     )
+    reema_workcenter_id = fields.Many2one(
+        'mrp.workcenter', related='reema_batch_entry_id.workorder_id.workcenter_id',
+        string='Process', store=True, readonly=True,
+        help='Which hall this labor line was billed for — same traceability pattern '
+             'as reema_mo_id/reema_po_id, needed to split WIP Labor back out by '
+             'process when it converts to COGS at Hall 17.',
+    )
     reema_product_id = fields.Many2one(
         related='reema_batch_entry_id.mo_id.product_id', string='Product', store=True, readonly=True,
     )
     reema_uom_id = fields.Many2one(
-        related='reema_batch_entry_id.piece_rate_id.uom_id', string='UOM', store=True, readonly=True,
-        help='The unit the batch entry was logged in (Ball, Sheet, Panel, Impression, ...) — '
-             'taken from the piece rate used, not a generic product UoM.',
+        'uom.uom', string='UOM', readonly=True, copy=False,
+        help='The unit this line was actually paid on (Ball, Sheet, Panel, Impression, ...). '
+             'Set at bill-generation time — normally the batch entry\'s piece rate UOM, but '
+             'the Low-Qty Per-Ball Rate\'s UOM when the printing low-quantity flat rate applied.',
     )
     reema_balls_qty = fields.Float(string='Ball Qty', digits=(16, 2), readonly=True, copy=False)
     reema_impressions_per_ball = fields.Float(string='Imp/Ball', digits=(16, 4), readonly=True, copy=False)

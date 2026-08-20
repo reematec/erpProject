@@ -452,6 +452,10 @@ class ReemaMaterialReturnWizard(models.TransientModel):
         )
         issuance._message_log(body=return_body)
         issuance.production_id._message_log(body=return_body)
+        issuance._reema_post_wip_entry(
+            self.returned_qty, 'return',
+            'Material Return: %s / %s' % (issuance.name, issuance.production_id.name),
+        )
 
         issuance._recompute_state()
 
@@ -610,6 +614,10 @@ class ReemaMaterialIssueWizard(models.TransientModel):
                 f'{self.issued_qty:.3f} {issuance.product_uom_id.name} of {issuance.product_id.display_name} '
                 f'→ {self.destination_location_id.name} (by {self.env.user.name})'
             ),
+        )
+        issuance._reema_post_wip_entry(
+            self.issued_qty, 'issue',
+            'Material Issue: %s / %s' % (issuance.name, issuance.production_id.name),
         )
 
 

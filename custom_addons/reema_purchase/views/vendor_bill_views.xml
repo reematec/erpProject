@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Vendor Bill form: standalone primary view (same technique as
+         reema_accounting's Contractor Bill form) so nothing here ever leaks
+         onto Contractor Bills or Customer Invoices — those keep using their
+         own separate screens untouched. ── -->
+    <record id="view_vendor_bill_form" model="ir.ui.view">
+        <field name="name">reema.vendor.bill.form</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+
+            <!-- Vendor field: core only soft-biases the partner search via
+                 context, it doesn't actually restrict it — every partner
+                 (customers, contractors included) shows up. Add the same
+                 hard domain used everywhere else in this codebase for real
+                 vendors (reema_purchase_order.py, the Vendors contact list). -->
+            <xpath expr="//field[@name='partner_id'][@widget='res_partner_many2one']" position="attributes">
+                <attribute name="domain">[('supplier_rank', '>', 0), ('is_contractor', '=', False)]</attribute>
+                <attribute name="options">{'no_open': True, 'no_quick_create': True}</attribute>
+            </xpath>
+
+            <!-- Bill Reference: editable while still pending, locked once
+                 submitted for match approval — matches the same window as
+                 the GRN/price-correction fields. -->
+            <xpath expr="//field[@name='ref'][1]" position="attributes">
+                <attribute name="readonly">state != 'draft' or reema_match_state not in ('na', 'pending')</attribute>
+            </xpath>
+
+            <!-- "in <rate> ..." currency-refresh widget next to Journal —
+                 not needed on this screen. -->
+            <xpath expr="//div[@name='in_and_refresh_button_div']" position="replace"/>
+
+            <!-- Currency: plain text, not a clickable link to res.currency. -->
+            <xpath expr="//field[@name='currency_id'][@class='oe_inline']" position="attributes">
+                <attribute name="options">{'no_create': True, 'no_open': True}</attribute>
+            </xpath>
+
+            <!-- Due Date: readonly once posted. -->
+            <xpath expr="//field[@name='invoice_date_due']" position="attributes">
+                <attribute name="readonly">state != 'draft'</attribute>
+            </xpath>
+
+            <!-- Remove Auto-Complete (account version) — searches other vendor
+                 bills to copy lines from; redundant now that GRN selection
+                 does that properly. Same removal as Contractor Bills. -->
+            <label name="invoice_vendor_bill_id_label" position="replace"/>
+            <field name="invoice_vendor_bill_id" position="replace"/>
+
+            <!-- Remove Auto-Complete (purchase version) — searches core
+                 purchase.order, which this system doesn't use at all
+                 (hidden; replaced by reema.purchase.order). Always empty. -->
+            <label for="purchase_vendor_bill_id" position="replace"/>
+            <field name="purchase_vendor_bill_id" position="replace"/>
+
+            <!-- Payment Reference / Recipient Bank are bank-wire concepts
+                 (auto-matching an incoming transfer, picking which vendor
+                 bank account to wire to) — vendors are paid cash/cheque. -->
+            <xpath expr="//group[@id='header_right_group']/field[@name='payment_reference']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+            <xpath expr="//group[@id='header_right_group']/field[@name='partner_bank_id']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath>
+
+            <!-- Match-status banner: explains why Post is unavailable -->
+            <xpath expr="//sheet/div[@name='button_box']" position="before">
+                <div class="alert alert-warning mb-2"
+                     invisible="reema_match_state not in ('pending', 'submitted')"
+                     role="alert">
+                    <i class="fa fa-lock me-1"/>
+                    This bill is linked to a Purchase Order with Goods Receipt Notes.
+                    It cannot be posted until the GRN match is submitted and approved below.
+                </div>
+                <!-- Vendor GL account missing: stays on this page, no forced
+                     navigation — the button opens the vendor's contact record
+                     in a new tab so this draft bill is never lost. -->
+                <div class="alert alert-danger mb-2 d-flex justify-content-between align-items-center"
+                     invisible="not reema_partner_missing_gl"
+                     role="alert">
+                    <span>
+                        <i class="fa fa-exclamation-triangle me-1"/>
+                        Vendor <field name="partner_id" nolabel="1" readonly="1" class="d-inline fw-bold"
+                               options="{'no_open': True}"/>
+                        has no Payable account set up yet — this bill cannot be posted until it does.
+                    </span>
+                    <widget name="reema_open_partner_new_tab"/>
+                </div>
+            </xpath>
+
+            <!-- PO / GRN / IGP linkage + amount comparison, right after the
+                 standard header fields -->
+            <xpath expr="//group[@id='header_right_group']" position="after">
+                <group string="GRN Matching">
+                    <field name="reema_po_id" options="{'no_create': True, 'no_edit': True}"
+                           readonly="state != 'draft'"/>
+                    <field name="reema_grn_ids" widget="many2many_tags"
+                           options="{'no_create': True, 'no_edit': True, 'no_edit_color': True, 'edit_tags': True}"
+                           readonly="state != 'draft' or reema_match_state not in ('pending',)"
+                           invisible="not reema_requires_match"/>
+                    <field name="reema_gate_pass_ids" widget="many2many_tags"
+                           options="{'no_create': True, 'no_edit': True, 'no_edit_color': True, 'edit_tags': True}"
+                           readonly="1"
+                           invisible="not reema_requires_match"/>
+                    <field name="reema_grn_amount" invisible="not reema_requires_match"/>
+                    <field name="reema_match_difference"
+                           invisible="not reema_requires_match"
+                           decoration-danger="reema_match_difference != 0"
+                           decoration-success="reema_match_difference == 0"/>
+                </group>
+            </xpath>
+
+            <!-- Submitted By / Approved By: not GRN-matching data, they
+                 belong with the bill's own reference info instead. -->
+            <xpath expr="//field[@name='ref'][1]" position="after">
+                <field name="reema_match_submitted_by" readonly="1" invisible="not reema_match_submitted_by"
+                       options="{'no_open': True}"/>
+                <field name="reema_match_approved_by" readonly="1" invisible="not reema_match_approved_by"
+                       options="{'no_open': True}"/>
+            </xpath>
+
+            <!-- Price Correction: its own tab, next to Invoice Lines, instead
+                 of tucked into the header group — same data, just a clearer
+                 home for it. Quantity/GRN Rate stay locked (they come from
+                 the GRN, Store Keeper's domain); only Negotiated Price is
+                 editable — that's the Accountant's call, per material, not a
+                 single lump total. -->
+            <xpath expr="//page[@id='invoice_tab']" position="after">
+                <page id="reema_price_correction_tab" string="Price Correction"
+                      invisible="not reema_requires_match">
+                    <field name="invoice_line_ids" nolabel="1"
+                           domain="[('reema_is_variance_line', '=', False)]"
+                           readonly="state != 'draft' or reema_match_state not in ('pending',)">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="product_id" readonly="1" options="{'no_open': True}"/>
+                            <field name="quantity" readonly="1"/>
+                            <field name="price_unit" string="GRN Rate" readonly="1"/>
+                            <field name="reema_negotiated_price" string="Negotiated Price"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+
+            <!-- When a Purchase Order with GRNs is linked, lines must come
+                 exclusively from the GRN/variance auto-fill (see
+                 _reema_rebuild_matched_lines in account_move_ext.py) — never
+                 hand-picked. A hand-picked product line would resolve its
+                 account from the product's category instead of the interim
+                 account, breaking the interim-clearing entry and requiring
+                 category-level accounts that only make sense for direct
+                 (no-PO/no-GRN) purchases. -->
+            <!-- Product in Invoice Lines: plain text, not a link to the
+                 product form. -->
+            <xpath expr="//field[@name='invoice_line_ids'][1]//field[@name='product_id']" position="attributes">
+                <attribute name="options">{'no_open': True}</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='invoice_line_ids']" position="attributes">
+                <attribute name="readonly">state != 'draft' or reema_requires_match</attribute>
+                <!-- Without this, Odoo's web client silently drops any
+                     onchange-set value on a readonly field when saving —
+                     which is exactly how the GRN/variance auto-fill gets
+                     written here. force_save keeps it in the save payload. -->
+                <attribute name="force_save">1</attribute>
+            </xpath>
+
+            <!-- Print button -->
+            <xpath expr="//header/button[@name='action_post'][1]" position="before">
+                <button name="action_reema_print_vendor_bill" string="Print" type="object"/>
+            </xpath>
+
+            <!-- Core's own "Print" button (action_print_pdf) only appears once
+                 posted — hide both its states here so this screen has exactly
+                 one Print button, the HTML one above. -->
+            <xpath expr="//header/button[@name='action_print_pdf'][1]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//header/button[@name='action_print_pdf'][2]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <!-- Match workflow buttons -->
+            <xpath expr="//header/button[@name='action_post'][1]" position="before">
+                <field name="reema_requires_match" invisible="1"/>
+                <button name="action_reema_submit_match" string="Submit Match" class="oe_highlight"
+                        type="object"
+                        groups="reema_accounting.group_reema_accountant"
+                        invisible="reema_match_state != 'pending'"
+                        confirm="Submit this bill's GRN match for Owner approval?"
+                        confirm-label="Yes, Submit" cancel-label="Go Back"/>
+                <button name="action_reema_approve_match" string="Approve Match" class="oe_highlight"
+                        type="object"
+                        groups="reema_purchase.group_reema_owner"
+                        invisible="reema_match_state != 'submitted'"
+                        confirm="Approve this GRN match? The bill can then be posted."
+                        confirm-label="Yes, Approve" cancel-label="Go Back"/>
+                <button name="action_reema_reject_match" string="Return to Pending"
+                        type="object"
+                        groups="reema_purchase.group_reema_owner"
+                        invisible="reema_match_state != 'submitted'"
+                        confirm="Send this match back to Pending for correction?"
+                        confirm-label="Yes, Return" cancel-label="Go Back"/>
+                <field name="reema_match_state" widget="statusbar"
+                       statusbar_visible="pending,submitted,matched"
+                       invisible="not reema_requires_match"/>
+            </xpath>
+
+            <!-- Info button: very end of the header, after everything else
+                 including core's own state statusbar. -->
+            <xpath expr="//header" position="inside">
+                <button class="btn btn-secondary btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#reema_vendor_bill_status_info_modal"
+                        title="Match Status Reference">
+                    <i class="fa fa-info-circle"/>
+                </button>
+            </xpath>
+
+            <!-- Match Status Reference: plain Bootstrap modal (no OWL/wizard,
+                 no access restriction — same technique as
+                 reema_invoice_views.xml's PI Status Reference modal). -->
+            <xpath expr="//header" position="after">
+                <div class="modal fade" id="reema_vendor_bill_status_info_modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Vendor Bill — Match Status Reference</h5>
+                                <a href="#" role="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:160px">Status</th>
+                                            <th>What it means</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge text-bg-secondary">Not Required</span></td>
+                                            <td>No Purchase Order, or the PO has no GRNs — a direct purchase. Posts normally, no match needed.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-info">Pending Match</span></td>
+                                            <td>GRN(s) linked but not yet submitted. Select the GRN(s), correct prices on the Price Correction tab if needed, then Submit Match.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-warning text-dark">Waiting Approval</span></td>
+                                            <td>Submitted by the Accountant. GRN and price fields are now locked. Waiting for the Owner to Approve or Return to Pending.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-success">Matched</span></td>
+                                            <td>Approved by the Owner. The bill can now be Posted. Final status for the match itself.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <table class="table table-sm table-bordered mt-3" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:160px">Button</th>
+                                            <th>What it does</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Submit Match</td>
+                                            <td><em>(Accountant)</em> Sends the GRN match for Owner approval. Requires at least one GRN linked and a Bill Date.</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Approve Match</td>
+                                            <td><em>(Owner)</em> Approves the match — unlocks Post.</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Return to Pending</td>
+                                            <td><em>(Owner)</em> Sends it back to the Accountant for correction.</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Post</td>
+                                            <td>Creates the actual accounting entry — clears the interim account, books any price correction, credits the vendor. Only enabled once Matched, or immediately for bills that don't require a match.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" role="button" class="btn btn-primary" data-bs-dismiss="modal">Close</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+
+            <!-- Block the standard Post/Confirm button until matched; core
+                 labels this "Confirm" for bills, relabel to "Post" here since
+                 that's what it actually does (creates the accounting entry). -->
+            <xpath expr="//header/button[@name='action_post'][2]" position="attributes">
+                <attribute name="string">Post</attribute>
+                <attribute name="invisible">state != 'draft' or reema_match_state in ('pending', 'submitted')</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ── Vendor Bill list: standalone, no inheritance from the core list
+         so nothing here leaks anywhere else either. ── -->
+    <record id="view_vendor_bill_list" model="ir.ui.view">
+        <field name="name">reema.vendor.bill.list</field>
+        <field name="model">account.move</field>
+        <field name="arch" type="xml">
+            <list string="Vendor Bills" decoration-muted="state == 'cancel'">
+                <field name="name" optional="show"/>
+                <field name="partner_id" optional="show"/>
+                <field name="invoice_date" string="Bill Date" optional="show"/>
+                <field name="reema_po_id" optional="show"/>
+                <field name="reema_match_state" optional="show" widget="badge"
+                       decoration-info="reema_match_state == 'pending'"
+                       decoration-warning="reema_match_state == 'submitted'"
+                       decoration-success="reema_match_state == 'matched'"/>
+                <field name="amount_total" string="Total" sum="Total" optional="show"/>
+                <field name="payment_state" widget="badge" optional="show"/>
+                <field name="state" widget="badge" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Vendor Bills: the standard core "Bills" action, scoped to exclude
+         Contractor Bills (which have their own separate screen already) and
+         pointed at the dedicated views above. ── -->
+    <record id="account.action_move_in_invoice" model="ir.actions.act_window">
+        <field name="domain">[('move_type', 'in', ['in_invoice', 'in_refund']), ('batch_entry_ids', '=', False)]</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_vendor_bill_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_vendor_bill_form')})]"/>
+    </record>
+
+    <record id="account.menu_action_move_in_invoice_type" model="ir.ui.menu">
+        <field name="name">Vendor Bills</field>
+    </record>
+
+</odoo>

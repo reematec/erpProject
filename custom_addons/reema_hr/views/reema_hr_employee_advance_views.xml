@@ -5,7 +5,7 @@
         <field name="name">reema.hr.employee.advance.list</field>
         <field name="model">reema.hr.employee.advance</field>
         <field name="arch" type="xml">
-            <list string="Advances/Loans">
+            <list string="Advances/Loans" js_class="reema_hr_advance_list">
                 <field name="name" string="Voucher No."/>
                 <field name="employee_id"/>
                 <field name="date"/>
@@ -31,17 +31,21 @@
         <field name="arch" type="xml">
             <form string="Employee Advance / Loan">
                 <header>
-                    <button name="action_confirm" string="Post" type="object" class="btn-primary"
+                    <button name="action_confirm" string="Post" type="object"
+                            class="btn-primary o_reema_hr_save_first"
                             invisible="state != 'draft'"
                             confirm="Post this voucher? Once posted the recovery schedule is fixed and it becomes read-only."
                             confirm-label="Yes, Post" cancel-label="Go Back"/>
                     <button name="action_void" string="Void" type="object"
-                            invisible="state != 'draft'"
+                            class="o_reema_hr_save_first"
+                            invisible="state != 'draft' or not id"
                             confirm="Void this draft? It will be marked Cancelled."
                             confirm-label="Yes, Void" cancel-label="Go Back"/>
                     <button name="action_reset_to_draft" string="Reset to Draft" type="object"
+                            class="o_reema_hr_save_first"
                             invisible="state != 'cancelled'"/>
-                    <button name="action_reverse" string="Reverse" type="object" class="btn-danger"
+                    <button name="action_reverse" string="Reverse" type="object"
+                            class="btn-danger o_reema_hr_save_first"
                             invisible="state != 'posted'"
                             confirm="Reverse this voucher? A reversing journal entry will be posted and it will be marked Cancelled. Only possible if no installment has been recovered yet."
                             confirm-label="Yes, Reverse" cancel-label="Go Back"/>
@@ -68,10 +72,10 @@
                                    invisible="advance_type != 'loan'"
                                    required="advance_type == 'loan'"/>
                             <field name="installments_count" readonly="1" invisible="advance_type != 'loan'"/>
-                            <field name="advance_account_id" readonly="1"/>
-                            <field name="outstanding_advance_loan" readonly="1"/>
+                            <field name="advance_account_id" readonly="1" widget="reema_hr_account_ledger_link"/>
+                            <field name="outstanding_advance_loan" readonly="1" invisible="state != 'draft'"/>
                             <field name="balance_remaining" readonly="1" invisible="state != 'posted'"/>
-                            <field name="move_id" readonly="1" invisible="not move_id"/>
+                            <field name="move_id" readonly="1" invisible="not move_id" widget="reema_hr_many2one_new_tab"/>
                         </group>
                     </group>
                     <notebook invisible="state == 'draft'">
@@ -91,6 +95,26 @@
                 </sheet>
                 <chatter/>
             </form>
+        </field>
+    </record>
+
+    <record id="view_reema_hr_employee_advance_search" model="ir.ui.view">
+        <field name="name">reema.hr.employee.advance.search</field>
+        <field name="model">reema.hr.employee.advance</field>
+        <field name="arch" type="xml">
+            <search string="Advances/Loans">
+                <field name="employee_id"/>
+                <field name="date"/>
+                <filter string="Draft" name="filter_draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Posted" name="filter_posted" domain="[('state', '=', 'posted')]"/>
+                <filter string="Closed" name="filter_closed" domain="[('state', '=', 'closed')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Employee" name="group_employee" context="{'group_by': 'employee_id'}"/>
+                    <filter string="Year" name="group_year" context="{'group_by': 'date:year'}"/>
+                    <filter string="Month" name="group_month" context="{'group_by': 'date:month'}"/>
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
         </field>
     </record>
 

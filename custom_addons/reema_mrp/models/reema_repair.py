@@ -15,6 +15,7 @@ DEFECT_TYPE_SELECTION = [
     ('wrong_panel_printed', 'Wrong Panel Printed'),
     ('wrong_stamp_color', 'Wrong Stamp / Color Printing'),
     ('wrong_lamination', 'Wrong Lamination'),
+    ('bad_bonding', 'Bad Bonding / Weak Fusion'),
     ('other', 'Other'),
 ]
 
@@ -33,6 +34,7 @@ class ReemaRepairJob(models.Model):
 
     name = fields.Char(string='Reference', readonly=True, copy=False, default='New')
     mo_id = fields.Many2one('mrp.production', string='Manufacturing Order', required=True)
+    construction_type = fields.Selection(related='mo_id.construction_type', readonly=True, store=True)
     workorder_id = fields.Many2one(
         'mrp.workorder', string='QC Work Order', required=True,
         help='The Initial QC or Final QC work order that found this fault.',
@@ -59,11 +61,13 @@ class ReemaRepairJob(models.Model):
         string='Contractors on this MO',
     )
     repair_contractor_id = fields.Many2one(
-        'res.partner', string='Repair Contractor (Shell Closing)', required=True,
+        'res.partner', string='Repair Contractor (Shell Closing)',
         domain="[('id', 'in', available_repair_contractor_ids)]",
         help='The Shell Closing contractor who cuts the shell open and closes '
              'it again once the fault contractor hands it back fixed — paid '
-             'the flat rate for that pair of tasks once Received & Paid.',
+             'the flat rate for that pair of tasks once Received & Paid.\n\n'
+             'MS/HYB only — required there. Left blank for THB: THB Binding '
+             'always does its own rework and is never paid a separate repair fee.',
     )
     available_repair_contractor_ids = fields.Many2many(
         'res.partner', compute='_compute_available_repair_contractor_ids',
@@ -247,6 +251,17 @@ class ReemaRepairJob(models.Model):
         self.ensure_one()
         if self.qty_remaining > 0:
             return
+        if self.construction_type == 'thb':
+            # THB Binding always does its own rework, whoever's fault it was —
+            # no Shell Closing lookup, no rate, no payable entry, ever.
+            state = 'scrapped' if self.qty_received == 0 else 'closed'
+            self.write({'state': state, 'closed_date': fields.Datetime.now()})
+            self.mo_id._message_log(
+                body=f'Repair job {self.name} — {self.qty_received} received, '
+                     f'{self.qty_scrapped} scrapped. No repair-contractor payout '
+                     '(THB construction).'
+            )
+            return
         if self.qty_scrapped == 0:
             pay_repairs = self.repair_count
         else:
@@ -365,7 +380,7 @@ class ReemaRepairPenalty(models.Model):
                     f'Cannot remove {penalty.name} from its bill: the bill is '
                     'no longer in the drafting stage.'
                 )
-            penalty.bill_id.message_post(body=_(
+            penalty.bill_id.sudo().message_post(body=_(
                 'Repair penalty removed: %(name)s — PKR %(amount).2f'
             ) % {'name': penalty.name, 'amount': penalty.amount})
         self.write({'is_billed': False, 'bill_id': False})
@@ -379,7 +394,7 @@ class ReemaRepairPenalty(models.Model):
         if bill.state != 'draft' or bill.reema_bill_state != 'pending':
             raise UserError('This bill is no longer in the drafting stage.')
         self.write({'is_billed': True, 'bill_id': bill.id})
-        bill.message_post(body=_(
+        bill.sudo().message_post(body=_(
             'Repair penalty/penalties added: %(lines)s'
         ) % {'lines': ', '.join(f'{p.name} — PKR {p.amount:.2f}' for p in self)})
         return {'type': 'ir.actions.act_window_close'}

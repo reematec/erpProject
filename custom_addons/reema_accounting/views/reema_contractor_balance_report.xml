@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for the Contractor Balances list, following the
+        reema reporting standard (see custom_addons/REPORTS.md). Deliberately
+        limited to each contractor's individual advance account (1-1-3-xx) —
+        see reema_contractor_balance.py for why the shared Contractors
+        Payable account (2-1-2-01) is out of scope here. Triggered by the
+        list view's "Print" / "Print (Skip Zero)" header buttons, both bound
+        to action_print_contractor_balance.
+    -->
+    <record id="action_report_contractor_balance" model="ir.actions.report">
+        <field name="name">Contractor Balances</field>
+        <field name="model">reema.contractor.balance</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_accounting.report_contractor_balance</field>
+        <field name="report_file">reema_accounting.report_contractor_balance</field>
+        <field name="print_report_name">'Contractor Balances'</field>
+    </record>
+
+    <template id="report_contractor_balance">
+        <t t-call="web.html_container">
+            <style>
+                @page { margin: 12mm; }
+            </style>
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div style="font-size:15px; font-weight:700;">
+                        Contractor Balances
+                    </div>
+                    <hr style="margin-top:4px;"/>
+
+                    <table class="table table-sm table-striped" style="font-size:12px;">
+                        <thead>
+                            <tr class="table-dark">
+                                <th>Account</th>
+                                <th>Contractor</th>
+                                <th class="text-end">Balance (PKR)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="docs" t-as="o">
+                                <td><span t-esc="o.account_code"/></td>
+                                <td><span t-field="o.partner_id"/></td>
+                                <td class="text-end"><span t-field="o.balance"/></td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="2" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end"><strong t-esc="'%.2f' % total_balance"/></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div t-if="not docs" class="text-muted mt-3">No contractor balances found.</div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

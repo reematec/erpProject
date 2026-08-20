@@ -16,3 +16,8 @@ access_account_move_line_reema_prod_manager,account.move.line reema prod manager
 access_reema_contractor_advance_accountant,reema.contractor.advance accountant,model_reema_contractor_advance,account.group_account_manager,1,1,1,1
 access_reema_contractor_advance_admin,reema.contractor.advance admin,model_reema_contractor_advance,base.group_system,1,1,1,1
 access_reema_bank_account_accountant,reema.bank.account accountant,reema_invoice.model_reema_bank_account,account.group_account_manager,1,0,0,0
+access_reema_ledger_line_accountant,reema.ledger.line accountant,model_reema_ledger_line,group_reema_accountant,1,0,0,0
+access_reema_ledger_wizard_accountant,reema.ledger.wizard accountant,model_reema_ledger_wizard,group_reema_accountant,1,1,1,1
+access_reema_vendor_balance_accountant,reema.vendor.balance accountant,model_reema_vendor_balance,group_reema_accountant,1,0,0,0
+access_reema_customer_balance_accountant,reema.customer.balance accountant,model_reema_customer_balance,group_reema_accountant,1,0,0,0
+access_reema_contractor_balance_accountant,reema.contractor.balance accountant,model_reema_contractor_balance,group_reema_accountant,1,0,0,0

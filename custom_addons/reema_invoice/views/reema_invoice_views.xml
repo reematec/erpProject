@@ -61,12 +61,66 @@
                     <button name="action_reset_to_pending" string="Reset to Pending" type="object"
                             invisible="state in ('draft', 'pending')"/>
                     <button name="action_print_invoice"  string="Print PI"     type="object"/>
-                    <button name="action_open_status_info" type="object"
-                            icon="fa-info-circle"
-                            groups="reema_invoice.group_reema_invoice_user,base.group_erp_manager,base.group_system"/>
+                    <button class="btn btn-secondary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#reema_invoice_status_info_modal"
+                            title="PI Status Reference"
+                            groups="reema_invoice.group_reema_invoice_user,base.group_erp_manager,base.group_system">
+                        <i class="fa fa-info-circle"/>
+                    </button>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,pending,sent,accepted,rejected"/>
                 </header>
+                <!-- PI Status Reference: plain Bootstrap modal (no OWL/wizard) -->
+                <div class="modal fade" id="reema_invoice_status_info_modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">PI Status Reference</h5>
+                                <a href="#" role="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:140px">Status</th>
+                                            <th>What it means &amp; key effects</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge text-bg-secondary">Draft</span></td>
+                                            <td>Invoice is being prepared. All fields editable. Can be discarded (permanently deleted).</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-info">Pending</span></td>
+                                            <td>Invoice confirmed internally. All fields still editable. Ready to be finalized and sent to the client.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-warning text-dark">Sent</span></td>
+                                            <td>PI sent to the client. Fields are now <strong>locked</strong>. Awaiting client acceptance or rejection.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-success">Accepted</span></td>
+                                            <td>Client accepted the PI. A journal entry is created automatically. Production Manager is notified to finalize BOMs and create Production Orders. Click <em>Mark as Shipped</em> once dispatched.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-danger">Rejected</span></td>
+                                            <td>Client rejected the PI. No accounting entry created. Use <em>Reset to Pending</em> to make corrections and resend.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-dark">Shipped</span></td>
+                                            <td>Order physically dispatched. <strong>Final status.</strong> Any journal entry created at Accepted remains intact.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" role="button" class="btn btn-primary" data-bs-dismiss="modal">Close</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -608,57 +662,6 @@
                 <footer>
                     <button name="action_confirm" string="Yes, Accept Order" type="object" class="btn-primary"/>
                     <button string="Go Back" class="btn-secondary" special="cancel"/>
-                </footer>
-            </form>
-        </field>
-    </record>
-
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         PI STATUS INFO WIZARD — opened by the ⓘ button in the form header
-    ════════════════════════════════════════════════════════════════════════ -->
-    <record id="view_reema_invoice_status_info_wizard_form" model="ir.ui.view">
-        <field name="name">reema.invoice.status.info.wizard.form</field>
-        <field name="model">reema.invoice.status.info.wizard</field>
-        <field name="arch" type="xml">
-            <form string="PI Status Reference">
-                <sheet>
-                    <table class="table table-sm table-bordered" style="font-size:13px;">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width:140px">Status</th>
-                                <th>What it means &amp; key effects</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><span class="badge text-bg-secondary">Draft</span></td>
-                                <td>Invoice is being prepared. All fields editable. Can be discarded (permanently deleted).</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-info">Pending</span></td>
-                                <td>Invoice confirmed internally. All fields still editable. Ready to be finalized and sent to the client.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-warning text-dark">Sent</span></td>
-                                <td>PI sent to the client. Fields are now <strong>locked</strong>. Awaiting client acceptance or rejection.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-success">Accepted</span></td>
-                                <td>Client accepted the PI. A journal entry is created automatically. Production Manager is notified to finalize BOMs and create Production Orders. Click <em>Mark as Shipped</em> once dispatched.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-danger">Rejected</span></td>
-                                <td>Client rejected the PI. No accounting entry created. Use <em>Reset to Pending</em> to make corrections and resend.</td>
-                            </tr>
-                            <tr>
-                                <td><span class="badge text-bg-dark">Shipped</span></td>
-                                <td>Order physically dispatched. <strong>Final status.</strong> Any journal entry created at Accepted remains intact.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </sheet>
-                <footer>
-                    <button string="Close" class="btn-primary" special="cancel"/>
                 </footer>
             </form>
         </field>

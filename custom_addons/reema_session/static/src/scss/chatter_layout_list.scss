@@ -1,0 +1,15 @@
+// The "Bottom Chatter" checkbox in Technical > Chatter Layout is a plain
+// bootstrap form-check-input, same faint grey as everywhere else. With the
+// row-selector column gone (chatter_layout_list.js) it's the only checkbox
+// on the row, so make it easy to actually see: bigger box, a solid border
+// even when unchecked, and a clear filled color when checked.
+.o_reema_bottom_chatter_cell .form-check-input {
+    width: 1.15em;
+    height: 1.15em;
+    border: 2px solid var(--o-brand-primary, #714B67);
+
+    &:checked {
+        background-color: var(--o-brand-primary, #714B67);
+        border-color: var(--o-brand-primary, #714B67);
+    }
+}

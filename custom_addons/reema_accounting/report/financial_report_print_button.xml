@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <!-- Reema's own qweb-html reports deliberately have no in-page Print
+         toolbar (see REPORTS.md — Ctrl+P is enough there, since those pages
+         are dead simple). The OCA account_financial_report reports (General
+         Ledger, Trial Balance, Open Items, Aged Partner Balance, Journal
+         Ledger, VAT Report) are opened the same way (act_url, new tab) but
+         have no button either AND, since they run inside a full backend
+         asset bundle (html_container's t-call-assets="web.assets_backend")
+         rather than a bare page, users land here with no obvious way to
+         print. Add one, shared across all of them via internal_layout —
+         the common wrapper every one of those report templates calls.
+
+         Uses a custom .o_screen_only class + @media print, NOT Bootstrap's
+         d-print-none — d-print-none renders display:none unconditionally in
+         these reports, not just at print time (see reema_mrp's report
+         layout override for the same gotcha). -->
+    <template id="financial_report_internal_layout_print_button"
+              inherit_id="account_financial_report.internal_layout">
+        <xpath expr="//t[@t-out='0']" position="before">
+            <div class="o_screen_only" style="text-align: right; margin-bottom: 8px;">
+                <button type="button" class="btn btn-primary" onclick="window.print()">
+                    Print
+                </button>
+            </div>
+            <style>
+                @media print {
+                    .o_screen_only { display: none !important; }
+                }
+            </style>
+            <script>
+                document.addEventListener('keydown', function (ev) {
+                    var isPrintShortcut = (ev.ctrlKey || ev.metaKey) &amp;&amp; !ev.shiftKey &amp;&amp; !ev.altKey
+                        &amp;&amp; (ev.key === 'p' || ev.key === 'P');
+                    if (isPrintShortcut) {
+                        ev.preventDefault();
+                        window.print();
+                    }
+                });
+            </script>
+        </xpath>
+    </template>
+
+</odoo>

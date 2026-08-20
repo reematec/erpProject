@@ -189,16 +189,6 @@ class ReemaProductionOrder(models.Model):
             'domain': [('id', 'in', mo_ids)],
         }
 
-    def action_open_po_status_info(self):
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Production Order Status Reference',
-            'res_model': 'reema.po.status.info.wizard',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {},
-        }
-
     # ── Procurement visibility ────────────────────────────────────────────
 
     def action_refresh_requirements(self):
@@ -819,11 +809,6 @@ class MrpRoutingWorkcenterReema(models.Model):
 
     def action_delete_operation(self):
         self.unlink()
-
-
-class ReemaPOStatusInfoWizard(models.TransientModel):
-    _name = 'reema.po.status.info.wizard'
-    _description = 'Production Order Status Reference'
 
 
 class StockPickingTypeReema(models.Model):

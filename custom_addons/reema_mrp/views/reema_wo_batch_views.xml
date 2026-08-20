@@ -268,6 +268,7 @@
                     <field name="workorder_id" invisible="1"/>
                     <field name="mo_id" invisible="1"/>
                     <field name="workcenter_id" invisible="1"/>
+                    <field name="construction_type" invisible="1"/>
                     <field name="workorder_name" readonly="1"/>
                     <field name="workcenter_name" readonly="1"/>
                 </group>
@@ -289,7 +290,8 @@
                         <field name="repair_count" string="Number of Repairs" required="qty_fail != 0"/>
                         <field name="defect_type" required="qty_fail != 0"/>
                         <field name="available_repair_contractor_ids" invisible="1"/>
-                        <field name="repair_contractor_id" required="qty_fail != 0"
+                        <field name="repair_contractor_id" required="qty_fail != 0 and construction_type != 'thb'"
+                               invisible="construction_type == 'thb'"
                                options="{'no_create': True, 'no_edit': True}"/>
                     </group>
                     <group string="Scrap">
@@ -452,6 +454,71 @@
                 </group>
             </search>
         </field>
+    </record>
+
+    <!-- Named favorite so the MO+Work Order grouping (already the default on
+         fresh open via reema_batch_entry_action's context) can be restored in
+         one click from the Favorites menu after a user clears filters/groups
+         to look at something else, instead of re-adding "Unbilled" + two
+         group-by filters by hand every time. Public (user_id left empty) so
+         it's shared across all users; not marked is_default since the action
+         context already covers the fresh-open case. -->
+    <record id="reema_batch_entry_filter_mo_wo" model="ir.filters">
+        <field name="name">MO + Work Order (Unbilled)</field>
+        <field name="model_id">reema.wo.batch.entry</field>
+        <field name="action_id" ref="reema_batch_entry_action"/>
+        <field name="domain">[('is_billed', '=', False), ('payment_excluded', '=', False)]</field>
+        <field name="context">{'group_by': ['mo_id', 'workorder_id']}</field>
+        <field name="user_id" eval="False"/>
+    </record>
+
+    <!-- The Favorites "x" shows on every saved filter regardless of delete
+         rights (see web/static/src/search/search_model.js deleteFavorite —
+         it always renders the icon and just calls unlink; the server decides).
+         Stock Odoo already stops plain Internal Users from deleting a public
+         ir.filters row, but anyone with the "Access Rights"/"Settings" admin
+         level (base.group_erp_manager/base.group_system — used elsewhere in
+         this codebase, e.g. reema_mrp production-manager-only buttons) can
+         delete ANY ir.filters record, including this one. Users who lose it
+         have no way to recreate the exact grouping/domain combo themselves.
+         This rule has no groups, so it's global — it AND-restricts the
+         unlink domain for *everyone*, including Administrator, to "not this
+         record". perm_read/write/create are left False so it has zero effect
+         on visibility or editing, only on delete. (A true superuser session,
+         e.g. `odoo-bin shell`, bypasses ir.rule entirely and can still remove
+         it if ever genuinely needed — recreating it is just re-running this
+         file via `-u reema_mrp`.) -->
+    <record id="reema_batch_entry_filter_mo_wo_protect_rule" model="ir.rule">
+        <field name="name">Batch Logs: MO + Work Order favorite cannot be deleted</field>
+        <field name="model_id" ref="base.model_ir_filters"/>
+        <field name="domain_force" eval="&quot;[('id', '!=', %d)]&quot; % ref('reema_batch_entry_filter_mo_wo')"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <!-- Same idea, grouped by Manufacturing Order then Contractor instead of
+         Work Order — for checking a contractor's unbilled totals per MO. -->
+    <record id="reema_batch_entry_filter_mo_contractor" model="ir.filters">
+        <field name="name">MO + Contractor (Unbilled)</field>
+        <field name="model_id">reema.wo.batch.entry</field>
+        <field name="action_id" ref="reema_batch_entry_action"/>
+        <field name="domain">[('is_billed', '=', False), ('payment_excluded', '=', False)]</field>
+        <field name="context">{'group_by': ['mo_id', 'contractor_id']}</field>
+        <field name="user_id" eval="False"/>
+    </record>
+
+    <!-- Same delete-protection as reema_batch_entry_filter_mo_wo_protect_rule
+         above, scoped to this favorite. -->
+    <record id="reema_batch_entry_filter_mo_contractor_protect_rule" model="ir.rule">
+        <field name="name">Batch Logs: MO + Contractor favorite cannot be deleted</field>
+        <field name="model_id" ref="base.model_ir_filters"/>
+        <field name="domain_force" eval="&quot;[('id', '!=', %d)]&quot; % ref('reema_batch_entry_filter_mo_contractor')"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
     </record>
 
     <!-- Per-work-order progress log — used by the "Balls Done" click-through

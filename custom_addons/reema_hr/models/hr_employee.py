@@ -19,11 +19,6 @@ class HrEmployee(models.Model):
         string='Monthly Salary', currency_field='currency_id', groups='hr.group_hr_user',
         help='Basic monthly salary. Payslips prorate this by attendance.',
     )
-    daily_rate = fields.Monetary(
-        string='Daily Rate', currency_field='currency_id', groups='hr.group_hr_user',
-        compute='_compute_daily_rate', store=True,
-        help='Monthly Salary ÷ Standard Working Days per Month (company setting).',
-    )
     has_eobi = fields.Boolean(string='Has EOBI', groups='hr.group_hr_user')
     eobi_amount = fields.Monetary(
         string='EOBI Deduction', currency_field='currency_id', groups='hr.group_hr_user',
@@ -81,12 +76,6 @@ class HrEmployee(models.Model):
             'domain': [('employee_id', '=', self.id)],
             'context': {'default_employee_id': self.id},
         }
-
-    @api.depends('monthly_salary', 'company_id.reema_hr_standard_days_per_month')
-    def _compute_daily_rate(self):
-        for employee in self:
-            days = employee.company_id.reema_hr_standard_days_per_month
-            employee.daily_rate = (employee.monthly_salary / days) if days else 0.0
 
     def _compute_advance_loan_balance(self):
         for employee in self:
@@ -149,16 +138,19 @@ class HrEmployee(models.Model):
         ]
         return self.with_context(active_test=False).search(domain)
 
-    def _get_next_due_advance_lines(self):
+    def _get_next_due_advance_lines(self, cutoff_date=None):
         """Next due installment line for each of this employee's posted
         advances/loans, oldest voucher first. A plain Advance has a single
-        line for its full amount; a Loan yields its next due installment."""
+        line for its full amount; a Loan yields its next due installment.
+        `cutoff_date`, when given, excludes vouchers dated after it — e.g. a
+        payslip for July must never recover an advance taken out in August,
+        even if it's older/first in the due queue."""
         self.ensure_one()
         lines = self.env['reema.hr.employee.advance.line']
-        vouchers = self.env['reema.hr.employee.advance'].search([
-            ('employee_id', '=', self.id),
-            ('state', '=', 'posted'),
-        ], order='date asc, id asc')
+        domain = [('employee_id', '=', self.id), ('state', '=', 'posted')]
+        if cutoff_date:
+            domain.append(('date', '<=', cutoff_date))
+        vouchers = self.env['reema.hr.employee.advance'].search(domain, order='date asc, id asc')
         for voucher in vouchers:
             due = voucher.line_ids.filtered(lambda l: l.state == 'due')[:1]
             lines |= due

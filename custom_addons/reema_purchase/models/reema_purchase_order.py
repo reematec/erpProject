@@ -110,6 +110,12 @@ class ReemaPurchaseOrder(models.Model):
                 [('po_id', '=', rec.id)]
             )
 
+    @api.depends('name', 'partner_id.name')
+    def _compute_display_name(self):
+        for rec in self:
+            rec.display_name = '%s — %s' % (rec.name or _('New'), rec.partner_id.name) \
+                if rec.partner_id else (rec.name or _('New'))
+
     # ── CRUD ────────────────────────────────────────────────────────────────
 
     @api.model_create_multi

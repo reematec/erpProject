@@ -5,3 +5,6 @@ from . import reema_hr_attendance
 from . import reema_hr_public_holiday
 from . import reema_hr_employee_advance
 from . import reema_hr_payslip
+from . import reema_hr_payslip_list_report
+from . import reema_payroll_balance
+from . import reema_payroll_balance_report
