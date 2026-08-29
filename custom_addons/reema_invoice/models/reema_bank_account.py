@@ -15,3 +15,7 @@ class ReemaBankAccount(models.Model):
     swift = fields.Char(string='SWIFT / BIC')
     # archive instead of delete so old invoices keep their bank label readable
     active = fields.Boolean(default=True)
+    # Links this print-label record to the real GL journal it posts through,
+    # so payments/opening balances for this bank land in its own account
+    # instead of a shared one.
+    journal_id = fields.Many2one('account.journal', string='Bank Journal', domain=[('type', '=', 'bank')])

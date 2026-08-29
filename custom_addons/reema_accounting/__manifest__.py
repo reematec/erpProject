@@ -1,6 +1,6 @@
 {
     'name': 'Reema Accounting',
-    'version': '18.0.1.0.5',
+    'version': '18.0.1.0.6',
     'category': 'Accounting',
     'summary': 'Chart of Accounts, Taxes, and Journals for Reema Tec',
     'depends': ['account', 'stock_account', 'purchase_stock', 'account_financial_report', 'reema_mrp', 'reema_invoice', 'account_payment', 'account_edi_ubl_cii'],
@@ -21,6 +21,8 @@
         'views/reema_vendor_balance_report.xml',
         'views/reema_customer_balance_report.xml',
         'views/reema_contractor_balance_report.xml',
+        'views/reema_opening_balance_views.xml',
+        'views/res_partner_privacy_views.xml',
         'views/account_menu_views.xml',
         'views/reema_cash_bank_voucher_views.xml',
         'views/reema_ledger_views.xml',

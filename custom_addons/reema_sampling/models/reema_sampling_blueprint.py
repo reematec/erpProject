@@ -88,7 +88,8 @@ class ReemaSamplingBlueprint(models.Model):
         ('handball', 'Handball'),
         ('volleyball', 'Volleyball'),
         ('freestyle', 'Freestyle Ball'),
-        ('training', 'Training Ball')
+        ('training', 'Training Ball'),
+        ('dodgeball', 'Dodgeball'),
     ], string='Type', tracking=True)
 
     product_type_id = fields.Many2one(

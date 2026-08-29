@@ -23,10 +23,12 @@ def post_init_hook(env):
         {'name': 'Journal Vouchers',  'type': 'general',  'code': 'JV'},
         {'name': 'Vendor Bills',      'type': 'purchase', 'code': 'BILL'},
         {'name': 'Customer Invoices', 'type': 'sale',     'code': 'INV'},
-        {'name': 'Main Bank',         'type': 'bank',     'code': 'BANK',
+        {'name': 'Bank Al Habib',     'type': 'bank',     'code': 'BNK',
          'default_account_id': find_account('1-1-1-01').id},
-        {'name': 'Petty Cash',        'type': 'cash',     'code': 'CASH',
+        {'name': 'Meezan Bank',       'type': 'bank',     'code': 'MZN',
          'default_account_id': find_account('1-1-1-02').id},
+        {'name': 'Petty Cash',        'type': 'cash',     'code': 'CSH',
+         'default_account_id': find_account('1-1-8-01').id},
     ]
 
     for vals in journals_to_create:

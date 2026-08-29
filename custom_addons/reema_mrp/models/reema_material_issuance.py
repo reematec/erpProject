@@ -269,6 +269,7 @@ class ReemaMaterialIssuanceLine(models.Model):
             })
             rev_move._action_confirm()
             rev_move.quantity = abs(self.issued_qty)
+            rev_move.move_line_ids.write({'picked': True})
             rev_move._action_done()
 
         self.env['reema.material.issuance.line'].create({
@@ -292,6 +293,13 @@ class ReemaMaterialIssuanceLine(models.Model):
             f'Original date: {date_str}<br/>'
             f'<b>Reversed by: {self.env.user.name}</b>'
         ))
+        # The original issue posted Dr WIP / Cr Raw Material — undo that the
+        # same way a Return does (opposite direction), so accounting stays in
+        # sync with the stock reversal above.
+        issuance._reema_post_wip_entry(
+            abs(self.issued_qty), 'return',
+            'Reversal of Issue: %s / %s' % (issuance.name, issuance.production_id.name),
+        )
         issuance._recompute_state()
 
 
@@ -352,6 +360,7 @@ class ReemaMaterialReturnLine(models.Model):
             })
             rev_move._action_confirm()
             rev_move.quantity = abs(self.returned_qty)
+            rev_move.move_line_ids.write({'picked': True})
             rev_move._action_done()
 
         self.env['reema.material.return.line'].create({
@@ -374,6 +383,13 @@ class ReemaMaterialReturnLine(models.Model):
             f'Original date: {date_str}<br/>'
             f'<b>Reversed by: {self.env.user.name}</b>'
         ))
+        # The original return posted Dr Raw Material / Cr WIP — undo that the
+        # same way an Issue does (opposite direction), so accounting stays in
+        # sync with the stock reversal above.
+        issuance._reema_post_wip_entry(
+            abs(self.returned_qty), 'issue',
+            'Reversal of Return: %s / %s' % (issuance.name, issuance.production_id.name),
+        )
         issuance._recompute_state()
 
 
@@ -426,6 +442,7 @@ class ReemaMaterialReturnWizard(models.TransientModel):
         })
         move._action_confirm()
         move.quantity = self.returned_qty
+        move.move_line_ids.write({'picked': True})
         move._action_done()
 
         self.env['reema.material.return.line'].create({
@@ -593,6 +610,7 @@ class ReemaMaterialIssueWizard(models.TransientModel):
         })
         move._action_confirm()
         move.quantity = self.issued_qty
+        move.move_line_ids.write({'picked': True})
         move._action_done()
 
         self.env['reema.material.issuance.line'].create({

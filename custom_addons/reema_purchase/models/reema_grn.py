@@ -218,6 +218,7 @@ class ReemaGRN(models.Model):
             for line in rec.line_ids:
                 if not line.product_id or line.accepted_qty <= 0:
                     continue
+                line._reema_resolve_po_price()
                 move = self.env['stock.move'].create({
                     'name': 'GRN: %s' % line.product_id.name,
                     'product_id': line.product_id.id,
@@ -343,6 +344,30 @@ class ReemaGRNLine(models.Model):
     def _compute_display_product(self):
         for rec in self:
             rec.display_product = rec.product_id.display_name or rec.product_name or ''
+
+    def _reema_resolve_po_price(self):
+        """Last-chance fallback, run right before the receipt posts: if this
+        line still has no price, but the GRN's own Purchase Order has a
+        priced line for the same product, pull it in.
+
+        Needed because po_line_id/price_unit are normally filled in by
+        @api.onchange handlers (on the GRN itself, or upstream on the Inward
+        Gate Pass line it was built from) — those only fire during
+        interactive form editing, so a line built any other way can reach
+        here with a real PO price sitting unused right next to it. Never
+        overwrites a price someone actually typed in.
+        """
+        self.ensure_one()
+        if self.price_unit or not self.product_id or not self.grn_id.po_id:
+            return
+        if not self.po_line_id:
+            po_line = self.grn_id.po_id.line_ids.filtered(
+                lambda l: l.product_id == self.product_id
+            )[:1]
+            if po_line:
+                self.po_line_id = po_line.id
+        if self.po_line_id and self.po_line_id.price_unit:
+            self.price_unit = self.po_line_id.price_unit
 
     @api.constrains('product_id', 'product_name')
     def _check_product(self):

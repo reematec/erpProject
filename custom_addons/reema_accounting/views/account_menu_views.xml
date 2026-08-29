@@ -410,6 +410,93 @@
         </field>
     </record>
 
+    <!-- ── Opening Balances: the menu lands directly on this list — every
+         account that already carries an opening balance, Code/Name locked
+         read-only, only Opening Debit/Credit left editable inline for a
+         quick correction. Its own header "New" button launches the
+         reema.opening.balance.wizard dialog (views/reema_opening_balance_
+         views.xml — Account, Debit or Credit, optional Notes) to add
+         another account; the dialog closing refreshes this list.
+         Reuses core's own editable Opening Balance list
+         (account.init_accounts_tree, the same view the Accounting
+         Dashboard onboarding wizard opens for "Chart of Accounts"), which
+         ships with open_form_view="True" plus Type/Reconcile/Tax/Tags/
+         Journals columns and native Create — meant for building a chart of
+         accounts from scratch. Since these accounts already exist here,
+         all of that is stripped: no row-click navigation into the Account
+         form, no native create/delete, and the irrelevant columns hidden.
+         Excludes the "Undistributed Profits/Loss" equity account, same as
+         core, since it's auto-computed and never has a manual opening
+         balance. Editing an account's Opening Balance here writes to the
+         company's opening move (account_opening_move_id) automatically —
+         once that move is posted, Odoo blocks further edits from this
+         screen; at that point corrections go through a normal Journal
+         Entry instead. ── -->
+    <record id="view_reema_opening_balances_list" model="ir.ui.view">
+        <field name="name">reema.account.opening.balances.list</field>
+        <field name="model">account.account</field>
+        <field name="inherit_id" ref="account.init_accounts_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="editable"></attribute>
+                <attribute name="open_form_view">False</attribute>
+                <attribute name="create">0</attribute>
+                <attribute name="delete">0</attribute>
+            </xpath>
+            <xpath expr="//list" position="inside">
+                <header>
+                    <button name="%(reema_accounting.action_reema_opening_balance_wizard)d"
+                            type="action"
+                            string="New"
+                            class="btn-primary"
+                            display="always"/>
+                </header>
+            </xpath>
+            <xpath expr="//field[@name='code']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='opening_debit']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='opening_credit']" position="attributes">
+                <attribute name="readonly">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='account_type']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='reconcile']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='tax_ids']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='tag_ids']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+            <xpath expr="//field[@name='allowed_journal_ids']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_reema_opening_balances" model="ir.actions.act_window">
+        <field name="name">Opening Balances</field>
+        <field name="res_model">account.account</field>
+        <field name="view_mode">list</field>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_opening_balances_list')})]"/>
+        <field name="domain">['&amp;', ('account_type', '!=', 'equity_unaffected'), '|', ('opening_debit', '!=', 0), ('opening_credit', '!=', 0)]</field>
+    </record>
+    <menuitem
+        id="menu_reema_opening_balances"
+        name="Opening Balances"
+        parent="account.account_account_menu"
+        action="action_reema_opening_balances"
+        sequence="1"
+        groups="account.group_account_manager"/>
+
     <!-- ── Account Groups window action ─────────────────────────────── -->
     <record id="action_account_group" model="ir.actions.act_window">
         <field name="name">Account Groups</field>
@@ -435,7 +522,7 @@
         name="Account Groups"
         parent="account.account_account_menu"
         action="action_account_group"
-        sequence="2"
+        sequence="3"
         groups="account.group_account_manager"/>
 
     <!-- ── Bank Accounts: same reema.bank.account list/action already on
@@ -1114,13 +1201,14 @@
                  specific recipient bank account entered here. -->
             <xpath expr="//field[@name='partner_bank_id']" position="replace"/>
             <!-- Payment Method Line has no real choice to make here — every
-                 journal in this database (checked: Main Bank, Petty Cash,
-                 all of them) only ever has one outbound method available,
-                 "Manual Payment", since no bank-integration/SEPA/check
-                 module is installed. Hide it (it still auto-fills in the
-                 background) and reuse the label for Journal instead,
-                 matching Contractor Advances where "Payment Method" means
-                 the journal, not a payment method line. -->
+                 journal in this database (checked: Bank Al Habib, Meezan
+                 Bank, Petty Cash, all of them) only ever has one outbound
+                 method available, "Manual Payment", since no bank-
+                 integration/SEPA/check module is installed. Hide it (it
+                 still auto-fills in the background) and reuse the label
+                 for Journal instead, matching Contractor Advances where
+                 "Payment Method" means the journal, not a payment method
+                 line. -->
             <xpath expr="//field[@name='journal_id']" position="attributes">
                 <attribute name="string">Payment Method</attribute>
             </xpath>

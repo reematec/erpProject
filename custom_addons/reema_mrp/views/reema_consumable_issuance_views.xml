@@ -103,8 +103,16 @@
                             type="object"
                             class="btn-primary"
                             invisible="state != 'draft'"/>
+                    <button name="action_void"
+                            string="Void Return"
+                            type="object"
+                            groups="reema_mrp.group_reema_production_manager"
+                            invisible="state != 'done'"
+                            confirm="This will reverse the full stock move and void this record. Continue?"
+                            confirm-label="Yes, Void It"
+                            cancel-label="Go Back"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="draft,done"/>
+                           statusbar_visible="draft,done,voided"/>
                 </header>
                 <sheet>
                     <div class="oe_title">

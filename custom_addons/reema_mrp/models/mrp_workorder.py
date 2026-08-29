@@ -635,5 +635,6 @@ class MrpWorkorder(models.Model):
             })
             move._action_confirm()
             move.quantity = qty
+            move.move_line_ids.write({'picked': True})
             move._action_done()
         return res

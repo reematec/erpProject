@@ -326,6 +326,7 @@ class ReemaWoBatchEntry(models.Model):
         records = super().create(vals_list)
         for entry in records:
             entry._create_sfg_move()
+            entry._create_fg_conversion()
             entry._backflush_components()
             # First batch logged on this WO → auto-release so the next hall's
             # Start button becomes available without any manual action.
@@ -424,6 +425,7 @@ class ReemaWoBatchEntry(models.Model):
             ).mapped('repair_dispatch_id')
 
             entry._reverse_stock_moves()
+            entry._reverse_fg_conversion()
             own_repair_deductions.unlink()
             own_scrap_deductions.unlink()
             own_dispatches.unlink()
@@ -504,6 +506,7 @@ class ReemaWoBatchEntry(models.Model):
             })
             ret._action_confirm()
             ret.quantity = ret.product_uom_qty
+            ret.move_line_ids.write({'picked': True})
             ret._action_done()
 
         backflush_origin = f'{self.mo_id.name} / {self.workorder_id.name} / {self.name}'
@@ -525,6 +528,7 @@ class ReemaWoBatchEntry(models.Model):
             })
             ret._action_confirm()
             ret.quantity = ret.product_uom_qty
+            ret.move_line_ids.write({'picked': True})
             ret._action_done()
 
     def action_supervisor_delete(self):
@@ -786,6 +790,7 @@ class ReemaWoBatchEntry(models.Model):
             })
             move._action_confirm()
             move.quantity = consumed_qty
+            move.move_line_ids.write({'picked': True})
             move._action_done()
 
     def _create_sfg_move(self):
@@ -814,6 +819,7 @@ class ReemaWoBatchEntry(models.Model):
         })
         move._action_confirm()
         move.quantity = qty
+        move.move_line_ids.write({'picked': True})
         move._action_done()
         self.sfg_move_id = move
 

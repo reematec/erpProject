@@ -154,6 +154,7 @@
                         <group>
                             <field name="client_order_number" readonly="state not in ('draft', 'pending')"/>
                             <field name="client_order_date" readonly="state not in ('draft', 'pending')"/>
+                            <field name="commercial_invoice_no"/>
                             <field name="payment_terms_id" readonly="state not in ('draft', 'pending')"
                                    options="{'no_create': True, 'no_edit': True}"/>
                             <field name="currency_id" readonly="state not in ('draft', 'pending')"
@@ -343,6 +344,7 @@
                 <field name="account_number"/>
                 <field name="iban"/>
                 <field name="swift"/>
+                <field name="journal_id" string="Bank Journal" optional="show"/>
             </list>
         </field>
     </record>
@@ -363,6 +365,7 @@
                             <field name="account_number"/>
                             <field name="iban"/>
                             <field name="swift"/>
+                            <field name="journal_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
                         </group>
                     </group>
                 </sheet>

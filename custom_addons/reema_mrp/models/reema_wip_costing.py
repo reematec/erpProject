@@ -8,8 +8,14 @@ class AccountMoveWipExt(models.Model):
     # Return below — lets a later phase (WIP -> Finished Goods) find
     # everything debited to a specific batch's WIP by a real FK, instead of
     # string-matching the ref field.
-    reema_production_order_id = fields.Many2one(
-        'reema.production.order', string='Production Order', readonly=True,
+    #
+    # Tagged at the Manufacturing Order level (not the Production Order) —
+    # one PO can have multiple MOs (reema.production.order.line_ids each
+    # carry their own mo_id), and Final QC / Finished Goods recognition
+    # happens per MO, not per PO. Matches the same reema_mo_id level already
+    # used for labor's WIP tagging on account.move.line (reema_wo_batch.py).
+    reema_mo_id = fields.Many2one(
+        'mrp.production', string='Manufacturing Order', readonly=True,
     )
 
 
@@ -66,7 +72,7 @@ class ReemaMaterialIssuanceWipCosting(models.Model):
             'journal_id': journal.id,
             'date': fields.Date.context_today(self),
             'ref': ref_label,
-            'reema_production_order_id': self.production_order_id.id if self.production_order_id else False,
+            'reema_mo_id': self.production_id.id if self.production_id else False,
             'line_ids': [
                 (0, 0, {'account_id': debit_account.id, 'name': label, 'debit': amount, 'credit': 0.0}),
                 (0, 0, {'account_id': credit_account.id, 'name': label, 'debit': 0.0, 'credit': amount}),

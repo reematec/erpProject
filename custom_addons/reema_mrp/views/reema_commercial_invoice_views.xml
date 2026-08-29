@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="reema_commercial_invoice_list_view" model="ir.ui.view">
+        <field name="name">reema.commercial.invoice.list</field>
+        <field name="model">reema.commercial.invoice</field>
+        <field name="arch" type="xml">
+            <list duplicate="false">
+                <field name="name"/>
+                <field name="commercial_invoice_no"/>
+                <field name="date"/>
+                <field name="partner_id"/>
+                <field name="order_no_display" optional="hide"/>
+                <field name="total_amount" optional="show"/>
+                <field name="currency_id" optional="hide"/>
+                <field name="state" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="reema_commercial_invoice_form_view" model="ir.ui.view">
+        <field name="name">reema.commercial.invoice.form</field>
+        <field name="model">reema.commercial.invoice</field>
+        <field name="arch" type="xml">
+            <form duplicate="false">
+                <header>
+                    <button name="action_confirm" type="object" string="Confirm"
+                            class="btn-primary" invisible="state != 'draft'"
+                            confirm="Confirm this Commercial Invoice? If any line has no Packing List yet, one will be created automatically and its Cost of Goods Sold posted. Either way, the Sales revenue entry will be posted."/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            invisible="state != 'confirmed'"
+                            confirm="Cancel this Commercial Invoice? This reverses the revenue entry, and cancels any Packing List this invoice created for itself."/>
+                    <button name="action_print_commercial_invoice" string="Print" type="object" class="btn-secondary"/>
+                    <button class="btn btn-secondary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#reema_ci_status_info_modal"
+                            title="Commercial Invoice Status Reference"
+                            groups="base.group_user">
+                        <i class="fa fa-info-circle"/>
+                    </button>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed"/>
+                </header>
+                <!-- Commercial Invoice Status Reference: plain Bootstrap modal (no OWL/wizard) -->
+                <div class="modal fade" id="reema_ci_status_info_modal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Commercial Invoice Status Reference</h5>
+                                <a href="#" role="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-sm table-bordered" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:140px">Status</th>
+                                            <th>What it means &amp; available actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge text-bg-secondary">Draft</span></td>
+                                            <td>Being built. Either pick one confirmed Packing List — its lines
+                                                populate automatically the moment it's selected, and clear again if
+                                                you remove it — or type Order/Article/Qty directly if no Packing
+                                                List exists yet. Nothing is posted to accounting yet. The invoice's
+                                                own reference number is assigned at Confirm, not before.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-success">Confirmed</span></td>
+                                            <td>Sales revenue entry posted. If the lines were typed directly (no
+                                                Packing List), one was just created and confirmed automatically
+                                                (posting its Cost of Goods Sold too). Locked — use
+                                                <strong>Cancel</strong> to undo.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge text-bg-danger">Cancelled</span></td>
+                                            <td>The revenue entry was reversed. A Packing List this invoice created
+                                                for itself was cancelled too — one it merely referenced, that
+                                                already existed, is left untouched.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <table class="table table-sm table-bordered mt-3" style="font-size:13px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:200px">Button</th>
+                                            <th>What it does</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Confirm</strong></td>
+                                            <td>Posts Dr Receivable / Cr Sales for this invoice's total, using each
+                                                article's own Sales Account. Only available in Draft.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Cancel</strong></td>
+                                            <td>Reverses the revenue entry. Only available once Confirmed.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Print</strong></td>
+                                            <td>Opens an HTML preview of the Commercial Invoice document in a new
+                                                tab — print with Ctrl+P. Available in any status.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" role="button" class="btn btn-primary" data-bs-dismiss="modal">Close</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="partner_id" options="{'no_open': True, 'no_create': True, 'no_edit': True}"
+                                   readonly="state != 'draft'"/>
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="commercial_invoice_no" readonly="state != 'draft'"/>
+                            <field name="packing_list_id"
+                                   options="{'no_open': True, 'no_create': True, 'no_edit': True}"
+                                   readonly="state != 'draft'"/>
+                            <field name="order_no_display"/>
+                        </group>
+                        <group>
+                            <field name="currency_id" readonly="state != 'draft'"/>
+                            <field name="total_qty"/>
+                            <field name="total_amount"/>
+                            <field name="total_cartons"/>
+                            <field name="account_move_id" readonly="1" groups="base.group_system"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Lines">
+                            <!-- Deliberately NOT readonly based on packing_list_id — that field
+                                 is set by the very onchange that populates these lines, so any
+                                 readonly= expression referencing it here would make the web
+                                 client drop the onchange-populated lines from the save entirely
+                                 (confirmed by reproducing it). Lines pulled from a Packing List
+                                 are instead protected from being hand-edited by a hard
+                                 server-side constraint (_check_pulled_line_not_altered) — not by
+                                 UI readonly. -->
+                            <field name="line_ids" readonly="state != 'draft'"
+                                   context="{'default_ci_id': id}">
+                                <list editable="bottom">
+                                    <field name="invoice_id" string="Order"
+                                           domain="[('partner_id', '=', parent.partner_id)]"
+                                           options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
+                                    <field name="pi_line_id" string="Article"
+                                           domain="[('invoice_id', '=', invoice_id)]"
+                                           options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
+                                    <field name="description" optional="show"/>
+                                    <field name="client_sku" optional="show"/>
+                                    <field name="sample_color" optional="show"/>
+                                    <field name="size" optional="show"/>
+                                    <field name="available_qty" readonly="1" optional="show"/>
+                                    <field name="qty"/>
+                                    <field name="price_unit"/>
+                                    <field name="amount" readonly="1"/>
+                                    <field name="sample_code" optional="hide"/>
+                                    <field name="hs_code" optional="hide"/>
+                                    <field name="packing_list_line_id" column_invisible="True"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Shipping &amp; Terms">
+                            <group>
+                                <group string="Ship-to / Bill-to">
+                                    <field name="ship_to_name" readonly="state != 'draft'"/>
+                                    <field name="ship_to_address" readonly="state != 'draft'"/>
+                                    <field name="bill_to_name" readonly="state != 'draft'"/>
+                                    <field name="bill_to_address" readonly="state != 'draft'"/>
+                                </group>
+                                <group string="Shipment">
+                                    <field name="container_no" readonly="state != 'draft'"/>
+                                    <field name="bl_no" readonly="state != 'draft'"/>
+                                    <field name="vessel_name" readonly="state != 'draft'"/>
+                                    <field name="bl_date" readonly="state != 'draft'"/>
+                                    <field name="incoterm_id" readonly="state != 'draft'"/>
+                                    <field name="incoterm_location" readonly="state != 'draft'"/>
+                                    <field name="payment_terms_id" readonly="state != 'draft'"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Bank Details">
+                            <group>
+                                <field name="bank_id" options="{'no_open': True, 'no_edit': True}"
+                                       readonly="state != 'draft'"/>
+                                <field name="bank_name" readonly="state != 'draft'"/>
+                                <field name="bank_title" readonly="state != 'draft'"/>
+                                <field name="bank_address" readonly="state != 'draft'"/>
+                                <field name="account_num" readonly="state != 'draft'"/>
+                                <field name="iban" readonly="state != 'draft'"/>
+                                <field name="swift" readonly="state != 'draft'"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="reema_commercial_invoice_action" model="ir.actions.act_window">
+        <field name="name">Commercial Invoices</field>
+        <field name="res_model">reema.commercial.invoice</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="reema_mrp_menu_commercial_invoice"
+              name="Commercial Invoices"
+              parent="reema_mrp_menu_operations"
+              action="reema_commercial_invoice_action"
+              groups="base.group_user"
+              sequence="30"/>
+</odoo>

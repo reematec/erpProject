@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Commercial Invoices, same pattern as the
+        Packing List report: report_type="qweb-html" (no PDF), no
+        binding_model_id. Triggered by action_print_commercial_invoice(),
+        opens /report/html/... in a new tab; the user prints with Ctrl+P.
+        Laid out to match the real Commercial Invoice document.
+    -->
+    <record id="action_report_commercial_invoice" model="ir.actions.report">
+        <field name="name">Commercial Invoice</field>
+        <field name="model">reema.commercial.invoice</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_mrp.report_commercial_invoice</field>
+        <field name="report_file">reema_mrp.report_commercial_invoice</field>
+        <field name="print_report_name">'Commercial Invoice - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_commercial_invoice">
+        <t t-call="web.html_container">
+            <style>
+                @media print {
+                    .ci_doc { page-break-after: always; }
+                    .ci_doc:last-child { page-break-after: auto; }
+                    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+                @page { margin: 12mm; }
+                .ci-order-row, .ci-order-row > td {
+                    background-color: #ffffff !important;
+                    border-bottom: none !important;
+                }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page ci_doc">
+
+                        <!-- Title -->
+                        <div class="row mt-2 mb-2">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    COMMERCIAL INVOICE
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- Header block -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Invoice No.</strong></td>
+                                        <td><span t-field="o.commercial_invoice_no"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Dated</strong></td>
+                                        <td><span t-field="o.date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Order No.</strong></td>
+                                        <td><span t-field="o.order_no_display"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Container No.</strong></td>
+                                        <td><span t-field="o.container_no"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>B/L No.</strong></td>
+                                        <td><span t-field="o.bl_no"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Per</strong></td>
+                                        <td><span t-field="o.vessel_name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>B/L Dated</strong></td>
+                                        <td><span t-field="o.bl_date"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Goods Addressed To</strong></td>
+                                        <td>
+                                            <span t-field="o.ship_to_name"/><br/>
+                                            <span t-field="o.ship_to_address"/>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>For A/C Of</strong></td>
+                                        <td>
+                                            <span t-field="o.bill_to_name"/><br/>
+                                            <span t-field="o.bill_to_address"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Line items, grouped per order -->
+                        <table class="table table-sm table-striped" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Item #</th>
+                                    <th>Description</th>
+                                    <th>Color</th>
+                                    <th>Size</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">U/Price</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="grouped_map.get(o.id, [])" t-as="group">
+                                    <tr class="ci-order-row">
+                                        <td colspan="7">
+                                            <strong>ORDER:
+                                                <t t-esc="group['invoice'].client_order_number or group['invoice'].name"/>
+                                            </strong>
+                                        </td>
+                                    </tr>
+                                    <t t-foreach="group['lines']" t-as="line">
+                                        <tr>
+                                            <td><t t-esc="line['client_sku']"/></td>
+                                            <td><t t-esc="line['description']"/></td>
+                                            <td><t t-esc="line['sample_color']"/></td>
+                                            <td><t t-esc="line['size']"/></td>
+                                            <td class="text-end"><t t-esc="line['qty']"/></td>
+                                            <td class="text-end"><t t-esc="line['price_unit']"/></td>
+                                            <td class="text-end"><t t-esc="line['amount']"/></td>
+                                        </tr>
+                                    </t>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Footer: commodity/HS breakdown + totals -->
+                        <t t-set="breakdown" t-value="breakdown_map.get(o.id, {})"/>
+                        <div class="row mt-2">
+                            <div class="col-4" style="font-size:12px;">
+                                <div>
+                                    <strong>TOTAL <t t-esc="(o.incoterm_id.name or 'FOB')"/> <t t-esc="o.incoterm_location"/></strong>
+                                </div>
+                                <t t-foreach="breakdown.get('hs_codes', [])" t-as="hs">
+                                    <div>HS Code: <t t-esc="hs"/></div>
+                                </t>
+                            </div>
+                            <div class="col-4" style="font-size:12px;">
+                                <t t-foreach="breakdown.get('groups', [])" t-as="grp">
+                                    <div><t t-esc="grp['qty']"/> PCS <t t-esc="grp['label']"/></div>
+                                </t>
+                            </div>
+                            <div class="col-4" style="font-size:12px;">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td><strong>Total Qty:</strong></td>
+                                        <td class="text-end"><span t-field="o.total_qty"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total:</strong></td>
+                                        <td class="text-end"><span t-field="o.total_amount"/> <t t-esc="o.currency_id.name"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="row mt-2">
+                            <div class="col-12" style="font-size:12px;">
+                                <strong>Amount in Words:</strong> <t t-esc="o.amount_in_words"/>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-6" style="font-size:13px;">
+                                <span t-field="o.commercial_invoice_no"/><br/>
+                                <strong>REEMA GROUP OF COMPANIES</strong>
+                            </div>
+                            <div class="col-6 text-end" style="font-size:13px; padding-top: 30px;">
+                                <strong>PARTNER</strong>
+                            </div>
+                        </div>
+
+                        <!-- Bank Information -->
+                        <div class="row mt-4">
+                            <div class="col-12" style="font-size:12px;">
+                                <strong>BANK INFORMATION</strong>
+                                <table class="table table-sm table-borderless" style="font-size:12px;">
+                                    <tr>
+                                        <td style="width:20%;">Bank Name:</td>
+                                        <td><span t-field="o.bank_name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Address:</td>
+                                        <td><span t-field="o.bank_address"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Account No:</td>
+                                        <td><span t-field="o.account_num"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Swift Code:</td>
+                                        <td><span t-field="o.swift"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>IBAN No:</td>
+                                        <td><span t-field="o.iban"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

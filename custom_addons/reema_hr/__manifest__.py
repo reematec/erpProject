@@ -9,11 +9,12 @@
         loans with installment recovery, and monthly payslips posted to Accounting.
     """,
     'author': 'Reema Tec',
-    'depends': ['hr', 'reema_accounting'],
+    'depends': ['hr', 'hr_skills', 'reema_accounting'],
     'data': [
         'security/reema_hr_security.xml',
         'security/ir.model.access.csv',
         'data/ir_sequence_data.xml',
+        'data/hr_menu_restrictions.xml',
         'views/res_company_views.xml',
         'views/hr_employee_views.xml',
         'views/reema_hr_attendance_views.xml',

@@ -21,3 +21,4 @@ access_reema_ledger_wizard_accountant,reema.ledger.wizard accountant,model_reema
 access_reema_vendor_balance_accountant,reema.vendor.balance accountant,model_reema_vendor_balance,group_reema_accountant,1,0,0,0
 access_reema_customer_balance_accountant,reema.customer.balance accountant,model_reema_customer_balance,group_reema_accountant,1,0,0,0
 access_reema_contractor_balance_accountant,reema.contractor.balance accountant,model_reema_contractor_balance,group_reema_accountant,1,0,0,0
+access_reema_opening_balance_wizard_accountant,reema.opening.balance.wizard accountant,model_reema_opening_balance_wizard,account.group_account_manager,1,1,1,1

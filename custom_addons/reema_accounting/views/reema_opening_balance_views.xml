@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── New Opening Balance dialog: launched from the Opening Balances
+         list's own "New" header button (account_menu_views.xml). One
+         account, one Debit or Credit amount, an optional note — nothing
+         else. "Save & New" clears the dialog for the next account so
+         several can be keyed in back to back without closing; "Save &
+         Close" is done for now and returns to the list, which refreshes
+         to show the new entry. ── -->
+    <record id="view_reema_opening_balance_wizard_form" model="ir.ui.view">
+        <field name="name">reema.opening.balance.wizard.form</field>
+        <field name="model">reema.opening.balance.wizard</field>
+        <field name="arch" type="xml">
+            <form string="New Opening Balance">
+                <field name="currency_id" invisible="1"/>
+                <group>
+                    <field name="account_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                    <field name="debit"/>
+                    <field name="credit"/>
+                    <field name="note"/>
+                </group>
+                <footer>
+                    <button name="action_save_and_new" string="Save &amp; New" type="object" class="btn-primary"/>
+                    <button name="action_save_and_close" string="Save &amp; Close" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reema_opening_balance_wizard" model="ir.actions.act_window">
+        <field name="name">New Opening Balance</field>
+        <field name="res_model">reema.opening.balance.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

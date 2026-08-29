@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Customer privacy gate: for records where hide_customer_details is
+         True (customer_rank > 0 and viewer is neither Administrator nor
+         Sales Manager), collapse the form to the name only. Vendor/contact
+         records (customer_rank = 0) are never affected — same base view,
+         so this applies wherever a customer record is opened, including
+         via a smart button from an invoice. -->
+    <record id="view_partner_form_hide_customer_details" model="ir.ui.view">
+        <field name="name">res.partner.form.hide.customer.details</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <field name="hide_customer_details" invisible="1"/>
+            </xpath>
+            <div name="button_box" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </div>
+            <field name="image_1920" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="company_type" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <xpath expr="//div[hasclass('oe_title')]//div[hasclass('o_row')]" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </xpath>
+            <xpath expr="//div[hasclass('oe_title')]/following-sibling::group[1]" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </xpath>
+            <notebook position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </notebook>
+        </field>
+    </record>
+
+    <record id="view_partner_tree_hide_customer_details" model="ir.ui.view">
+        <field name="name">res.partner.list.hide.customer.details</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <field name="complete_name" position="before">
+                <field name="hide_customer_details" column_invisible="1"/>
+            </field>
+            <field name="phone" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="mobile" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="email" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="user_id" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="street" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="city" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="state_id" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="country_id" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="vat" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="category_id" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="activity_ids" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="invoice_sending_method" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+            <field name="invoice_edi_format" position="attributes">
+                <attribute name="invisible">hide_customer_details</attribute>
+            </field>
+        </field>
+    </record>
+
+</odoo>

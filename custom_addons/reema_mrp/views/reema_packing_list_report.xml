@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Packing Lists, same pattern as MO/Piece Rate:
+        report_type="qweb-html" (no PDF), no binding_model_id (kept OUT of
+        the cog Print menu). Triggered by action_print_packing_list(), which
+        opens /report/html/... in a new tab; the user prints with Ctrl+P.
+        Laid out to match the real Packing List document — client/order
+        header block, articles grouped under an "ORDER: ..." heading per
+        order, cartons/weight totals at the bottom.
+    -->
+    <record id="action_report_packing_list" model="ir.actions.report">
+        <field name="name">Packing List</field>
+        <field name="model">reema.packing.list</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_mrp.report_packing_list</field>
+        <field name="report_file">reema_mrp.report_packing_list</field>
+        <field name="print_report_name">'Packing List - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_packing_list">
+        <t t-call="web.html_container">
+            <!-- No in-page toolbar: user prints with Ctrl+P and closes the tab. -->
+            <style>
+                @media print {
+                    .packing_list_doc { page-break-after: always; }
+                    .packing_list_doc:last-child { page-break-after: auto; }
+                    /* Firefox hides background colors on print unless told
+                       otherwise — Chrome does it by default, which is why
+                       .pkl-order-row's white background only showed there. */
+                    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+                @page { margin: 12mm; }
+                /* Dedicated classes with !important instead of relying on
+                   border-collapse conflict resolution between two adjacent
+                   cells' borders — that resolution isn't consistent across
+                   Firefox/Chrome, this is. */
+                .pkl-order-row, .pkl-order-row > td {
+                    background-color: #ffffff !important;
+                    border-bottom: none !important;
+                }
+                .pkl-no-border-bottom, .pkl-no-border-bottom > td {
+                    border-bottom: none !important;
+                }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page packing_list_doc">
+
+                        <!-- Title: PL reference + client -->
+                        <div class="row mt-2 mb-2">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    PACKING LIST — <span t-field="o.name"/>
+                                    <br/>
+                                    <span t-field="o.partner_id"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- Basic details -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Client Address</strong></td>
+                                        <td><span t-field="o.client_address"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Date</strong></td>
+                                        <td><span t-field="o.date"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Container Number</strong></td>
+                                        <td><span t-field="o.container_no"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Commercial Invoice No.</strong></td>
+                                        <td><span t-field="o.commercial_invoice_no"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Articles, grouped per order -->
+                        <table class="table table-sm table-striped" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Carton No.</th>
+                                    <th class="text-end">Qty/Carton</th>
+                                    <th class="text-end">Total Qty</th>
+                                    <th>SKU</th>
+                                    <th>Description</th>
+                                    <th>Color</th>
+                                    <th>Size</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="grouped_map.get(o.id, [])" t-as="group">
+                                    <tr class="pkl-order-row">
+                                        <td colspan="7">
+                                            <strong>ORDER:
+                                                <t t-esc="group['invoice'].client_order_number or group['invoice'].name"/>
+                                            </strong>
+                                        </td>
+                                    </tr>
+                                    <t t-foreach="group['rows']" t-as="row">
+                                        <tr t-attf-class="{{'pkl-no-border-bottom' if row['no_border'] else ''}}">
+                                            <td><t t-esc="row['carton_range']"/></td>
+                                            <td class="text-end"><t t-esc="row['qty_per_carton']"/></td>
+                                            <td class="text-end"><t t-esc="row['qty']"/></td>
+                                            <td><t t-esc="row['client_sku']"/></td>
+                                            <td><t t-esc="row['description']"/></td>
+                                            <td><t t-esc="row['sample_color']"/></td>
+                                            <td><t t-esc="row['size']"/></td>
+                                        </tr>
+                                    </t>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Totals -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Total Cartons</strong></td>
+                                        <td><span t-field="o.total_cartons"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Gross Weight</strong></td>
+                                        <td><span t-field="o.gross_weight"/> kg</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Net Weight</strong></td>
+                                        <td><span t-field="o.net_weight"/> kg</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

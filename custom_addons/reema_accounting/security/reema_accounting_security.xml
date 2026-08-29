@@ -36,4 +36,14 @@
         <field name="implied_ids" eval="[(4, ref('group_reema_accountant'))]"/>
     </record>
 
+    <!-- Sales Manager: full customer master-data visibility (privacy gate).
+         Everyone else sees only the customer's name on Accounting > Customers
+         > Customers — address, contact info, financials and notes are hidden.
+         Vendor/contractor/contact records are unaffected. -->
+    <record id="group_reema_sales_manager" model="res.groups">
+        <field name="name">Sales Manager</field>
+        <field name="category_id" ref="module_category_reema_accounting"/>
+        <field name="comment">Full visibility into customer master data (address, contact details, financials). Everyone else sees only the customer name.</field>
+    </record>
+
 </odoo>

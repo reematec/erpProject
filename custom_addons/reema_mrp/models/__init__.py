@@ -10,7 +10,15 @@ from . import reema_production_order
 from . import reema_wo_batch
 from . import reema_material_issuance
 from . import reema_wip_costing
+from . import reema_fg_costing
+from . import reema_packing_list
+from . import reema_packing_list_report
+from . import reema_box_packing_list
+from . import reema_box_packing_list_report
+from . import reema_commercial_invoice
+from . import reema_commercial_invoice_report
 from . import reema_consumable_issuance
+from . import reema_consumable_stock_take
 from . import res_partner
 from . import res_users
 from . import reema_ilo

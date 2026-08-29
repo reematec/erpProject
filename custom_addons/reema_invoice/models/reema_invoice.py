@@ -38,6 +38,12 @@ class ReemaInvoice(models.Model):
     # Client's purchase order reference
     client_order_number = fields.Char(string='Client Order Number', tracking=True)
     client_order_date   = fields.Date(string='Client Order Date', tracking=True)
+    commercial_invoice_no = fields.Char(
+        string='Commercial Invoice No.', tracking=True,
+        help='Cross-reference to the Commercial Invoice covering the '
+             'shipment(s) for this order — links this Pro Forma Invoice and '
+             'its Packing List(s) together under one shipment reference.',
+    )
     payment_terms_id    = fields.Many2one('account.payment.term', string='Payment Terms', tracking=True)
 
     # ── Shipping & Terms ──────────────────────────────────────────────────────
@@ -230,8 +236,10 @@ class ReemaInvoice(models.Model):
         self.write({'state': 'sent'})
 
     def action_accept(self):
-        for rec in self:
-            rec._create_accounting_entry()
+        # No accounting entry here — revenue is posted at Commercial Invoice
+        # confirm instead (see reema_mrp/models/reema_commercial_invoice.py),
+        # since one order can ship (and so be invoiced) across several
+        # partial Commercial Invoices over time, not all at once.
         self.write({'state': 'accepted'})
 
     def action_reject(self):
@@ -267,124 +275,6 @@ class ReemaInvoice(models.Model):
                 rec.move_id.unlink()
                 rec.move_id = False
         self.write({'state': 'pending'})
-
-    def _create_accounting_entry(self):
-        self.ensure_one()
-        self = self.sudo()
-        company = self.env.company
-        company_currency = company.currency_id
-        invoice_currency = self.currency_id
-        date = fields.Date.today()
-        is_foreign = invoice_currency != company_currency
-
-        if not self.line_ids:
-            raise UserError('Cannot accept an invoice with no lines.')
-
-        receivable_account = self.partner_id.property_account_receivable_id
-        if not receivable_account:
-            raise UserError(
-                f'Customer "{self.partner_id.name}" has no receivable account set. '
-                f'Create a GL account for this customer first.'
-            )
-
-        pkr_total = invoice_currency._convert(
-            self.net_total_payable, company_currency, company, date
-        )
-        rate = pkr_total / self.net_total_payable if self.net_total_payable else 0.0
-        terms = self.payment_terms_id.name or ''
-
-        # Receivable line: PI | FC amount @ rate | Payment Terms
-        if is_foreign:
-            recv_desc = f"{self.name} | {invoice_currency.name} {self.net_total_payable:,.2f} @ {rate:,.4f}"
-        else:
-            recv_desc = f"{self.name} | {company_currency.name} {pkr_total:,.2f}"
-        if terms:
-            recv_desc += f" | {terms}"
-
-        recv_line_vals = {
-            'account_id': receivable_account.id,
-            'name': recv_desc,
-            'debit': pkr_total,
-            'credit': 0.0,
-        }
-        if is_foreign:
-            # Only stamp a foreign currency_id/amount_currency when the line
-            # actually is foreign — setting currency_id (even to the company's
-            # own currency) makes Odoo derive debit/credit FROM amount_currency,
-            # so passing amount_currency=0.0 here would silently zero out
-            # pkr_total on domestic invoices.
-            recv_line_vals['currency_id'] = invoice_currency.id
-            recv_line_vals['amount_currency'] = self.net_total_payable
-        move_lines = [(0, 0, recv_line_vals)]
-
-        account_totals = {}
-        for line in self.line_ids:
-            account = line.sample_id.product_type_id.sales_account_id
-            if not account:
-                raise UserError(
-                    f'Sample "{line.sample_code}" has no Product Type or Sales Account configured. '
-                    f'Go to Sampling > Configuration > Product Types, then set the Product Type '
-                    f'on the sampling blueprint.'
-                )
-            pkr_line = invoice_currency._convert(
-                line.price_subtotal, company_currency, company, date
-            )
-            type_name = line.sample_id.product_type_id.name
-            if account.id not in account_totals:
-                account_totals[account.id] = {'pkr': 0.0, 'fc': 0.0, 'type_name': type_name}
-            account_totals[account.id]['pkr'] += pkr_line
-            account_totals[account.id]['fc'] += line.price_subtotal
-
-        for account_id, amounts in account_totals.items():
-            if is_foreign:
-                credit_desc = (
-                    f"{self.name} | {amounts['type_name']} | "
-                    f"{invoice_currency.name} {amounts['fc']:,.2f}"
-                )
-            else:
-                credit_desc = f"{self.name} | {amounts['type_name']} | {company_currency.name} {amounts['pkr']:,.2f}"
-            credit_line_vals = {
-                'account_id': account_id,
-                'name': credit_desc,
-                'debit': 0.0,
-                'credit': amounts['pkr'],
-            }
-            if is_foreign:
-                credit_line_vals['currency_id'] = invoice_currency.id
-                credit_line_vals['amount_currency'] = -amounts['fc']
-            move_lines.append((0, 0, credit_line_vals))
-
-        # Narration — full summary visible on the journal entry form
-        narration = [
-            f"Pro Forma Invoice : {self.name}",
-            f"Customer          : {self.partner_id.name}",
-            f"PI Date           : {self.date}",
-        ]
-        if self.client_order_number:
-            narration.append(f"Client Order No.  : {self.client_order_number}")
-        narration.append(f"Invoice Total     : {invoice_currency.name} {self.net_total_payable:,.2f}")
-        if is_foreign:
-            narration += [
-                f"Exchange Rate     : 1 {invoice_currency.name} = {rate:,.4f} {company_currency.name}",
-                f"{company_currency.name} Equivalent  : {company_currency.name} {pkr_total:,.2f}",
-            ]
-
-        journal = self.env['account.journal'].search(
-            [('type', '=', 'sale'), ('company_id', '=', company.id)], limit=1
-        )
-        if not journal:
-            raise UserError('No Sales journal found. Please configure one in Accounting.')
-
-        move = self.env['account.move'].sudo().create({
-            'move_type': 'entry',
-            'journal_id': journal.id,
-            'date': date,
-            'ref': self.name,
-            'narration': '\n'.join(narration),
-            'line_ids': move_lines,
-        })
-        move.action_post()
-        self.move_id = move
 
     def action_view_move(self):
         self.ensure_one()
@@ -476,6 +366,11 @@ class ReemaInvoiceLine(models.Model):
             self.sample_color = s.color
             self.hs_code      = s.hs_code
             self.ean          = s.barcode
+
+    @api.depends('description', 'sample_name', 'sample_id.name')
+    def _compute_display_name(self):
+        for line in self:
+            line.display_name = line.description or line.sample_name or line.sample_id.name or _('Unnamed')
 
 
 class ReemaInvoiceDocument(models.Model):

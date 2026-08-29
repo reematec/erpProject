@@ -1019,6 +1019,7 @@
                        class="fst-italic text-muted" string="" readonly="1"/>
                 <field name="uom_id" string="Unit of Measure"
                        options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="weight"/>
             </xpath>
             <xpath expr="//group[@name='group_standard_price']//field[@name='categ_id']" position="replace"/>
 

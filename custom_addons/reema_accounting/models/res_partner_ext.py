@@ -17,6 +17,21 @@ class ResPartnerExt(models.Model):
         help='Individual current-asset account (1-1-3-xx) tracking advances given to this contractor.',
     )
 
+    hide_customer_details = fields.Boolean(
+        compute='_compute_hide_customer_details',
+        help='True when this is a customer record and the current user lacks '
+             'full visibility (not an Administrator or Sales Manager) — drives '
+             'the name-only view of Accounting > Customers > Customers.',
+    )
+
+    @api.depends('customer_rank')
+    @api.depends_context('uid')
+    def _compute_hide_customer_details(self):
+        privileged = self.env.user.has_group('base.group_system') \
+            or self.env.user.has_group('reema_accounting.group_reema_sales_manager')
+        for partner in self:
+            partner.hide_customer_details = partner.customer_rank > 0 and not privileged
+
     def _get_contractor_payable_account(self):
         """Return the shared Contractors Payable account (2-1-2-01) or False if not found."""
         return self.env['account.account'].search(

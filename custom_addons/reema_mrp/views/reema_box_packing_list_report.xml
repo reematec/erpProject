@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        HTML preview report for Box Packing Lists, same pattern as the
+        existing Packing List: report_type="qweb-html" (no PDF), no
+        binding_model_id (kept OUT of the cog Print menu). Triggered by
+        action_print_box_packing_list(), which opens /report/html/... in a
+        new tab; the user prints with Ctrl+P.
+        Laid out the same way the existing Packing List is: one printed row
+        per contiguous run of identical cartons (carton range, e.g.
+        "016-030"), not one block per physical box — necessary for a real
+        container shipment, which can run into hundreds of boxes. A run's
+        row expands to one line per article when that carton mixes articles.
+    -->
+    <record id="action_report_box_packing_list" model="ir.actions.report">
+        <field name="name">Box Packing List</field>
+        <field name="model">reema.box.packing.list</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">reema_mrp.report_box_packing_list</field>
+        <field name="report_file">reema_mrp.report_box_packing_list</field>
+        <field name="print_report_name">'Box Packing List - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_box_packing_list">
+        <t t-call="web.html_container">
+            <!-- No in-page toolbar: user prints with Ctrl+P and closes the tab. -->
+            <style>
+                @media print {
+                    .box_packing_list_doc { page-break-after: always; }
+                    .box_packing_list_doc:last-child { page-break-after: auto; }
+                    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+                @page { margin: 12mm; }
+                /* Dedicated class with !important instead of relying on
+                   border-collapse conflict resolution between two adjacent
+                   cells' borders — that resolution isn't consistent across
+                   Firefox/Chrome, this is. Same trick as the existing
+                   Packing List's own report. */
+                .pkl-no-border-bottom, .pkl-no-border-bottom > td {
+                    border-bottom: none !important;
+                }
+            </style>
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page box_packing_list_doc">
+
+                        <!-- Title: reference + client -->
+                        <div class="row mt-2 mb-2">
+                            <div class="col-12">
+                                <div style="font-size:15px; font-weight:700; margin-bottom:1px;">
+                                    BOX PACKING LIST — <span t-field="o.name"/>
+                                    <br/>
+                                    <span t-field="o.partner_id"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="margin-top:4px;"/>
+
+                        <!-- Basic details -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Client Address</strong></td>
+                                        <td><span t-field="o.client_address"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Date</strong></td>
+                                        <td><span t-field="o.date"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Container Number</strong></td>
+                                        <td><span t-field="o.container_no"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Commercial Invoice No.</strong></td>
+                                        <td><span t-field="o.commercial_invoice_no"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Cartons, one row per contiguous run of identical boxes (same
+                             size + same contents) — a real container can run into hundreds
+                             of physical boxes, and most are identical runs, so this reads
+                             the same way the existing Packing List's own carton ranges do. -->
+                        <table class="table table-sm table-striped mt-2" style="font-size:12px;">
+                            <thead>
+                                <tr class="table-dark">
+                                    <th>Carton No.</th>
+                                    <th>Size</th>
+                                    <th class="text-end">Weight (kg)</th>
+                                    <th>Order</th>
+                                    <th>SKU</th>
+                                    <th>Description</th>
+                                    <th>Color</th>
+                                    <th>Size</th>
+                                    <th class="text-end">Qty/Carton</th>
+                                    <th class="text-end">Total Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="rows_map.get(o.id, [])" t-as="row">
+                                    <t t-set="rowspan" t-value="len(row['articles']) or 1"/>
+                                    <t t-foreach="row['articles'] or [{}]" t-as="article">
+                                        <tr t-attf-class="{{'pkl-no-border-bottom' if not article_last else ''}}">
+                                            <t t-if="article_first">
+                                                <td t-att-rowspan="rowspan"><t t-esc="row['carton_range']"/></td>
+                                                <td t-att-rowspan="rowspan"><t t-esc="row['carton_size']"/></td>
+                                                <td t-att-rowspan="rowspan" class="text-end"><t t-esc="row['carton_weight']"/></td>
+                                            </t>
+                                            <td><t t-esc="article.get('order')"/></td>
+                                            <td><t t-esc="article.get('client_sku')"/></td>
+                                            <td><t t-esc="article.get('description')"/></td>
+                                            <td><t t-esc="article.get('sample_color')"/></td>
+                                            <td><t t-esc="article.get('size')"/></td>
+                                            <td class="text-end"><t t-esc="article.get('qty_per_carton')"/></td>
+                                            <td class="text-end"><t t-esc="article.get('qty_total')"/></td>
+                                        </tr>
+                                    </t>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <!-- Totals -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <table class="table table-sm table-borderless" style="font-size:13px;">
+                                    <tr>
+                                        <td style="width:45%;"><strong>Total Boxes</strong></td>
+                                        <td><span t-field="o.total_boxes"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Gross Weight</strong></td>
+                                        <td><span t-field="o.gross_weight"/> kg</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Net Weight</strong></td>
+                                        <td><span t-field="o.net_weight"/> kg</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>
