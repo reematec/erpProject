@@ -12,6 +12,7 @@ class ReportVendorBalance(models.AbstractModel):
             'doc_ids': docids,
             'doc_model': 'reema.vendor.balance',
             'docs': docs,
-            'total_balance': sum(docs.mapped('balance')),
+            'total_debit': sum(docs.mapped('debit')),
+            'total_credit': sum(docs.mapped('credit')),
             'company': self.env.company,
         }

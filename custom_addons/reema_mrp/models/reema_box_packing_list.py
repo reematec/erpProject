@@ -65,7 +65,9 @@ class ReemaBoxPackingList(models.Model):
     total_boxes = fields.Integer(string='Total Boxes', compute='_compute_total_boxes', store=True)
     net_weight = fields.Float(
         string='Net Weight (kg)', digits=(10, 2), compute='_compute_weights', store=True,
-        help='Sum of each article\'s qty × its product\'s own weight.',
+        help='Sum, across every box run, of qty per box × No. of Boxes × '
+             'that article\'s own weight — what\'s actually packed, not '
+             'what was ordered.',
     )
     gross_weight = fields.Float(
         string='Gross Weight (kg)', digits=(10, 2), compute='_compute_weights', store=True,
@@ -91,11 +93,14 @@ class ReemaBoxPackingList(models.Model):
         for rec in self:
             rec.total_boxes = sum(rec.box_ids.mapped('carton_qty'))
 
-    @api.depends('article_ids.qty', 'article_ids.sample_id.weight_kg',
+    @api.depends('box_ids.line_ids.qty', 'box_ids.line_ids.article_id.sample_id.weight_kg',
                  'box_ids.carton_weight', 'box_ids.carton_qty')
     def _compute_weights(self):
         for rec in self:
-            net = sum(article.qty * article.sample_id.weight_kg for article in rec.article_ids)
+            net = sum(
+                box.carton_qty * line.qty * line.article_id.sample_id.weight_kg
+                for box in rec.box_ids for line in box.line_ids
+            )
             packaging = sum(box.carton_weight * box.carton_qty for box in rec.box_ids)
             rec.net_weight = net
             rec.gross_weight = net + packaging
@@ -652,7 +657,10 @@ class ReemaBoxPackingListBox(models.Model):
     def _compute_box_no_range(self):
         for bpl in self.mapped('box_packing_id'):
             runs_in_self = self.filtered(lambda r: r.box_packing_id == bpl)
-            all_runs = bpl.box_ids.sorted(lambda r: (r.sequence, r.id))
+            # Sort by sequence only (stable sort keeps ties in original
+            # order); comparing NewId to NewId directly raises TypeError,
+            # so an id tiebreaker can't be used for unsaved rows.
+            all_runs = bpl.box_ids.sorted(lambda r: r.sequence)
             start = 1
             for run in all_runs:
                 if run in runs_in_self:

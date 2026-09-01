@@ -2,6 +2,17 @@
 <odoo>
 
     <!-- ══════════════════════════════════════════════════════════════════
+         INVENTORY > PRODUCTS — Stock Opening Balance
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_reema_stock_opening_balance"
+              name="Stock Opening Balance"
+              parent="stock.menu_stock_inventory_control"
+              action="action_reema_stock_opening_balance"
+              sequence="5"
+              groups="reema_mrp.group_reema_store,reema_mrp.group_reema_production_manager"/>
+
+    <!-- ══════════════════════════════════════════════════════════════════
          INVENTORY > OPERATIONS — Bladder Winding
     ══════════════════════════════════════════════════════════════════════ -->
 

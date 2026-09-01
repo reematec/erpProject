@@ -15,15 +15,21 @@
                             confirm="Delete this run? All boxes in it will be removed too."/>
                 </header>
                 <sheet>
+                    <div class="alert alert-info mb-3" role="alert">
+                        <strong>Save &amp; Close</strong> / <strong>Save &amp; New</strong> only add
+                        this run to the list below — nothing is checked or saved to the database
+                        yet. Quantities are only validated when you save the Box Packing List
+                        itself, so double-check the numbers here before saving it.
+                    </div>
                     <group>
                         <group>
-                            <field name="carton_range" readonly="1"/>
                             <field name="carton_size"/>
                             <field name="carton_weight"/>
+                            <field name="carton_qty"/>
                         </group>
                         <group>
-                            <field name="carton_qty"/>
                             <field name="total_qty" readonly="1"/>
+                            <field name="carton_range" string="Cartons" readonly="1"/>
                         </group>
                     </group>
                     <field name="line_ids">
@@ -35,7 +41,7 @@
                             <field name="client_sku" optional="show" readonly="1"/>
                             <field name="sample_color" optional="show" readonly="1"/>
                             <field name="size" optional="show" readonly="1"/>
-                            <field name="qty" string="Qty/Box" optional="show"/>
+                            <field name="qty" string="Per Box" optional="show"/>
                         </list>
                     </field>
                 </sheet>

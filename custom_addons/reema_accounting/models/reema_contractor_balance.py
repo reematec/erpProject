@@ -25,6 +25,8 @@ class ReemaContractorBalance(models.Model):
         string='Account', readonly=True,
         help='This contractor\'s advance account (1-1-3-xx) — blank if none has been created yet.',
     )
+    debit = fields.Monetary(string='Debit', readonly=True)
+    credit = fields.Monetary(string='Credit', readonly=True)
     balance = fields.Monetary(string='Balance', readonly=True)
     currency_id = fields.Many2one('res.currency', string='Currency', readonly=True)
     company_id = fields.Many2one('res.company', readonly=True)
@@ -37,6 +39,8 @@ class ReemaContractorBalance(models.Model):
                     p.id AS id,
                     p.id AS partner_id,
                     acc.code_store ->> aar.res_company_id::text AS account_code,
+                    COALESCE(SUM(aml.debit) FILTER (WHERE am.state = 'posted'), 0) AS debit,
+                    COALESCE(SUM(aml.credit) FILTER (WHERE am.state = 'posted'), 0) AS credit,
                     COALESCE(SUM(aml.balance) FILTER (WHERE am.state = 'posted'), 0) AS balance,
                     (SELECT currency_id FROM res_company ORDER BY id LIMIT 1) AS currency_id,
                     (SELECT id FROM res_company ORDER BY id LIMIT 1) AS company_id

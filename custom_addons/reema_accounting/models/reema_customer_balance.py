@@ -17,6 +17,8 @@ class ReemaCustomerBalance(models.Model):
     partner_id = fields.Many2one('res.partner', string='Customer', readonly=True)
     account_id = fields.Many2one('account.account', string='Account', readonly=True)
     account_code = fields.Char(string='Account Code', readonly=True)
+    debit = fields.Monetary(string='Debit', readonly=True)
+    credit = fields.Monetary(string='Credit', readonly=True)
     balance = fields.Monetary(string='Balance', readonly=True)
     currency_id = fields.Many2one('res.currency', string='Currency', readonly=True)
     company_id = fields.Many2one('res.company', readonly=True)
@@ -30,6 +32,8 @@ class ReemaCustomerBalance(models.Model):
                     acc.partner_id AS partner_id,
                     acc.id AS account_id,
                     acc.code_store ->> aar.res_company_id::text AS account_code,
+                    COALESCE(SUM(aml.debit) FILTER (WHERE am.state = 'posted'), 0) AS debit,
+                    COALESCE(SUM(aml.credit) FILTER (WHERE am.state = 'posted'), 0) AS credit,
                     COALESCE(SUM(aml.balance) FILTER (WHERE am.state = 'posted'), 0) AS balance,
                     rc.currency_id AS currency_id,
                     aar.res_company_id AS company_id

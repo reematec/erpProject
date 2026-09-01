@@ -21,16 +21,17 @@ class PayslipMonthFilterListController extends ListController {
         this.orm = useService("orm");
         this.monthOptions = MONTH_OPTIONS;
         this.filterState = useState({
-            month: false,
+            month: String(new Date().getMonth() + 1),
             year: String(new Date().getFullYear()),
         });
-        // The genuinely-empty starting state (nothing loads until a month is
-        // picked, so opening the menu never fetches every payslip ever
-        // generated) is handled entirely by the "No Month Selected" search
-        // filter + the action's search_default_ context — that's evaluated
-        // by the search model's own init, before the first fetch, which is
-        // the only reliable place for it (calling searchModel methods here
-        // in setup() races the model's own initial load and silently loses).
+        // Purely cosmetic — keeps the Month/Year dropdowns showing the current
+        // month, matching the "This Month" facet chip that's actually scoping
+        // the list. The real scoping (never fetching every payslip ever
+        // generated on open) is handled entirely by the "This Month" search
+        // filter + the action's search_default_ context — that's evaluated by
+        // the search model's own init, before the first fetch, which is the
+        // only reliable place for it (calling searchModel methods here in
+        // setup() races the model's own initial load and silently loses).
         // This widget only ever reacts to actual user input from here on.
     }
 

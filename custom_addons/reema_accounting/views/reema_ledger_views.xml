@@ -90,7 +90,8 @@
                 </header>
                 <field name="account_code" string="Account"/>
                 <field name="partner_id" string="Customer"/>
-                <field name="balance" string="Balance (PKR)" widget="monetary" sum="Total"/>
+                <field name="debit" string="Debit (PKR)" widget="monetary" sum="Total Debit"/>
+                <field name="credit" string="Credit (PKR)" widget="monetary" sum="Total Credit"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="company_id" column_invisible="1"/>
             </list>
@@ -167,7 +168,8 @@
                 </header>
                 <field name="account_code" string="Account"/>
                 <field name="partner_id" string="Vendor"/>
-                <field name="balance" string="Balance (PKR)" widget="monetary" sum="Total"/>
+                <field name="debit" string="Debit (PKR)" widget="monetary" sum="Total Debit"/>
+                <field name="credit" string="Credit (PKR)" widget="monetary" sum="Total Credit"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="company_id" column_invisible="1"/>
             </list>
@@ -247,7 +249,8 @@
                 </header>
                 <field name="account_code" string="Account"/>
                 <field name="partner_id" string="Contractor"/>
-                <field name="balance" string="Balance (PKR)" widget="monetary" sum="Total"/>
+                <field name="debit" string="Debit (PKR)" widget="monetary" sum="Total Debit"/>
+                <field name="credit" string="Credit (PKR)" widget="monetary" sum="Total Credit"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="company_id" column_invisible="1"/>
             </list>

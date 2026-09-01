@@ -1,4 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reema_sob_store,reema.stock.opening.balance store,model_reema_stock_opening_balance,reema_mrp.group_reema_store,1,1,1,0
+access_reema_sob_manager,reema.stock.opening.balance manager,model_reema_stock_opening_balance,reema_mrp.group_reema_production_manager,1,1,1,1
 access_reema_bwi_store,reema.bladder.winding.issue store,model_reema_bladder_winding_issue,reema_mrp.group_reema_store,1,1,1,0
 access_reema_bwi_manager,reema.bladder.winding.issue manager,model_reema_bladder_winding_issue,reema_mrp.group_reema_production_manager,1,1,1,1
 access_reema_bwr_store,reema.bladder.winding.receipt store,model_reema_bladder_winding_receipt,reema_mrp.group_reema_store,1,1,1,0

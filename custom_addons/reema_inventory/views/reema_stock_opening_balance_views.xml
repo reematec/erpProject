@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_reema_stock_opening_balance_form" model="ir.ui.view">
+        <field name="name">reema.stock.opening.balance.form</field>
+        <field name="model">reema.stock.opening.balance</field>
+        <field name="arch" type="xml">
+            <form string="Stock Opening Balance">
+                <header>
+                    <button name="action_post" string="Post" type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Post this opening balance? This moves stock and cannot be changed afterwards."/>
+                    <button name="action_reset_to_draft" string="Reset to Draft" type="object"
+                            class="btn-warning"
+                            invisible="state != 'posted' or move_id"
+                            groups="reema_mrp.group_reema_production_manager"
+                            confirm="Reset this opening balance to Draft?"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,posted"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Opening Balance">
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="product_id" options="{'no_create': True, 'no_edit': True}" readonly="state != 'draft'"/>
+                            <field name="location_id" options="{'no_create': True, 'no_edit': True, 'no_open': True}" readonly="state != 'draft'"/>
+                            <field name="quantity" readonly="state != 'draft'"/>
+                            <field name="uom_id" readonly="1"/>
+                        </group>
+                        <group string="Other">
+                            <field name="entered_by" options="{'no_create': True, 'no_edit': True, 'no_open': True}" readonly="1"/>
+                            <field name="move_id" options="{'no_create': True, 'no_edit': True}" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="notes" readonly="state != 'draft'"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reema_stock_opening_balance_list" model="ir.ui.view">
+        <field name="name">reema.stock.opening.balance.list</field>
+        <field name="model">reema.stock.opening.balance</field>
+        <field name="arch" type="xml">
+            <list string="Stock Opening Balances"
+                  decoration-muted="state == 'draft'"
+                  decoration-success="state == 'posted'">
+                <field name="name" optional="show"/>
+                <field name="date" optional="show"/>
+                <field name="product_id" optional="show" options="{'no_create': True, 'no_edit': True}"/>
+                <field name="location_id" optional="show" options="{'no_create': True, 'no_edit': True, 'no_open': True}"/>
+                <field name="quantity" optional="show"/>
+                <field name="uom_id" optional="show"/>
+                <field name="entered_by" optional="hide"/>
+                <field name="state" widget="badge" optional="hide"
+                       decoration-muted="state == 'draft'"
+                       decoration-success="state == 'posted'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reema_stock_opening_balance_search" model="ir.ui.view">
+        <field name="name">reema.stock.opening.balance.search</field>
+        <field name="model">reema.stock.opening.balance</field>
+        <field name="arch" type="xml">
+            <search string="Search Stock Opening Balances">
+                <field name="name"/>
+                <field name="product_id"/>
+                <field name="location_id"/>
+                <separator/>
+                <filter string="Draft" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Posted" name="posted" domain="[('state','=','posted')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Location" name="group_location" context="{'group_by': 'location_id'}"/>
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reema_stock_opening_balance" model="ir.actions.act_window">
+        <field name="name">Stock Opening Balance</field>
+        <field name="res_model">reema.stock.opening.balance</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reema_stock_opening_balance_search"/>
+    </record>
+
+</odoo>

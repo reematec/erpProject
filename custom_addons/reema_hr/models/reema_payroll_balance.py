@@ -21,6 +21,8 @@ class ReemaPayrollBalance(models.Model):
         string='Account', readonly=True,
         help='This employee\'s Advances & Loans account (1-1-4-xx) — blank if none has been created yet.',
     )
+    debit = fields.Monetary(string='Debit', readonly=True)
+    credit = fields.Monetary(string='Credit', readonly=True)
     balance = fields.Monetary(string='Balance', readonly=True)
     currency_id = fields.Many2one('res.currency', string='Currency', readonly=True)
     company_id = fields.Many2one('res.company', readonly=True)
@@ -33,6 +35,8 @@ class ReemaPayrollBalance(models.Model):
                     e.id AS id,
                     e.id AS employee_id,
                     acc.code_store ->> aar.res_company_id::text AS account_code,
+                    COALESCE(SUM(aml.debit) FILTER (WHERE am.state = 'posted'), 0) AS debit,
+                    COALESCE(SUM(aml.credit) FILTER (WHERE am.state = 'posted'), 0) AS credit,
                     COALESCE(SUM(aml.balance) FILTER (WHERE am.state = 'posted'), 0) AS balance,
                     (SELECT currency_id FROM res_company ORDER BY id LIMIT 1) AS currency_id,
                     (SELECT id FROM res_company ORDER BY id LIMIT 1) AS company_id

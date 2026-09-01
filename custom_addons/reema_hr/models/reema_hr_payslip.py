@@ -591,8 +591,15 @@ class ReemaHrPayslip(models.Model):
         # explicitly ticked (or called from the form, always exactly one
         # record), prints each of those as its own individual detailed slip.
         if not self:
-            active_domain = self.env.context.get('active_domain')
-            records = self.search(active_domain) if active_domain else self
+            # Note: check *presence* of the key, not truthiness — an empty list
+            # ([]) is a legitimate "no filter, show everything" domain (e.g. the
+            # Accounting > Payroll > Payslips screen, which has no default month
+            # filter), and is falsy in Python, so `if active_domain` would wrongly
+            # treat it the same as "no domain sent at all" and print nothing.
+            if 'active_domain' in self.env.context:
+                records = self.search(self.env.context['active_domain'])
+            else:
+                records = self
             if not records:
                 raise UserError(_('No payslips to print — select one or more, or adjust the list filter first.'))
             # print_fields: the on-screen column order at the moment Print was

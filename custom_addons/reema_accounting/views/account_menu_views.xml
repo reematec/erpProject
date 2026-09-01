@@ -99,6 +99,29 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <!-- ── Customer Invoices: no New/Upload — invoices are only ever
+         generated through Sales's reema.invoice flow (action_view_move on
+         the sales invoice), never created by hand or scanned from this
+         screen. Clearing js_class drops the FileUploadListController
+         (account_tree) that injects the Upload button, same pattern as
+         the Contractor Bills Ready to Pay list above. ── -->
+    <record id="view_out_invoice_tree_no_new" model="ir.ui.view">
+        <field name="name">reema.account.out.invoice.list.no.new</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_out_invoice_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="create">0</attribute>
+                <attribute name="import">0</attribute>
+                <attribute name="js_class"></attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="account.action_move_out_invoice_type" model="ir.actions.act_window">
+        <field name="view_id" ref="view_out_invoice_tree_no_new"/>
+    </record>
+
     <!-- ── Vendor Payments form: pay-only, no "Receive Money" — Payment Type
          is hidden (mirrors the domain's hard 'outbound' below), Payment
          Method Line is hidden since every journal in this database only
@@ -177,6 +200,38 @@
         <field name="view_ids" eval="[(5, 0, 0),
             (0, 0, {'view_mode': 'list', 'view_id': ref('account.view_account_supplier_payment_tree')}),
             (0, 0, {'view_mode': 'form', 'view_id': ref('view_account_payment_form_reema_vendor')})]"/>
+    </record>
+
+    <!-- ── Accounting > Customers > Payments: same gap as Vendor Payments
+         above — core ships no domain at all on this action, only a
+         removable search_default_inbound_filter facet, so clearing it (or
+         the user removing the facet, as reported) floods in every outbound
+         vendor/contractor payment too. Hard-bake partner_type/payment_type
+         here as well — this screen records money received from a customer,
+         it never pays anyone. The domain alone now guarantees that, so the
+         search_default_inbound_filter facet is redundant (and confusing —
+         a removable-looking chip that isn't actually optional); dropped
+         from context, keeping only the create-time defaults. -->
+    <record id="account.action_account_payments" model="ir.actions.act_window">
+        <field name="domain">[('partner_type', '=', 'customer'), ('payment_type', '=', 'inbound')]</field>
+        <field name="context">{
+            'default_payment_type': 'inbound',
+            'default_partner_type': 'customer',
+            'default_move_journal_types': ('bank', 'cash'),
+            'display_account_trust': True,
+        }</field>
+    </record>
+
+    <!-- ── Same redundant-facet cleanup on Vendor Payments' own
+         search_default_outbound_filter, now that its domain (above) hard-
+         bakes the restriction too. ── -->
+    <record id="account.action_account_payments_payable" model="ir.actions.act_window">
+        <field name="context">{
+            'default_payment_type': 'outbound',
+            'default_partner_type': 'supplier',
+            'default_move_journal_types': ('bank', 'cash'),
+            'display_account_trust': True,
+        }</field>
     </record>
 
     <!-- ── Partner form (account extension): hide irrelevant Invoicing tab groups + lock account fields ── -->

@@ -20,6 +20,7 @@
         'security/ir.model.access.csv',
         'data/ir_sequence_data.xml',
         'data/stock_location_data.xml',
+        'views/reema_stock_opening_balance_views.xml',
         'views/reema_bladder_winding_views.xml',
         'views/reema_bladder_winding_issue_report.xml',
         'views/reema_bladder_winding_receipt_report.xml',

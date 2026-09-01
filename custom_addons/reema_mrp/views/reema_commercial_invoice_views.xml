@@ -25,10 +25,10 @@
                 <header>
                     <button name="action_confirm" type="object" string="Confirm"
                             class="btn-primary" invisible="state != 'draft'"
-                            confirm="Confirm this Commercial Invoice? If any line has no Packing List yet, one will be created automatically and its Cost of Goods Sold posted. Either way, the Sales revenue entry will be posted."/>
+                            confirm="Confirm this Commercial Invoice? If any line has no Box Packing List yet, one will be created automatically and its Cost of Goods Sold posted. Either way, the Sales revenue entry will be posted."/>
                     <button name="action_cancel" type="object" string="Cancel"
                             invisible="state != 'confirmed'"
-                            confirm="Cancel this Commercial Invoice? This reverses the revenue entry, and cancels any Packing List this invoice created for itself."/>
+                            confirm="Cancel this Commercial Invoice? This reverses the revenue entry, and cancels any Box Packing List this invoice created for itself."/>
                     <button name="action_print_commercial_invoice" string="Print" type="object" class="btn-secondary"/>
                     <button class="btn btn-secondary btn-sm"
                             data-bs-toggle="modal"
@@ -58,24 +58,24 @@
                                     <tbody>
                                         <tr>
                                             <td><span class="badge text-bg-secondary">Draft</span></td>
-                                            <td>Being built. Either pick one confirmed Packing List — its lines
+                                            <td>Being built. Either pick one confirmed Box Packing List — its lines
                                                 populate automatically the moment it's selected, and clear again if
-                                                you remove it — or type Order/Article/Qty directly if no Packing
+                                                you remove it — or type Order/Article/Qty directly if no Box Packing
                                                 List exists yet. Nothing is posted to accounting yet. The invoice's
                                                 own reference number is assigned at Confirm, not before.</td>
                                         </tr>
                                         <tr>
                                             <td><span class="badge text-bg-success">Confirmed</span></td>
                                             <td>Sales revenue entry posted. If the lines were typed directly (no
-                                                Packing List), one was just created and confirmed automatically
+                                                Box Packing List), one was just created and confirmed automatically
                                                 (posting its Cost of Goods Sold too). Locked — use
                                                 <strong>Cancel</strong> to undo.</td>
                                         </tr>
                                         <tr>
                                             <td><span class="badge text-bg-danger">Cancelled</span></td>
-                                            <td>The revenue entry was reversed. A Packing List this invoice created
-                                                for itself was cancelled too — one it merely referenced, that
-                                                already existed, is left untouched.</td>
+                                            <td>The revenue entry was reversed. A Box Packing List this invoice
+                                                created for itself was cancelled too — one it merely referenced,
+                                                that already existed, is left untouched.</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -120,9 +120,11 @@
                                    readonly="state != 'draft'"/>
                             <field name="date" readonly="state != 'draft'"/>
                             <field name="commercial_invoice_no" readonly="state != 'draft'"/>
-                            <field name="packing_list_id"
+                            <field name="box_packing_id"
                                    options="{'no_open': True, 'no_create': True, 'no_edit': True}"
                                    readonly="state != 'draft'"/>
+                            <field name="packing_list_id" invisible="not packing_list_id"
+                                   options="{'no_open': True}"/>
                             <field name="order_no_display"/>
                         </group>
                         <group>
@@ -135,12 +137,12 @@
                     </group>
                     <notebook>
                         <page string="Lines">
-                            <!-- Deliberately NOT readonly based on packing_list_id — that field
+                            <!-- Deliberately NOT readonly based on box_packing_id — that field
                                  is set by the very onchange that populates these lines, so any
                                  readonly= expression referencing it here would make the web
                                  client drop the onchange-populated lines from the save entirely
-                                 (confirmed by reproducing it). Lines pulled from a Packing List
-                                 are instead protected from being hand-edited by a hard
+                                 (confirmed by reproducing it). Lines pulled from a Box Packing
+                                 List are instead protected from being hand-edited by a hard
                                  server-side constraint (_check_pulled_line_not_altered) — not by
                                  UI readonly. -->
                             <field name="line_ids" readonly="state != 'draft'"
@@ -160,11 +162,27 @@
                                     <field name="qty"/>
                                     <field name="price_unit"/>
                                     <field name="amount" readonly="1"/>
+                                    <field name="packed_qty" readonly="1" optional="show"/>
+                                    <field name="box_count" readonly="1" optional="show"/>
+                                    <field name="box_numbers" readonly="1" optional="show"/>
                                     <field name="sample_code" optional="hide"/>
                                     <field name="hs_code" optional="hide"/>
+                                    <field name="box_article_id" column_invisible="True"/>
                                     <field name="packing_list_line_id" column_invisible="True"/>
                                 </list>
                             </field>
+                        </page>
+                        <page string="Boxes" invisible="box_packing_id">
+                            <div class="alert alert-info mb-3" role="alert">
+                                Only used when no Box Packing List is picked above. Add one row per
+                                run of identical boxes (same as the Box Packing List's own Boxes tab)
+                                if you need a real, printable carton breakdown for this invoice —
+                                every article's Packed total must exactly match its invoiced Qty
+                                before this invoice can be confirmed. Leave empty for a quick
+                                invoice with no real breakdown.
+                            </div>
+                            <field name="box_entry_ids" readonly="state != 'draft'"
+                                   context="{'default_ci_id': id}"/>
                         </page>
                         <page string="Shipping &amp; Terms">
                             <group>
@@ -201,6 +219,62 @@
                 </sheet>
                 <chatter/>
             </form>
+        </field>
+    </record>
+
+    <!-- A run's own form view for the Commercial Invoice's Boxes tab —
+         same shape as the Box Packing List's own run form. -->
+    <record id="reema_commercial_invoice_box_form_view" model="ir.ui.view">
+        <field name="name">reema.commercial.invoice.box.form</field>
+        <field name="model">reema.commercial.invoice.box</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_delete_box" type="object" string="Delete This Run"
+                            class="btn-secondary" invisible="not carton_range"
+                            confirm="Delete this run? All boxes in it will be removed too."/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="carton_size"/>
+                            <field name="carton_weight"/>
+                            <field name="carton_qty"/>
+                        </group>
+                        <group>
+                            <field name="total_qty" readonly="1"/>
+                            <field name="carton_range" string="Cartons" readonly="1"/>
+                        </group>
+                    </group>
+                    <field name="line_ids">
+                        <list editable="bottom">
+                            <field name="article_id" string="Article"
+                                   domain="[('ci_id', '=', parent.ci_id)]"
+                                   options="{'no_open': True, 'no_create': True, 'no_edit': True}"/>
+                            <field name="description" optional="show" readonly="1"/>
+                            <field name="client_sku" optional="show" readonly="1"/>
+                            <field name="sample_color" optional="show" readonly="1"/>
+                            <field name="size" optional="show" readonly="1"/>
+                            <field name="qty" string="Per Box" optional="show"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="reema_commercial_invoice_box_list_view" model="ir.ui.view">
+        <field name="name">reema.commercial.invoice.box.list</field>
+        <field name="model">reema.commercial.invoice.box</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="carton_range" optional="show"/>
+                <field name="carton_size" optional="show"/>
+                <field name="carton_weight" optional="show"/>
+                <field name="carton_qty" optional="show"/>
+                <field name="contents_summary" optional="show"/>
+                <field name="total_qty" optional="show"/>
+            </list>
         </field>
     </record>
 

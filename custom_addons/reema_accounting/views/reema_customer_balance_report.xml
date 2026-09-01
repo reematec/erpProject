@@ -33,20 +33,23 @@
                             <tr class="table-dark">
                                 <th>Account</th>
                                 <th>Customer</th>
-                                <th class="text-end">Balance (PKR)</th>
+                                <th class="text-end">Debit (PKR)</th>
+                                <th class="text-end">Credit (PKR)</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr t-foreach="docs" t-as="o">
                                 <td><span t-esc="o.account_code"/></td>
                                 <td><span t-field="o.partner_id"/></td>
-                                <td class="text-end"><span t-field="o.balance"/></td>
+                                <td class="text-end"><span t-field="o.debit"/></td>
+                                <td class="text-end"><span t-field="o.credit"/></td>
                             </tr>
                         </tbody>
                         <tfoot>
                             <tr class="table-light">
                                 <td colspan="2" class="text-end"><strong>Total</strong></td>
-                                <td class="text-end"><strong t-esc="'%.2f' % total_balance"/></td>
+                                <td class="text-end"><strong t-esc="'%.2f' % total_debit"/></td>
+                                <td class="text-end"><strong t-esc="'%.2f' % total_credit"/></td>
                             </tr>
                         </tfoot>
                     </table>

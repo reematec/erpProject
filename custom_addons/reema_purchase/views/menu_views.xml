@@ -8,11 +8,13 @@
 
     <!-- ══════════════════════════════════════════════════════════════════
          INVENTORY > OPERATIONS — Hide irrelevant standard menus
-         Kept: Physical Inventory, Scrap (promoted to direct children of Operations)
+         Kept: Scrap (promoted to direct child of Operations)
          Hidden: Receipts/Deliveries/Internal (custom Gate Pass→GRN handles receipt;
                  deliveries via sales/packing list; material moves via custom issuance forms)
                  Replenishment/Procurement (custom PO flow replaces reorder rules)
-                 Adjustments (hidden; its children promoted to Operations level)
+                 Adjustments (hidden; Scrap promoted out, its own folder stays hidden)
+                 Physical Inventory (hidden 2026-09-01 — reema_inventory's Stock Opening
+                 Balance now covers initial stock entry)
     ══════════════════════════════════════════════════════════════════════ -->
 
     <!-- Hides Receipts, Deliveries, and Internal Transfers in one record -->
@@ -35,10 +37,9 @@
         <field name="active" eval="False"/>
     </record>
 
-    <!-- Promote Physical Inventory to direct child of Operations -->
+    <!-- Hide Physical Inventory (Inventory Adjustments) -->
     <record id="stock.menu_action_inventory_tree" model="ir.ui.menu">
-        <field name="parent_id" ref="stock.menu_stock_warehouse_mgmt"/>
-        <field name="sequence">10</field>
+        <field name="active" eval="False"/>
     </record>
 
     <!-- Promote Scrap to direct child of Operations -->

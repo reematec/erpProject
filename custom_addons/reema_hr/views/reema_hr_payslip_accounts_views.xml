@@ -53,6 +53,13 @@
         <field name="name">Payslips</field>
         <field name="res_model">reema.hr.payslip</field>
         <field name="view_mode">list,form</field>
+        <!-- Same default scope as the HR-side Payslips screen (see
+             view_reema_hr_payslip_search's filter_this_month) — starts on the
+             current month instead of fetching every payslip ever generated;
+             removable via the facet chip's "x" in the search bar. Ready to
+             Pay (below) deliberately does NOT get this — an unpaid confirmed
+             payslip from a prior month still needs to show up there. -->
+        <field name="context">{'search_default_filter_this_month': 1}</field>
         <field name="view_ids" eval="[(5, 0, 0),
             (0, 0, {'view_mode': 'list', 'view_id': ref('view_reema_hr_payslip_list_readonly')}),
             (0, 0, {'view_mode': 'form', 'view_id': ref('view_reema_hr_payslip_form_readonly')})]"/>
