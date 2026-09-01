@@ -44,3 +44,8 @@ backups/
 
 # Deployment scripts not for version control
 scripts/*.dump
+
+# Ad hoc business document exports dropped at repo root (invoices, packing
+# lists, employee data) — not code, never meant for version control
+/*.xlsx
+/*.pdf
